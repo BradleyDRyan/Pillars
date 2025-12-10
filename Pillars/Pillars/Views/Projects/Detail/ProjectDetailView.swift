@@ -11,14 +11,14 @@ import UIKit
 
 // MARK: - Navigation Destination for new conversations
 struct NewConversationDestination: Hashable {
-    let projectIds: [String]
+    let pillarIds: [String]
     let initialMessage: String
 }
 
 struct ProjectDetailView: View {
     let project: Project
     var onMenuTapped: (() -> Void)?
-    var onStartConversation: ((_ projectIds: [String], _ initialMessage: String) -> Void)?
+    var onStartConversation: ((_ pillarIds: [String], _ initialMessage: String) -> Void)?
     var onOpenConversation: ((_ conversation: Conversation) -> Void)?  // Used when navigation style is "jump"
     var onCreateProjectTapped: (() -> Void)?  // For "Create Project" from context menu
     
@@ -62,7 +62,7 @@ struct ProjectDetailView: View {
     init(
         project: Project,
         onMenuTapped: (() -> Void)? = nil,
-        onStartConversation: ((_ projectIds: [String], _ initialMessage: String) -> Void)? = nil,
+        onStartConversation: ((_ pillarIds: [String], _ initialMessage: String) -> Void)? = nil,
         onOpenConversation: ((_ conversation: Conversation) -> Void)? = nil,
         onCreateProjectTapped: (() -> Void)? = nil
     ) {
@@ -178,7 +178,7 @@ struct ProjectDetailView: View {
             }
             .navigationDestination(for: NewConversationDestination.self) { destination in
                 ConversationView(
-                    projectIds: destination.projectIds,
+                    pillarIds: destination.pillarIds,
                     initialMessage: destination.initialMessage,
                     showHeader: false
                 )
@@ -186,7 +186,7 @@ struct ProjectDetailView: View {
                 .environmentObject(firebaseManager)
             }
         }
-        .onChange(of: projectTabsStyle) { newValue in
+        .onChange(of: projectTabsStyle) { oldValue, newValue in
             // Ensure segmented control only shows supported filters
             if newValue == ProjectTabsStyle.segmented.rawValue && selectedFilter == .bookmarks {
                 selectedFilter = .chats
@@ -306,7 +306,7 @@ struct ProjectDetailView: View {
                             // Navigate within the project's navigation stack
                             print("📱 [ProjectDetailView] Starting new conversation via nav stack")
                             let destination = NewConversationDestination(
-                                projectIds: [project.id],
+                                pillarIds: [project.id],
                                 initialMessage: message
                             )
                             navigationPath.append(destination)

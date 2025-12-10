@@ -4,7 +4,8 @@ class Thought {
   constructor(data = {}) {
     this.id = data.id || null;
     this.userId = data.userId || null;
-    this.projectIds = data.projectIds || [];
+    // Support both pillarIds (new) and projectIds (legacy)
+    this.pillarIds = data.pillarIds || data.projectIds || [];
     this.conversationId = data.conversationId || null;
     this.content = data.content || '';
     this.type = data.type || 'reflection';
@@ -26,7 +27,7 @@ class Thought {
     const thought = new Thought(data);
     const docRef = await this.collection().add({
       userId: thought.userId,
-      projectIds: thought.projectIds,
+      pillarIds: thought.pillarIds,
       conversationId: thought.conversationId,
       content: thought.content,
       type: thought.type,
@@ -54,8 +55,8 @@ class Thought {
   static async findByUserId(userId, filters = {}) {
     let query = this.collection().where('userId', '==', userId);
     
-    if (filters.projectId) {
-      query = query.where('projectIds', 'array-contains', filters.projectId);
+    if (filters.pillarId) {
+      query = query.where('pillarIds', 'array-contains', filters.pillarId);
     }
     
     if (filters.type) {
@@ -123,7 +124,7 @@ class Thought {
     if (this.id) {
       await Thought.collection().doc(this.id).update({
         content: this.content,
-        projectIds: this.projectIds,
+        pillarIds: this.pillarIds,
         type: this.type,
         category: this.category,
         tags: this.tags,

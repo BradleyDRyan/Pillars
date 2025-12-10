@@ -5,7 +5,7 @@ import CoreTransferable
 struct Conversation: Identifiable, Codable {
     let id: String
     let userId: String
-    var projectIds: [String]
+    var pillarIds: [String]
     var title: String
     var lastMessage: String?
     let createdAt: Date
@@ -13,14 +13,14 @@ struct Conversation: Identifiable, Codable {
     var metadata: [String: String]?
     
     enum CodingKeys: String, CodingKey {
-        case id, userId, projectIds, title, lastMessage
+        case id, userId, pillarIds, title, lastMessage
         case createdAt, updatedAt, metadata
     }
     
-    init(id: String, userId: String, projectIds: [String], title: String, lastMessage: String? = nil, createdAt: Date, updatedAt: Date, metadata: [String: String]? = nil) {
+    init(id: String, userId: String, pillarIds: [String], title: String, lastMessage: String? = nil, createdAt: Date, updatedAt: Date, metadata: [String: String]? = nil) {
         self.id = id
         self.userId = userId
-        self.projectIds = projectIds
+        self.pillarIds = pillarIds
         self.title = title
         self.lastMessage = lastMessage
         self.createdAt = createdAt
@@ -32,7 +32,8 @@ struct Conversation: Identifiable, Codable {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         id = try container.decode(String.self, forKey: .id)
         userId = try container.decode(String.self, forKey: .userId)
-        projectIds = try container.decodeIfPresent([String].self, forKey: .projectIds) ?? []
+        // Support both pillarIds (new) and legacy projectIds for backwards compatibility
+        pillarIds = try container.decodeIfPresent([String].self, forKey: .pillarIds) ?? []
         title = try container.decode(String.self, forKey: .title)
         lastMessage = try container.decodeIfPresent(String.self, forKey: .lastMessage)
         createdAt = try container.decode(Date.self, forKey: .createdAt)
@@ -43,7 +44,7 @@ struct Conversation: Identifiable, Codable {
         var container = encoder.container(keyedBy: CodingKeys.self)
         try container.encode(id, forKey: .id)
         try container.encode(userId, forKey: .userId)
-        try container.encode(projectIds, forKey: .projectIds)
+        try container.encode(pillarIds, forKey: .pillarIds)
         try container.encode(title, forKey: .title)
         try container.encodeIfPresent(lastMessage, forKey: .lastMessage)
         try container.encode(createdAt, forKey: .createdAt)

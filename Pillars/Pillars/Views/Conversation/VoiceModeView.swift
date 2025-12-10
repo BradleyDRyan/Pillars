@@ -67,30 +67,32 @@ struct VoiceModeView: View {
 
                 // Camera view overlays on top when active
                 if showCamera {
-                    VStack {
-                        Spacer()
+                    GeometryReader { geometry in
+                        VStack {
+                            Spacer()
 
-                        InlineCameraView(
-                            capturedImage: $capturedImage,
-                            isCapturing: $isCapturing,
-                            isUploading: $isUploading,
-                            onSend: { image in
-                                Task {
-                                    await uploadPhoto(image)
+                            InlineCameraView(
+                                capturedImage: $capturedImage,
+                                isCapturing: $isCapturing,
+                                isUploading: $isUploading,
+                                onSend: { image in
+                                    Task {
+                                        await uploadPhoto(image)
+                                    }
+                                },
+                                onRetake: { }, // Not used anymore but kept for interface
+                                onClose: {
+                                    withAnimation(.easeInOut(duration: 0.3)) {
+                                        showCamera = false
+                                        capturedImage = nil
+                                    }
                                 }
-                            },
-                            onRetake: { }, // Not used anymore but kept for interface
-                            onClose: {
-                                withAnimation(.easeInOut(duration: 0.3)) {
-                                    showCamera = false
-                                    capturedImage = nil
-                                }
-                            }
-                        )
-                        .frame(maxHeight: UIScreen.main.bounds.height * 0.5) // Take up bottom half
-                        .transition(.move(edge: .bottom).combined(with: .opacity))
+                            )
+                            .frame(maxHeight: geometry.size.height * 0.5) // Take up bottom half
+                            .transition(.move(edge: .bottom).combined(with: .opacity))
 
-                        Spacer(minLength: 50)
+                            Spacer(minLength: 50)
+                        }
                     }
                 }
             }

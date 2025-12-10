@@ -1,14 +1,26 @@
 const { firestore } = require('../config/firebase');
 const admin = require('firebase-admin');
 
+/**
+ * Conversation — An ongoing dialogue between the user and the system
+ * 
+ * Used to ask for advice, reflect, and interact with Pillars.
+ * There is at least one "primary" Conversation (the Home View chat),
+ * but the data model supports multiple conversations.
+ */
 class Conversation {
   constructor(data = {}) {
     this.id = data.id || null;
     this.userId = data.userId || null;
     this.agentId = data.agentId || null;
-    this.projectIds = data.projectIds || [];
+    // Support both pillarIds (new) and projectIds (legacy)
+    this.pillarIds = data.pillarIds || data.projectIds || [];
     this.title = data.title || 'New Conversation';
     this.titleGenerated = data.titleGenerated || false;
+    /** @type {boolean} Primary conversation appears on Home View */
+    this.isPrimary = data.isPrimary || false;
+    /** @type {'active'|'archived'} */
+    this.status = data.status || 'active';
     this.lastMessage = data.lastMessage || null;
     // Use Firebase Timestamps consistently
     this.createdAt = data.createdAt || admin.firestore.Timestamp.now();
@@ -25,9 +37,11 @@ class Conversation {
     const docRef = await this.collection().add({
       userId: conversation.userId,
       agentId: conversation.agentId || null,
-      projectIds: conversation.projectIds,
+      pillarIds: conversation.pillarIds,
       title: conversation.title,
       titleGenerated: false,
+      isPrimary: conversation.isPrimary,
+      status: conversation.status,
       lastMessage: conversation.lastMessage,
       createdAt: conversation.createdAt,
       updatedAt: conversation.updatedAt,
@@ -45,15 +59,48 @@ class Conversation {
     return new Conversation({ id: doc.id, ...doc.data() });
   }
 
-  static async findByUserId(userId, projectId = null) {
+  static async findByUserId(userId, pillarId = null, includeArchived = false) {
     let query = this.collection().where('userId', '==', userId);
     
-    if (projectId) {
-      query = query.where('projectIds', 'array-contains', projectId);
+    if (pillarId) {
+      query = query.where('pillarIds', 'array-contains', pillarId);
+    }
+    
+    if (!includeArchived) {
+      query = query.where('status', '==', 'active');
     }
     
     const snapshot = await query.orderBy('updatedAt', 'desc').get();
     return snapshot.docs.map(doc => new Conversation({ id: doc.id, ...doc.data() }));
+  }
+
+  static async findPrimary(userId) {
+    const snapshot = await this.collection()
+      .where('userId', '==', userId)
+      .where('isPrimary', '==', true)
+      .limit(1)
+      .get();
+    
+    if (snapshot.empty) {
+      return null;
+    }
+    
+    return new Conversation({ id: snapshot.docs[0].id, ...snapshot.docs[0].data() });
+  }
+
+  static async findOrCreatePrimary(userId) {
+    let primary = await this.findPrimary(userId);
+    
+    if (!primary) {
+      primary = await this.create({
+        userId,
+        title: 'Home',
+        isPrimary: true,
+        metadata: { type: 'primary' }
+      });
+    }
+    
+    return primary;
   }
 
   static async findByAgentId(agentId) {
@@ -78,7 +125,9 @@ class Conversation {
       await Conversation.collection().doc(this.id).update({
         title: this.title,
         agentId: this.agentId || null,
-        projectIds: this.projectIds,
+        pillarIds: this.pillarIds,
+        isPrimary: this.isPrimary,
+        status: this.status,
         lastMessage: this.lastMessage,
         updatedAt: this.updatedAt,
         metadata: this.metadata
@@ -88,6 +137,16 @@ class Conversation {
       this.id = created.id;
     }
     return this;
+  }
+
+  async archive() {
+    this.status = 'archived';
+    return this.save();
+  }
+
+  async unarchive() {
+    this.status = 'active';
+    return this.save();
   }
 
   async delete() {
@@ -102,8 +161,10 @@ class Conversation {
       id: this.id,
       userId: this.userId,
       agentId: this.agentId || null,
-      projectIds: this.projectIds,
+      pillarIds: this.pillarIds,
       title: this.title,
+      isPrimary: this.isPrimary,
+      status: this.status,
       lastMessage: this.lastMessage,
       // Convert Firestore Timestamps to ISO8601 strings
       createdAt: this.createdAt?.toDate ? this.createdAt.toDate().toISOString() : 

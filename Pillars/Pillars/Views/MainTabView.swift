@@ -74,7 +74,7 @@ class DrawerAnimator: ObservableObject {
 // MARK: - Active View (single source of truth for navigation)
 enum ActiveView: Equatable {
     case conversation(Conversation?)  // nil = new chat
-    case newConversation(projectIds: [String], initialMessage: String)  // New chat with context
+    case newConversation(pillarIds: [String], initialMessage: String)  // New chat with context
     case project(Project)
     case forYou
     case library
@@ -289,27 +289,27 @@ struct MainTabView: View {
             .id(conversation?.id ?? "new")
             .transition(.identity) // No transition animation - prevents interference with offset animation
             
-        case .newConversation(let projectIds, let initialMessage):
+        case .newConversation(let pillarIds, let initialMessage):
             ConversationView(
-                projectIds: projectIds,
+                pillarIds: pillarIds,
                 initialMessage: initialMessage,
                 onMenuTapped: toggleDrawer,
                 onSettingsTapped: { showingSettings = true },
                 showHeader: true
             )
-            .id("new-\(projectIds.joined())-\(initialMessage)")
+            .id("new-\(pillarIds.joined())-\(initialMessage)")
             .transition(.identity)
             
         case .project(let project):
             ProjectDetailView(
                 project: project,
                 onMenuTapped: toggleDrawer,
-                onStartConversation: { projectIds, initialMessage in
+                onStartConversation: { pillarIds, initialMessage in
                     print("🚀 [MainTabView] onStartConversation called")
-                    print("🚀 [MainTabView] projectIds: \(projectIds)")
+                    print("🚀 [MainTabView] pillarIds: \(pillarIds)")
                     print("🚀 [MainTabView] initialMessage: \(initialMessage)")
-                    // Navigate to new conversation with project context
-                    activeView = .newConversation(projectIds: projectIds, initialMessage: initialMessage)
+                    // Navigate to new conversation with pillar context
+                    activeView = .newConversation(pillarIds: pillarIds, initialMessage: initialMessage)
                 },
                 onOpenConversation: { conversation in
                     // Used when navigation style is "jump"

@@ -155,11 +155,11 @@ class DrawerViewModel: ObservableObject {
                 
                 print("📊 [DrawerViewModel] Found \(documents.count) conversation documents")
                 
-                // Parse all conversations with messages (filter by project later)
+                // Parse all conversations with messages (filter by pillar later)
                 var conversations = documents.compactMap { doc -> Conversation? in
                     let data = doc.data()
                     
-                    let projectIds = data["projectIds"] as? [String] ?? []
+                    let pillarIds = data["pillarIds"] as? [String] ?? []
                     
                     guard let userId = data["userId"] as? String,
                           let title = data["title"] as? String,
@@ -179,7 +179,7 @@ class DrawerViewModel: ObservableObject {
                     return Conversation(
                         id: doc.documentID,
                         userId: userId,
-                        projectIds: projectIds,
+                        pillarIds: pillarIds,
                         title: title,
                         lastMessage: lastMessage,
                         createdAt: createdTimestamp.dateValue(),
@@ -206,10 +206,10 @@ class DrawerViewModel: ObservableObject {
         let userProjectIds = Set(projects.map { $0.id })
         
         // Hide conversations that are assigned to any user-created project
-        // Conversations with empty projectIds or only non-project IDs will show
+        // Conversations with empty pillarIds or only non-project IDs will show
         let filtered = allConversationsWithMessages.filter { conversation in
-            let projectIdsInUserProjects = conversation.projectIds.filter { userProjectIds.contains($0) }
-            return projectIdsInUserProjects.isEmpty
+            let pillarIdsInUserProjects = conversation.pillarIds.filter { userProjectIds.contains($0) }
+            return pillarIdsInUserProjects.isEmpty
         }
         
         // Take top 10
@@ -221,16 +221,16 @@ class DrawerViewModel: ObservableObject {
     func assignConversationToProject(conversation: Conversation, project: Project) {
         Task {
             do {
-                // Update the conversation's projectIds in Firestore
-                var updatedProjectIds = conversation.projectIds
-                if !updatedProjectIds.contains(project.id) {
-                    updatedProjectIds.append(project.id)
+                // Update the conversation's pillarIds in Firestore
+                var updatedPillarIds = conversation.pillarIds
+                if !updatedPillarIds.contains(project.id) {
+                    updatedPillarIds.append(project.id)
                 }
                 
                 try await db.collection("conversations")
                     .document(conversation.id)
                     .updateData([
-                        "projectIds": updatedProjectIds,
+                        "pillarIds": updatedPillarIds,
                         "updatedAt": FieldValue.serverTimestamp()
                     ])
                 
@@ -246,14 +246,14 @@ class DrawerViewModel: ObservableObject {
     func removeConversationFromProject(conversation: Conversation, project: Project) {
         Task {
             do {
-                // Remove the project ID from the conversation's projectIds
-                var updatedProjectIds = conversation.projectIds
-                updatedProjectIds.removeAll { $0 == project.id }
+                // Remove the project ID from the conversation's pillarIds
+                var updatedPillarIds = conversation.pillarIds
+                updatedPillarIds.removeAll { $0 == project.id }
                 
                 try await db.collection("conversations")
                     .document(conversation.id)
                     .updateData([
-                        "projectIds": updatedProjectIds,
+                        "pillarIds": updatedPillarIds,
                         "updatedAt": FieldValue.serverTimestamp()
                     ])
                 

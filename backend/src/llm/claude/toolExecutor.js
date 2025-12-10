@@ -65,12 +65,12 @@ async function lookupDocumentTitle(input, handlerContext) {
     const firebase = require('../../config/firebase');
     const firestore = firebase.firestore;
     const attachmentId = input?.attachmentId;
-    const projectId = handlerContext?.project?.id || input?.projectId;
+    const pillarId = handlerContext?.pillar?.id || input?.pillarId;
     
-    if (projectId) {
+    if (pillarId) {
       const attachmentsRef = firestore
-        .collection('projects')
-        .doc(projectId)
+        .collection('pillars')
+        .doc(pillarId)
         .collection('attachments');
       
       // If we have attachmentId, look up specifically

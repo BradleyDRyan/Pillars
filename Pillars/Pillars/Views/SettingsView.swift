@@ -129,6 +129,17 @@ struct SettingsView: View {
                     }
                 }
                 
+                // Debug section
+                #if DEBUG
+                Section("Developer") {
+                    NavigationLink {
+                        GlassPlayground()
+                    } label: {
+                        Label("Glass Playground", systemImage: "slider.horizontal.3")
+                    }
+                }
+                #endif
+                
                 // App info section
                 Section("About") {
                     HStack {

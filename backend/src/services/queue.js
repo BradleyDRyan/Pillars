@@ -14,68 +14,6 @@ const getWorkerUrl = (path) => {
 };
 
 /**
- * Enqueue collection inference job
- */
-async function enqueueInference(entryId, userId, content) {
-  try {
-    const workerUrl = getWorkerUrl('/process-inference');
-    console.log(`[QUEUE] Enqueuing inference for entry ${entryId}`);
-    console.log(`[QUEUE] Worker URL: ${workerUrl}`);
-    console.log(`[QUEUE] QStash token present: ${!!process.env.QSTASH_TOKEN}`);
-    
-    const response = await qstashClient.publishJSON({
-      url: workerUrl,
-      body: {
-        entryId,
-        userId,
-        content,
-        timestamp: new Date().toISOString()
-      },
-      retries: 3,
-      delay: 0 // Process immediately
-    });
-    
-    console.log(`[QUEUE] Inference job queued with ID: ${response.messageId}`);
-    return response.messageId;
-  } catch (error) {
-    console.error('[QUEUE] Failed to enqueue inference:', error);
-    console.error('[QUEUE] Error details:', error.message);
-    if (error.response) {
-      console.error('[QUEUE] Response status:', error.response.status);
-      console.error('[QUEUE] Response data:', error.response.data);
-    }
-    throw error;
-  }
-}
-
-/**
- * Enqueue collection rule processing job
- */
-async function enqueueCollectionProcessing(collectionId, userId, data = {}) {
-  try {
-    console.log(`[QUEUE] Enqueuing collection processing for ${collectionId}`);
-    
-    const response = await qstashClient.publishJSON({
-      url: getWorkerUrl('/process-collection'),
-      body: {
-        collectionId,
-        userId,
-        ...data,
-        timestamp: new Date().toISOString()
-      },
-      retries: 3,
-      delay: 0
-    });
-    
-    console.log(`[QUEUE] Collection job queued with ID: ${response.messageId}`);
-    return response.messageId;
-  } catch (error) {
-    console.error('[QUEUE] Failed to enqueue collection processing:', error);
-    throw error;
-  }
-}
-
-/**
  * Enqueue AI generation job (for complex AI tasks)
  */
 async function enqueueAIGeneration(type, data) {
@@ -97,33 +35,6 @@ async function enqueueAIGeneration(type, data) {
     return response.messageId;
   } catch (error) {
     console.error('[QUEUE] Failed to enqueue AI generation:', error);
-    throw error;
-  }
-}
-
-/**
- * Enqueue batch processing job
- */
-async function enqueueBatchProcessing(userId, operation, items) {
-  try {
-    console.log(`[QUEUE] Enqueuing batch ${operation} for ${items.length} items`);
-    
-    const response = await qstashClient.publishJSON({
-      url: getWorkerUrl('/process-batch'),
-      body: {
-        userId,
-        operation,
-        items,
-        timestamp: new Date().toISOString()
-      },
-      retries: 3,
-      delay: 0
-    });
-    
-    console.log(`[QUEUE] Batch job queued with ID: ${response.messageId}`);
-    return response.messageId;
-  } catch (error) {
-    console.error('[QUEUE] Failed to enqueue batch processing:', error);
     throw error;
   }
 }
@@ -155,9 +66,6 @@ async function scheduleJob(type, data, delaySeconds) {
 }
 
 module.exports = {
-  enqueueInference,
-  enqueueCollectionProcessing,
   enqueueAIGeneration,
-  enqueueBatchProcessing,
   scheduleJob
 };

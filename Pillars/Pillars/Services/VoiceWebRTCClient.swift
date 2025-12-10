@@ -42,7 +42,7 @@ class VoiceWebRTCClient: NSObject, ObservableObject {
             // Configure for voice chat with speaker output
             try session.setCategory(.playAndRecord,
                                    mode: .voiceChat,
-                                   options: [.defaultToSpeaker, .allowBluetooth])
+                                   options: [.defaultToSpeaker, .allowBluetoothHFP])
 
             // Activate the session
             try session.setActive(true)

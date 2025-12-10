@@ -76,23 +76,23 @@ final class ConversationViewModel: ObservableObject {
     private var messagesListener: ListenerRegistration?
 
     // Initialize and fetch API key
-    func setup(conversationId: String? = nil, existingConversation: Conversation? = nil, projectIds: [String] = []) async {
-        print("🔧 [ConversationViewModel] setup() called - conversationId: \(conversationId ?? "nil"), projectIds: \(projectIds)")
+    func setup(conversationId: String? = nil, existingConversation: Conversation? = nil, pillarIds: [String] = []) async {
+        print("🔧 [ConversationViewModel] setup() called - conversationId: \(conversationId ?? "nil"), pillarIds: \(pillarIds)")
         
         // Load or create conversation
         if let conversationId = conversationId {
             await loadConversation(id: conversationId, existingConversation: existingConversation)
         } else {
             print("🆕 [ConversationViewModel] Creating new conversation...")
-            await createNewConversation(projectIds: projectIds)
+            await createNewConversation(pillarIds: pillarIds)
         }
         
         print("🔧 [ConversationViewModel] setup() complete - conversation: \(conversation?.id ?? "nil")")
     }
 
     // Create a new conversation
-    private func createNewConversation(projectIds: [String] = []) async {
-        print("📝 [ConversationViewModel] createNewConversation() starting... projectIds: \(projectIds)")
+    private func createNewConversation(pillarIds: [String] = []) async {
+        print("📝 [ConversationViewModel] createNewConversation() starting... pillarIds: \(pillarIds)")
         
         guard let user = Auth.auth().currentUser else {
             print("❌ [ConversationViewModel] Not authenticated - no current user")
@@ -122,10 +122,10 @@ final class ConversationViewModel: ObservableObject {
             LocationManager.shared.getCurrentLocation()
             let locationMetadata = LocationManager.shared.getLocationMetadata()
 
-            // Send projectIds to backend
+            // Send pillarIds to backend
             let body: [String: Any] = [
                 "title": "New Conversation",
-                "projectIds": projectIds,
+                "pillarIds": pillarIds,
                 "metadata": locationMetadata
             ]
             request.httpBody = try JSONSerialization.data(withJSONObject: body)
@@ -192,7 +192,7 @@ final class ConversationViewModel: ObservableObject {
             conversation = Conversation(
                 id: id,
                 userId: Auth.auth().currentUser?.uid ?? "",
-                projectIds: [],
+                pillarIds: [],
                 title: "Chat",
                 lastMessage: nil,
                 createdAt: Date(),
@@ -537,7 +537,7 @@ final class ConversationViewModel: ObservableObject {
                 .filter { !$0.isStreaming }
                 .map { ["role": $0.role.rawValue, "content": $0.content] }
 
-            // Include conversation and project context for tool execution
+            // Include conversation and pillar context for tool execution
             var body: [String: Any] = [
                 "messages": historyMessages
             ]
@@ -546,9 +546,9 @@ final class ConversationViewModel: ObservableObject {
                 body["conversationId"] = conversationId
             }
             
-            // Include project ID for file reading
-            if let projectId = conversation?.projectIds.first {
-                body["projectId"] = projectId
+            // Include pillar ID for context
+            if let pillarId = conversation?.pillarIds.first {
+                body["pillarId"] = pillarId
             }
             request.httpBody = try JSONSerialization.data(withJSONObject: body)
 

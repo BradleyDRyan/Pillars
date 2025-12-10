@@ -116,7 +116,7 @@ struct ProjectChatRow: View {
             conversation: Conversation(
                 id: "1",
                 userId: "user1",
-                projectIds: ["project1"],
+                pillarIds: ["project1"],
                 title: "Lab results questions",
                 lastMessage: "The glucose levels look normal...",
                 createdAt: Date().addingTimeInterval(-86400 * 3),
@@ -128,7 +128,7 @@ struct ProjectChatRow: View {
             conversation: Conversation(
                 id: "2",
                 userId: "user1",
-                projectIds: ["project1"],
+                pillarIds: ["project1"],
                 title: "Glucose vs A1C",
                 lastMessage: nil,
                 createdAt: Date().addingTimeInterval(-86400 * 6),

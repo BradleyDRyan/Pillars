@@ -57,7 +57,7 @@ struct ProjectChatList: View {
             Conversation(
                 id: "1",
                 userId: "user1",
-                projectIds: ["project1"],
+                pillarIds: ["project1"],
                 title: "Lab results questions",
                 lastMessage: "The glucose levels look normal...",
                 createdAt: Date().addingTimeInterval(-86400 * 3),
@@ -66,7 +66,7 @@ struct ProjectChatList: View {
             Conversation(
                 id: "2",
                 userId: "user1",
-                projectIds: ["project1"],
+                pillarIds: ["project1"],
                 title: "Tax Prep & Savings Strategy",
                 lastMessage: "Here are some tips...",
                 createdAt: Date().addingTimeInterval(-86400 * 6),

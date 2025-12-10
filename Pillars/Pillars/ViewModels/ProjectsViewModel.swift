@@ -147,9 +147,9 @@ class ProjectsViewModel: ObservableObject {
         print("🔍 [ProjectsViewModel] Starting to listen for conversations in project: \(projectId)")
         conversationsListener?.remove()
         
-        // Query by projectIds - order by updatedAt descending (most recent first)
+        // Query by pillarIds - order by updatedAt descending (most recent first)
         conversationsListener = db.collection("conversations")
-            .whereField("projectIds", arrayContains: projectId)
+            .whereField("pillarIds", arrayContains: projectId)
             .order(by: "updatedAt", descending: true)
             .addSnapshotListener { [weak self] snapshot, error in
                 guard let self = self else { return }
@@ -168,10 +168,10 @@ class ProjectsViewModel: ObservableObject {
                 
                 print("📊 [ProjectsViewModel] Found \(documents.count) conversations for project")
                 
-                var conversations = documents.compactMap { doc -> Conversation? in
+                let conversations = documents.compactMap { doc -> Conversation? in
                     let data = doc.data()
                     
-                    let projectIds = data["projectIds"] as? [String] ?? []
+                    let pillarIds = data["pillarIds"] as? [String] ?? []
                     
                     guard let userId = data["userId"] as? String,
                           let title = data["title"] as? String,
@@ -186,7 +186,7 @@ class ProjectsViewModel: ObservableObject {
                     return Conversation(
                         id: doc.documentID,
                         userId: userId,
-                        projectIds: projectIds,
+                        pillarIds: pillarIds,
                         title: title,
                         lastMessage: lastMessage,
                         createdAt: createdTimestamp.dateValue(),
@@ -303,15 +303,15 @@ class ProjectsViewModel: ObservableObject {
     // MARK: - Assign Conversation to Project
     
     func assignConversationToProject(conversation: Conversation, project: Project) async throws {
-        var updatedProjectIds = conversation.projectIds
-        if !updatedProjectIds.contains(project.id) {
-            updatedProjectIds.append(project.id)
+        var updatedPillarIds = conversation.pillarIds
+        if !updatedPillarIds.contains(project.id) {
+            updatedPillarIds.append(project.id)
         }
         
         try await db.collection("conversations")
             .document(conversation.id)
             .updateData([
-                "projectIds": updatedProjectIds,
+                "pillarIds": updatedPillarIds,
                 "updatedAt": FieldValue.serverTimestamp()
             ])
         
@@ -321,13 +321,13 @@ class ProjectsViewModel: ObservableObject {
     // MARK: - Remove Conversation from Project
     
     func removeConversationFromProject(conversation: Conversation, project: Project) async throws {
-        var updatedProjectIds = conversation.projectIds
-        updatedProjectIds.removeAll { $0 == project.id }
+        var updatedPillarIds = conversation.pillarIds
+        updatedPillarIds.removeAll { $0 == project.id }
         
         try await db.collection("conversations")
             .document(conversation.id)
             .updateData([
-                "projectIds": updatedProjectIds,
+                "pillarIds": updatedPillarIds,
                 "updatedAt": FieldValue.serverTimestamp()
             ])
 

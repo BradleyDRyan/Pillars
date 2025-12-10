@@ -1,15 +1,15 @@
 /**
  * Read File Tool
  * 
- * Reads PDF documents that have been uploaded to a project.
- * Can read a specific attachment by ID, or search for files in a project.
+ * Reads PDF documents that have been uploaded to a pillar.
+ * Can read a specific attachment by ID, or search for files in a pillar.
  */
 
 const definition = {
   name: 'read_file',
   description: [
-    'Reads PDF documents that have been uploaded to a project.',
-    'Can read a specific attachment by ID, or search for files in a project.',
+    'Reads PDF documents that have been uploaded to a pillar.',
+    'Can read a specific attachment by ID, or search for files in a pillar.',
     'Returns the extracted text content from the document.'
   ].join(' '),
   input_schema: {
@@ -19,13 +19,13 @@ const definition = {
         type: 'string',
         description: 'ID of a specific attachment to read. Use this if the user referenced a specific file.'
       },
-      projectId: {
+      pillarId: {
         type: 'string',
-        description: 'Project ID to search for files. Required if searching by query.'
+        description: 'Pillar ID to search for files. Required if searching by query.'
       },
       query: {
         type: 'string',
-        description: 'Optional search query to find relevant files by name or content in the project.'
+        description: 'Optional search query to find relevant files by name or content in the pillar.'
       }
     }
   }
@@ -34,7 +34,7 @@ const definition = {
 const behaviorPrompt = [
   'Use `read_file` when the user asks about documents, PDFs, or uploaded files.',
   'If you know the specific attachmentId, provide it directly.',
-  'If searching a project, provide the projectId and optionally a query to filter results.',
+  'If searching a pillar, provide the pillarId and optionally a query to filter results.',
   'After reading, summarize the key points from the document for the user.'
 ].join(' ');
 
@@ -52,39 +52,39 @@ function getFirebase() {
 /**
  * Get a specific attachment by ID
  */
-async function getAttachmentById(attachmentId, projectId = null) {
+async function getAttachmentById(attachmentId, pillarId = null) {
   const { firestore, logger } = getFirebase();
   
-  logger.info({ attachmentId, projectId }, '[readFile] Looking up attachment by ID');
+  logger.info({ attachmentId, pillarId }, '[readFile] Looking up attachment by ID');
 
-  // If projectId provided, search in that project first
-  if (projectId) {
+  // If pillarId provided, search in that pillar first
+  if (pillarId) {
     const attachmentRef = firestore
-      .collection('projects')
-      .doc(projectId)
+      .collection('pillars')
+      .doc(pillarId)
       .collection('attachments');
     
     const querySnapshot = await attachmentRef.where('id', '==', attachmentId).get();
     
     if (!querySnapshot.empty) {
       return {
-        projectId,
+        pillarId,
         ...querySnapshot.docs[0].data()
       };
     }
   }
 
-  // Search across all projects
-  const projectsRef = firestore.collection('projects');
-  const projectsSnapshot = await projectsRef.get();
+  // Search across all pillars
+  const pillarsRef = firestore.collection('pillars');
+  const pillarsSnapshot = await pillarsRef.get();
 
-  for (const projectDoc of projectsSnapshot.docs) {
-    const attachmentsRef = projectDoc.ref.collection('attachments');
+  for (const pillarDoc of pillarsSnapshot.docs) {
+    const attachmentsRef = pillarDoc.ref.collection('attachments');
     const querySnapshot = await attachmentsRef.where('id', '==', attachmentId).get();
 
     if (!querySnapshot.empty) {
       return {
-        projectId: projectDoc.id,
+        pillarId: pillarDoc.id,
         ...querySnapshot.docs[0].data()
       };
     }
@@ -94,20 +94,20 @@ async function getAttachmentById(attachmentId, projectId = null) {
 }
 
 /**
- * Search for files in a project
+ * Search for files in a pillar
  */
-async function searchFilesInProject(projectId, query = null) {
+async function searchFilesInPillar(pillarId, query = null) {
   const { firestore, logger } = getFirebase();
   
-  logger.info({ projectId, query }, '[readFile] Searching files in project');
+  logger.info({ pillarId, query }, '[readFile] Searching files in pillar');
 
   const attachmentsRef = firestore
-    .collection('projects')
-    .doc(projectId)
+    .collection('pillars')
+    .doc(pillarId)
     .collection('attachments');
 
   // Get attachments (simple query, filter in memory to avoid index issues)
-  console.log(`[readFile] Fetching attachments from projects/${projectId}/attachments`);
+  console.log(`[readFile] Fetching attachments from pillars/${pillarId}/attachments`);
   const snapshot = await attachmentsRef.limit(50).get();
   
   console.log(`[readFile] Raw attachment count: ${snapshot.docs.length}`);
@@ -115,7 +115,7 @@ async function searchFilesInProject(projectId, query = null) {
   // Filter PDFs in memory
   let attachments = snapshot.docs
     .map(doc => ({
-      projectId,
+      pillarId,
       ...doc.data()
     }))
     .filter(att => att.mimeType === 'application/pdf');
@@ -147,7 +147,7 @@ function formatAttachmentResponse(attachment) {
 
   return {
     attachmentId: attachment.id,
-    projectId: attachment.projectId,
+    pillarId: attachment.pillarId,
     title: attachment.title || attachment.originalName || 'Untitled',
     mimeType: attachment.mimeType,
     status: attachment.ocrStatus || 'unknown',
@@ -163,15 +163,15 @@ function formatAttachmentResponse(attachment) {
 }
 
 const handler = async (input = {}, handlerContext = {}) => {
-  const { attachmentId, projectId, query } = input;
-  const contextProjectId = handlerContext?.project?.id || projectId;
+  const { attachmentId, pillarId, query } = input;
+  const contextPillarId = handlerContext?.pillar?.id || pillarId;
 
-  console.log('[readFile] Handler called', { attachmentId, projectId: contextProjectId, query });
+  console.log('[readFile] Handler called', { attachmentId, pillarId: contextPillarId, query });
 
   try {
     // Case 1: Read specific attachment by ID
     if (attachmentId) {
-      const attachment = await getAttachmentById(attachmentId, contextProjectId);
+      const attachment = await getAttachmentById(attachmentId, contextPillarId);
 
       if (!attachment) {
         return {
@@ -218,19 +218,19 @@ const handler = async (input = {}, handlerContext = {}) => {
       };
     }
 
-    // Case 2: Search files in a project
-    if (contextProjectId) {
-      const attachments = await searchFilesInProject(contextProjectId, query);
+    // Case 2: Search files in a pillar
+    if (contextPillarId) {
+      const attachments = await searchFilesInPillar(contextPillarId, query);
 
       if (attachments.length === 0) {
         return {
           content: JSON.stringify({
-            projectId: contextProjectId,
+            pillarId: contextPillarId,
             query: query || null,
             files: [],
             message: query 
-              ? `No PDF files matching "${query}" found in this project.`
-              : 'No PDF files found in this project.'
+              ? `No PDF files matching "${query}" found in this pillar.`
+              : 'No PDF files found in this pillar.'
           })
         };
       }
@@ -257,7 +257,7 @@ const handler = async (input = {}, handlerContext = {}) => {
 
       return {
         content: JSON.stringify({
-          projectId: contextProjectId,
+          pillarId: contextPillarId,
           query: query || null,
           fileCount: formattedList.length,
           files: formattedList,
@@ -266,11 +266,11 @@ const handler = async (input = {}, handlerContext = {}) => {
       };
     }
 
-    // No attachmentId or projectId provided
+    // No attachmentId or pillarId provided
     return {
       content: JSON.stringify({
         error: 'missing_parameters',
-        message: 'Please provide either an attachmentId to read a specific file, or a projectId to search for files.'
+        message: 'Please provide either an attachmentId to read a specific file, or a pillarId to search for files.'
       }),
       isError: true
     };

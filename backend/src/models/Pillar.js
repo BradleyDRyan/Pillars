@@ -1,12 +1,17 @@
 const { firestore } = require('../config/firebase');
 
 /**
+ * Pillar — A major domain of life (e.g., Work, Relationship, Health)
+ * 
  * Valid icon values (enum-based, translates to platform-specific assets):
  * - folder (default)
  * - health
  * - money
+ * - work
+ * - relationship
+ * - growth
  */
-class Project {
+class Pillar {
   constructor(data = {}) {
     this.id = data.id || null;
     this.userId = data.userId || null;
@@ -20,9 +25,11 @@ class Project {
     this.settings = data.settings || {};
     this.stats = data.stats || {
       conversationCount: 0,
+      messageCount: 0,
       taskCount: 0,
-      entryCount: 0,
-      thoughtCount: 0
+      principleCount: 0,
+      wisdomCount: 0,
+      resourceCount: 0
     };
     this.createdAt = data.createdAt || new Date();
     this.updatedAt = data.updatedAt || new Date();
@@ -30,27 +37,27 @@ class Project {
   }
 
   static collection() {
-    return firestore.collection('projects');
+    return firestore.collection('pillars');
   }
 
   static async create(data) {
-    const project = new Project(data);
+    const pillar = new Pillar(data);
     const docRef = await this.collection().add({
-      userId: project.userId,
-      name: project.name,
-      description: project.description,
-      color: project.color,
-      icon: project.icon,
-      isDefault: project.isDefault,
-      isArchived: project.isArchived,
-      settings: project.settings,
-      stats: project.stats,
-      createdAt: project.createdAt,
-      updatedAt: project.updatedAt,
-      metadata: project.metadata
+      userId: pillar.userId,
+      name: pillar.name,
+      description: pillar.description,
+      color: pillar.color,
+      icon: pillar.icon,
+      isDefault: pillar.isDefault,
+      isArchived: pillar.isArchived,
+      settings: pillar.settings,
+      stats: pillar.stats,
+      createdAt: pillar.createdAt,
+      updatedAt: pillar.updatedAt,
+      metadata: pillar.metadata
     });
-    project.id = docRef.id;
-    return project;
+    pillar.id = docRef.id;
+    return pillar;
   }
 
   static async findById(id) {
@@ -58,7 +65,7 @@ class Project {
     if (!doc.exists) {
       return null;
     }
-    return new Project({ id: doc.id, ...doc.data() });
+    return new Pillar({ id: doc.id, ...doc.data() });
   }
 
   static async findByUserId(userId, includeArchived = false) {
@@ -69,10 +76,10 @@ class Project {
     }
     
     const snapshot = await query.orderBy('createdAt', 'asc').get();
-    return snapshot.docs.map(doc => new Project({ id: doc.id, ...doc.data() }));
+    return snapshot.docs.map(doc => new Pillar({ id: doc.id, ...doc.data() }));
   }
 
-  static async findDefaultProject(userId) {
+  static async findDefaultPillar(userId) {
     const snapshot = await this.collection()
       .where('userId', '==', userId)
       .where('isDefault', '==', true)
@@ -84,11 +91,11 @@ class Project {
     }
     
     const doc = snapshot.docs[0];
-    return new Project({ id: doc.id, ...doc.data() });
+    return new Pillar({ id: doc.id, ...doc.data() });
   }
 
-  static async createDefaultProject(userId) {
-    const existingDefault = await this.findDefaultProject(userId);
+  static async createDefaultPillar(userId) {
+    const existingDefault = await this.findDefaultPillar(userId);
     if (existingDefault) {
       return existingDefault;
     }
@@ -96,7 +103,7 @@ class Project {
     return this.create({
       userId,
       name: 'Personal',
-      description: 'Your personal project',
+      description: 'Your personal pillar',
       color: '#6366f1',
       isDefault: true
     });
@@ -104,26 +111,36 @@ class Project {
 
   async updateStats() {
     const conversations = await firestore.collection('conversations')
-      .where('projectIds', 'array-contains', this.id)
+      .where('pillarIds', 'array-contains', this.id)
+      .get();
+    
+    const messages = await firestore.collection('messages')
+      .where('pillarIds', 'array-contains', this.id)
       .get();
     
     const tasks = await firestore.collection('tasks')
-      .where('projectIds', 'array-contains', this.id)
+      .where('pillarIds', 'array-contains', this.id)
       .get();
-    
-    const entries = await firestore.collection('entries')
-      .where('projectIds', 'array-contains', this.id)
+
+    const principles = await firestore.collection('principles')
+      .where('pillarId', '==', this.id)
       .get();
-    
-    const thoughts = await firestore.collection('thoughts')
-      .where('projectIds', 'array-contains', this.id)
+
+    const wisdoms = await firestore.collection('wisdoms')
+      .where('pillarId', '==', this.id)
+      .get();
+
+    const resources = await firestore.collection('resources')
+      .where('pillarId', '==', this.id)
       .get();
     
     this.stats = {
       conversationCount: conversations.size,
+      messageCount: messages.size,
       taskCount: tasks.size,
-      entryCount: entries.size,
-      thoughtCount: thoughts.size
+      principleCount: principles.size,
+      wisdomCount: wisdoms.size,
+      resourceCount: resources.size
     };
     
     await this.save();
@@ -133,7 +150,7 @@ class Project {
   async save() {
     this.updatedAt = new Date();
     if (this.id) {
-      await Project.collection().doc(this.id).update({
+      await Pillar.collection().doc(this.id).update({
         name: this.name,
         description: this.description,
         color: this.color,
@@ -146,7 +163,7 @@ class Project {
         metadata: this.metadata
       });
     } else {
-      const created = await Project.create(this);
+      const created = await Pillar.create(this);
       this.id = created.id;
     }
     return this;
@@ -166,13 +183,13 @@ class Project {
     if (this.id) {
       const hasContent = Object.values(this.stats).some(count => count > 0);
       if (hasContent) {
-        throw new Error('Cannot delete project with existing content. Archive it instead.');
+        throw new Error('Cannot delete pillar with existing content. Archive it instead.');
       }
       
-      await Project.collection().doc(this.id).delete();
+      await Pillar.collection().doc(this.id).delete();
     }
   }
 }
 
-module.exports = Project;
+module.exports = Pillar;
 

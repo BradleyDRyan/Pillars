@@ -1,12 +1,12 @@
 /**
  * Context Builder Module
  *
- * Builds system prompts, request context, and project context
+ * Builds system prompts, request context, and pillar context
  * for Claude API requests.
  *
  * Key Responsibilities:
  * - Build comprehensive system prompts (date, tool behavior)
- * - Extract and format project context from parameters
+ * - Extract and format pillar context from parameters
  * - Combine multiple system prompt sources
  */
 
@@ -39,8 +39,8 @@ const BASE_SYSTEM_PROMPT = `You are a helpful AI assistant. You have access to t
 IMPORTANT - Tool Usage:
 - You HAVE tools available to help users
 - When a user asks about documents, files, or PDFs, use the read_file tool
-- Don't say you can't access files - you CAN use tools to read documents in the user's projects
-- If you need to find files in a project, use read_file with projectId parameter
+- Don't say you can't access files - you CAN use tools to read documents in the user's pillars
+- If you need to find files in a pillar, use read_file with pillarId parameter
 - If the user mentions a specific document, search for it using the query parameter
 
 Be helpful, concise, and use your tools when appropriate.`;
@@ -50,13 +50,13 @@ Be helpful, concise, and use your tools when appropriate.`;
  *
  * @param {Object} options - Options for building system prompt
  * @param {string} [options.system] - System messages from message history
- * @param {Object} [options.projectContext] - Project context object
+ * @param {Object} [options.pillarContext] - Pillar context object
  * @param {string} [options.userId] - User ID
  * @returns {Promise<string>} Complete system prompt
  */
 async function buildSystemPrompt({
   system = null,
-  projectContext = null,
+  pillarContext = null,
   userId = null
 } = {}) {
   const systemParts = [];
@@ -69,28 +69,28 @@ async function buildSystemPrompt({
     systemParts.push(system);
   }
 
-  // 3. Add project context if available
-  if (projectContext && projectContext.id) {
-    let projectContextText = `\nPROJECT CONTEXT:\nYou are assisting with the "${projectContext.title || 'Untitled Project'}" project (ID: ${projectContext.id}).`;
+  // 3. Add pillar context if available
+  if (pillarContext && pillarContext.id) {
+    let pillarContextText = `\nPILLAR CONTEXT:\nYou are assisting with the "${pillarContext.name || 'Untitled Pillar'}" pillar (ID: ${pillarContext.id}).`;
     
-    if (projectContext.instructions) {
-      projectContextText += `\n\nProject Instructions:\n${projectContext.instructions}`;
+    if (pillarContext.description) {
+      pillarContextText += `\n\nPillar Description:\n${pillarContext.description}`;
     }
     
     // Add available files
-    if (projectContext.files && projectContext.files.length > 0) {
-      projectContextText += '\n\nAVAILABLE FILES IN THIS PROJECT:';
-      projectContext.files.forEach(file => {
+    if (pillarContext.files && pillarContext.files.length > 0) {
+      pillarContextText += '\n\nAVAILABLE FILES IN THIS PILLAR:';
+      pillarContext.files.forEach(file => {
         const statusIcon = file.hasContent ? '✓' : '⏳';
-        projectContextText += `\n- ${statusIcon} "${file.title}" (ID: ${file.id})`;
+        pillarContextText += `\n- ${statusIcon} "${file.title}" (ID: ${file.id})`;
       });
-      projectContextText += '\n\nTo read a file, use the read_file tool with the attachmentId shown above.';
+      pillarContextText += '\n\nTo read a file, use the read_file tool with the attachmentId shown above.';
     } else {
-      projectContextText += '\n\nNo PDF files have been uploaded to this project yet.';
+      pillarContextText += '\n\nNo PDF files have been uploaded to this pillar yet.';
     }
     
-    systemParts.push(projectContextText);
-    console.log(`[ContextBuilder] Added project context: ${projectContext.title} (${projectContext.id}) with ${projectContext.files?.length || 0} files`);
+    systemParts.push(pillarContextText);
+    console.log(`[ContextBuilder] Added pillar context: ${pillarContext.name} (${pillarContext.id}) with ${pillarContext.files?.length || 0} files`);
   }
 
   // 4. Add current date context
@@ -106,48 +106,47 @@ async function buildSystemPrompt({
 }
 
 /**
- * Builds project context from request parameters
- * Fetches project data and available files from Firestore
+ * Builds pillar context from request parameters
+ * Fetches pillar data and available files from Firestore
  *
  * @param {Object} params - Request parameters
- * @param {string} [params.projectId] - Project ID
- * @returns {Promise<Object>} Project context object with files
+ * @param {string} [params.pillarId] - Pillar ID
+ * @returns {Promise<Object>} Pillar context object with files
  */
-async function buildProjectContext(params = {}) {
+async function buildPillarContext(params = {}) {
   if (!params || typeof params !== 'object') {
     return null;
   }
 
-  const projectId = params.projectId || null;
+  const pillarId = params.pillarId || null;
   
-  if (!projectId) {
+  if (!pillarId) {
     return null;
   }
 
   try {
-    // Fetch project data from Firestore (optional - might not exist)
-    let projectData = {};
+    // Fetch pillar data from Firestore
+    let pillarData = {};
     try {
-      const projectDoc = await firestore.collection('projects').doc(projectId).get();
-      if (projectDoc.exists) {
-        projectData = projectDoc.data();
-        console.log(`[ContextBuilder] Found project: ${projectData.name || projectData.title || projectId}`);
+      const pillarDoc = await firestore.collection('pillars').doc(pillarId).get();
+      if (pillarDoc.exists) {
+        pillarData = pillarDoc.data();
+        console.log(`[ContextBuilder] Found pillar: ${pillarData.name || pillarId}`);
       } else {
-        console.log(`[ContextBuilder] Project document not found, but will still check attachments: ${projectId}`);
+        console.log(`[ContextBuilder] Pillar document not found, but will still check attachments: ${pillarId}`);
       }
-    } catch (projError) {
-      console.log(`[ContextBuilder] Could not fetch project doc: ${projError.message}`);
+    } catch (pillarError) {
+      console.log(`[ContextBuilder] Could not fetch pillar doc: ${pillarError.message}`);
     }
     
-    // Fetch available PDF files in this project
-    // Try simple query first (no compound index needed)
+    // Fetch available PDF files in this pillar
     let files = [];
     try {
-      console.log(`[ContextBuilder] Fetching attachments from projects/${projectId}/attachments`);
+      console.log(`[ContextBuilder] Fetching attachments from pillars/${pillarId}/attachments`);
       
       const attachmentsSnapshot = await firestore
-        .collection('projects')
-        .doc(projectId)
+        .collection('pillars')
+        .doc(pillarId)
         .collection('attachments')
         .limit(20)
         .get();
@@ -168,7 +167,7 @@ async function buildProjectContext(params = {}) {
         })
         .filter(f => f.mimeType === 'application/pdf');
       
-      console.log(`[ContextBuilder] Found ${files.length} PDF files in project ${projectId}`);
+      console.log(`[ContextBuilder] Found ${files.length} PDF files in pillar ${pillarId}`);
       if (files.length > 0) {
         console.log(`[ContextBuilder] Files:`, files.map(f => `${f.title} (${f.status})`));
       }
@@ -177,18 +176,18 @@ async function buildProjectContext(params = {}) {
     }
     
     return {
-      id: projectId,
-      title: projectData.title || projectData.name || null,
-      instructions: projectData.instructions || null,
-      description: projectData.description || null,
+      id: pillarId,
+      name: pillarData.name || null,
+      description: pillarData.description || null,
+      color: pillarData.color || null,
       files
     };
   } catch (error) {
-    console.error('[ContextBuilder] Error fetching project data:', error);
+    console.error('[ContextBuilder] Error fetching pillar data:', error);
     return {
-      id: projectId,
-      title: null,
-      instructions: null,
+      id: pillarId,
+      name: null,
+      description: null,
       files: []
     };
   }
@@ -233,7 +232,7 @@ function buildRequestPayload({
 
 module.exports = {
   buildSystemPrompt,
-  buildProjectContext,
+  buildPillarContext,
   buildRequestPayload,
   getCurrentDateContext,
   BASE_SYSTEM_PROMPT

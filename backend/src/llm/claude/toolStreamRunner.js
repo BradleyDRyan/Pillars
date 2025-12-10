@@ -12,7 +12,7 @@ const {
 } = require('../../services/anthropic');
 const { executeToolsInParallel } = require('./toolExecutor');
 const { buildToolDefinitions, filterToolsByContext } = require('./toolOrchestrator');
-const { buildSystemPrompt, buildProjectContext } = require('./contextBuilder');
+const { buildSystemPrompt, buildPillarContext } = require('./contextBuilder');
 const {
   setSSEHeaders,
   emitTextDelta,
@@ -93,9 +93,9 @@ async function runClaudeToolStream({
       null
     );
 
-    // Build project context from request
-    const projectContext = await buildProjectContext({
-      projectId: requestContext?.projectId
+    // Build pillar context from request
+    const pillarContext = await buildPillarContext({
+      pillarId: requestContext?.pillarId
     });
 
     // Transform messages (extract system messages)
@@ -104,14 +104,14 @@ async function runClaudeToolStream({
     // Build complete system prompt with context
     const fullSystemPrompt = await buildSystemPrompt({
       system: baseSystemPrompt,
-      projectContext,
+      pillarContext,
       userId: requestContext?.userId
     });
 
     const convo = [...baseTransformed];
     let fullAccumulatedText = '';
 
-    console.log(`[toolStreamRunner] Project context:`, projectContext?.id || 'none');
+    console.log(`[toolStreamRunner] Pillar context:`, pillarContext?.id || 'none');
     console.log(`[toolStreamRunner] Tools count:`, definitions.length);
     console.log(`[toolStreamRunner] Tools available:`, JSON.stringify(definitions.map(d => ({ name: d.name, hasSchema: !!d.input_schema }))));
     console.log(`[toolStreamRunner] System prompt length:`, fullSystemPrompt?.length || 0);
@@ -168,8 +168,8 @@ async function runClaudeToolStream({
           ...handlerContext,
           conversationId: requestContext?.conversationId,
           userId: requestContext?.userId,
-          // Pass project context to tools
-          project: projectContext ? { id: projectContext.id } : handlerContext?.project
+          // Pass pillar context to tools
+          pillar: pillarContext ? { id: pillarContext.id } : handlerContext?.pillar
         },
         requestContext
       });

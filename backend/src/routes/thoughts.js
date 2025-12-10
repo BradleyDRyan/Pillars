@@ -1,4 +1,4 @@
-const express = require('express');
+sconst express = require('express');
 const router = express.Router();
 const { Thought } = require('../models');
 const { verifyToken } = require('../middleware/auth');
@@ -78,11 +78,12 @@ router.get('/:id/linked', async (req, res) => {
 
 router.post('/', async (req, res) => {
   try {
-    const projectIds = req.body.projectIds || [];
+    // Support both pillarIds (new) and projectIds (legacy)
+    const pillarIds = req.body.pillarIds || req.body.projectIds || [];
     
     const thought = await Thought.create({
       ...req.body,
-      projectIds,
+      pillarIds,
       userId: req.user.uid
     });
     res.status(201).json(thought);

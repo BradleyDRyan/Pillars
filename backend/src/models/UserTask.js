@@ -4,7 +4,8 @@ class UserTask {
   constructor(data = {}) {
     this.id = data.id || null;
     this.userId = data.userId || null;
-    this.projectIds = data.projectIds || [];
+    // Support both pillarIds (new) and projectIds (legacy)
+    this.pillarIds = data.pillarIds || data.projectIds || [];
     this.conversationId = data.conversationId || null;
     this.title = data.title || '';
     this.description = data.description || '';
@@ -26,7 +27,7 @@ class UserTask {
     const task = new UserTask(data);
     const docRef = await this.collection().add({
       userId: task.userId,
-      projectIds: task.projectIds,
+      pillarIds: task.pillarIds,
       conversationId: task.conversationId,
       title: task.title,
       description: task.description,
@@ -54,8 +55,8 @@ class UserTask {
   static async findByUserId(userId, filters = {}) {
     let query = this.collection().where('userId', '==', userId);
     
-    if (filters.projectId) {
-      query = query.where('projectIds', 'array-contains', filters.projectId);
+    if (filters.pillarId) {
+      query = query.where('pillarIds', 'array-contains', filters.pillarId);
     }
     
     if (filters.status) {
@@ -88,7 +89,7 @@ class UserTask {
       await UserTask.collection().doc(this.id).update({
         title: this.title,
         description: this.description,
-        projectIds: this.projectIds,
+        pillarIds: this.pillarIds,
         status: this.status,
         priority: this.priority,
         dueDate: this.dueDate,

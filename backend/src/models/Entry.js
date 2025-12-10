@@ -10,7 +10,8 @@ class Entry {
     } else {
       this.collectionIds = data.collectionIds || [];
     }
-    this.projectIds = data.projectIds || [];
+    // Support both pillarIds (new) and projectIds (legacy)
+    this.pillarIds = data.pillarIds || data.projectIds || [];
     this.conversationId = data.conversationId || null;
     this.title = data.title || '';
     this.content = data.content || '';
@@ -36,7 +37,7 @@ class Entry {
     const docRef = await this.collection().add({
       userId: entry.userId,
       collectionIds: entry.collectionIds,
-      projectIds: entry.projectIds,
+      pillarIds: entry.pillarIds,
       conversationId: entry.conversationId,
       title: entry.title,
       content: entry.content,
@@ -75,8 +76,8 @@ class Entry {
       query = query.where('collectionId', '==', filters.collectionId);
     }
     
-    if (filters.projectId) {
-      query = query.where('projectIds', 'array-contains', filters.projectId);
+    if (filters.pillarId) {
+      query = query.where('pillarIds', 'array-contains', filters.pillarId);
     }
     
     if (filters.type) {
@@ -141,7 +142,7 @@ class Entry {
       await Entry.collection().doc(this.id).update({
         title: this.title,
         content: this.content,
-        projectIds: this.projectIds,
+        pillarIds: this.pillarIds,
         type: this.type,
         mood: this.mood,
         tags: this.tags,

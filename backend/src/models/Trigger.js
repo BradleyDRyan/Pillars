@@ -1,119 +1,72 @@
 const { firestore } = require('../config/firebase');
 
-const toDate = value => {
-  if (!value) {
-    return null;
-  }
-  if (value instanceof Date) {
-    return value;
-  }
-  if (typeof value.toDate === 'function') {
-    return value.toDate();
-  }
-  return new Date(value);
-};
-
-const cleanData = data =>
-  Object.entries(data).reduce((acc, [key, value]) => {
-    if (value !== undefined) {
-      acc[key] = value;
-    }
-    return acc;
-  }, {});
-
+/**
+ * Trigger — Defines when and how an Agent should run
+ */
 class Trigger {
   constructor(data = {}) {
     this.id = data.id || null;
-    this.agentId = data.agentId || data.monitorId || ''; // Support both for migration
-    this.type = data.type || 'time_based'; // For now, only time_based
-    this.schedule = data.schedule || ''; // e.g., "daily:09:00" or cron expression
-    this.enabled = data.enabled !== undefined ? Boolean(data.enabled) : true;
-    this.lastRunAt = toDate(data.lastRunAt);
-    this.nextRunAt = toDate(data.nextRunAt);
+    this.agentId = data.agentId || null;
+    this.type = data.type || 'time_based';
+    this.schedule = data.schedule || null;
+    this.enabled = data.enabled !== undefined ? data.enabled : true;
+    this.lastRunAt = data.lastRunAt || null;
+    this.createdAt = data.createdAt || new Date();
+    this.updatedAt = data.updatedAt || new Date();
     this.metadata = data.metadata || {};
-    this.createdAt = toDate(data.createdAt) || new Date();
-    this.updatedAt = toDate(data.updatedAt) || new Date();
   }
 
   static collection() {
     return firestore.collection('triggers');
   }
 
-  static fromDoc(doc) {
-    if (!doc.exists) {
-      return null;
-    }
-
-    return new Trigger({
-      id: doc.id,
-      ...doc.data()
+  static async create(data) {
+    const trigger = new Trigger(data);
+    const docRef = await this.collection().add({
+      agentId: trigger.agentId,
+      type: trigger.type,
+      schedule: trigger.schedule,
+      enabled: trigger.enabled,
+      lastRunAt: trigger.lastRunAt,
+      createdAt: trigger.createdAt,
+      updatedAt: trigger.updatedAt,
+      metadata: trigger.metadata
     });
-  }
-
-  static async findAll() {
-    const snapshot = await this.collection().orderBy('createdAt', 'desc').get();
-    return snapshot.docs.map(doc => this.fromDoc(doc)).filter(Boolean);
+    trigger.id = docRef.id;
+    return trigger;
   }
 
   static async findById(id) {
-    if (!id) {
+    const doc = await this.collection().doc(id).get();
+    if (!doc.exists) {
       return null;
     }
-    const doc = await this.collection().doc(id).get();
-    return this.fromDoc(doc);
+    return new Trigger({ id: doc.id, ...doc.data() });
   }
 
   static async findByAgentId(agentId) {
-    if (!agentId) {
-      return [];
-    }
     const snapshot = await this.collection()
       .where('agentId', '==', agentId)
-      .orderBy('createdAt', 'desc')
       .get();
-    return snapshot.docs.map(doc => this.fromDoc(doc)).filter(Boolean);
+    return snapshot.docs.map(doc => new Trigger({ id: doc.id, ...doc.data() }));
   }
 
-  // Legacy method for backward compatibility
-  static async findByMonitorId(monitorId) {
-    return this.findByAgentId(monitorId);
-  }
-
-  static async create(data) {
-    const now = new Date();
-    const payload = cleanData({
-      agentId: data.agentId || data.monitorId, // Support both for migration
-      type: data.type || 'time_based',
-      schedule: data.schedule,
-      enabled: data.enabled !== undefined ? Boolean(data.enabled) : true,
-      lastRunAt: data.lastRunAt || null,
-      nextRunAt: data.nextRunAt || null,
-      metadata: data.metadata || {},
-      createdAt: now,
-      updatedAt: now
-    });
-
-    const docRef = await this.collection().add(payload);
-    return new Trigger({
-      id: docRef.id,
-      ...payload
-    });
+  static async findAll() {
+    const snapshot = await this.collection().get();
+    return snapshot.docs.map(doc => new Trigger({ id: doc.id, ...doc.data() }));
   }
 
   static async update(id, data) {
-    if (!id) {
-      throw new Error('Trigger ID is required');
-    }
-
-    const payload = cleanData({
+    const updateData = {
       ...data,
-      updatedAt: data.updatedAt || new Date()
-    });
+      updatedAt: new Date()
+    };
+    await this.collection().doc(id).update(updateData);
+    return this.findById(id);
+  }
 
-    const docRef = this.collection().doc(id);
-    await docRef.set(payload, { merge: true });
-    const updatedDoc = await docRef.get();
-    return this.fromDoc(updatedDoc);
+  static async delete(id) {
+    await this.collection().doc(id).delete();
   }
 
   toJSON() {
@@ -123,11 +76,10 @@ class Trigger {
       type: this.type,
       schedule: this.schedule,
       enabled: this.enabled,
-      lastRunAt: this.lastRunAt ? this.lastRunAt.toISOString() : null,
-      nextRunAt: this.nextRunAt ? this.nextRunAt.toISOString() : null,
-      metadata: this.metadata,
-      createdAt: this.createdAt ? this.createdAt.toISOString() : null,
-      updatedAt: this.updatedAt ? this.updatedAt.toISOString() : null
+      lastRunAt: this.lastRunAt,
+      createdAt: this.createdAt,
+      updatedAt: this.updatedAt,
+      metadata: this.metadata
     };
   }
 }

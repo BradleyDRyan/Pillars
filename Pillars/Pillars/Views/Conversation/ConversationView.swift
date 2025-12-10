@@ -42,14 +42,14 @@ struct ConversationView: View {
     // Optional existing conversation (from History)
     let existingConversation: Conversation?
     
-    // Project IDs to assign to new conversation
-    let projectIds: [String]
+    // Pillar IDs to assign to new conversation
+    let pillarIds: [String]
     
-    // Initial message to send after setup (for starting from project view)
+    // Initial message to send after setup (for starting from pillar view)
     let initialMessage: String?
     
     init(existingConversation: Conversation? = nil,
-         projectIds: [String] = [],
+         pillarIds: [String] = [],
          initialMessage: String? = nil,
          onMenuTapped: (() -> Void)? = nil,
          onSettingsTapped: (() -> Void)? = nil,
@@ -57,11 +57,11 @@ struct ConversationView: View {
          showHeader: Bool = true) {
         print("🎬 [ConversationView] init called")
         print("🎬 [ConversationView] existingConversation: \(existingConversation?.id ?? "nil")")
-        print("🎬 [ConversationView] projectIds: \(projectIds)")
+        print("🎬 [ConversationView] pillarIds: \(pillarIds)")
         print("🎬 [ConversationView] initialMessage: \(initialMessage ?? "nil")")
         
         self.existingConversation = existingConversation
-        self.projectIds = projectIds
+        self.pillarIds = pillarIds
         self.initialMessage = initialMessage
         self.onMenuTapped = onMenuTapped
         self.onSettingsTapped = onSettingsTapped
@@ -118,17 +118,6 @@ struct ConversationView: View {
                             }
                         }
                     }
-                    .safeAreaBar(edge: .top) {
-                        // Header bar - enables top scroll edge effect
-                        // safeAreaBar automatically handles safe area insets
-                        if showHeader {
-                            ConversationHeader(
-                                onMenuTapped: onMenuTapped ?? {},
-                                onSettingsTapped: onSettingsTapped ?? { dismiss() },
-                                moreMenu: headerMenuContent
-                            )
-                        }
-                    }
                     .safeAreaBar(edge: .bottom) {
                         // Composer bar - enables bottom scroll edge effect
                         Composer(
@@ -174,16 +163,15 @@ struct ConversationView: View {
                 menuViewModel.startListening(userId: userId)
             }
             processInputSignatureChange()
-            // Auto-focus input
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-                isInputFocused = true
-            }
         }
         .onChange(of: inputSignature) { _, newSignature in
             print("🔄 [ConversationView] inputSignature changed -> \(newSignature)")
             processInputSignatureChange()
         }
         .onDisappear {
+            // Dismiss keyboard when leaving
+            UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
+            
             setupTask?.cancel()
             menuViewModel.stopListening()
             Task {
@@ -203,16 +191,30 @@ struct ConversationView: View {
                 onToggleVoice: toggleVoice
             )
         }
-        // Add toolbar menu when header is hidden (pushed from project view)
+        // Native iOS toolbar
         .toolbar {
-            if !showHeader, let menuContent = headerMenuContent {
-                ToolbarItem(placement: .topBarTrailing) {
+            if showHeader {
+                ToolbarItem(placement: .topBarLeading) {
+                    Button {
+                        onMenuTapped?()
+                    } label: {
+                        Image(systemName: "line.3.horizontal")
+                    }
+                }
+            }
+            
+            ToolbarItem(placement: .topBarTrailing) {
+                if let menuContent = headerMenuContent {
                     Menu {
                         menuContent()
                     } label: {
                         Image(systemName: "ellipsis")
-                            .font(.system(size: 16, weight: .medium))
-                            .foregroundColor(.primary)
+                    }
+                } else {
+                    Button {
+                        onSettingsTapped?() ?? dismiss()
+                    } label: {
+                        Image(systemName: "ellipsis")
                     }
                 }
             }
@@ -266,7 +268,7 @@ struct ConversationView: View {
         print("🔧 [ConversationView] setupConversation() starting")
         print("🔧 [ConversationView] existingConversation?.id: \(existingConversation?.id ?? "nil")")
         print("🔧 [ConversationView] conversationId: \(conversationId ?? "nil")")
-        print("🔧 [ConversationView] projectIds: \(projectIds)")
+        print("🔧 [ConversationView] pillarIds: \(pillarIds)")
         print("🔧 [ConversationView] initialMessage: \(initialMessage ?? "nil")")
         
         let convId = existingConversation?.id ?? conversationId
@@ -275,7 +277,7 @@ struct ConversationView: View {
         await textViewModel.setup(
             conversationId: convId,
             existingConversation: existingConversation,
-            projectIds: projectIds
+            pillarIds: pillarIds
         )
         
         if Task.isCancelled {
@@ -316,9 +318,9 @@ struct ConversationView: View {
         if let conversation = existingConversation {
             return "conversation-\(conversation.id)"
         }
-        let projectsKey = projectIds.sorted().joined(separator: ",")
+        let pillarsKey = pillarIds.sorted().joined(separator: ",")
         let initial = initialMessage ?? ""
-        return "new-\(projectsKey)-\(initial)"
+        return "new-\(pillarsKey)-\(initial)"
     }
     
     private func processInputSignatureChange() {

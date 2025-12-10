@@ -21,16 +21,15 @@ const phoneAuthRoutes = require('./routes/phone-auth');
 const conversationRoutes = require('./routes/conversations');
 const messageRoutes = require('./routes/messages');
 const taskRoutes = require('./routes/tasks');
-const entryRoutes = require('./routes/entries');
-const thoughtRoutes = require('./routes/thoughts');
-const projectRoutes = require('./routes/projects');
+const pillarRoutes = require('./routes/pillars');
+const principleRoutes = require('./routes/principles');
+const wisdomRoutes = require('./routes/wisdoms');
+const resourceRoutes = require('./routes/resources');
 const aiRoutes = require('./routes/ai');
 const realtimeRoutes = require('./routes/realtime');
-const workerRoutes = require('./routes/workers');
 const testRoutes = require('./routes/test');
 const adminUiRoutes = require('./routes/admin');
 const agentRoutes = require('./routes/agents');
-const triggerRoutes = require('./routes/triggers');
 const attachmentRoutes = require('./routes/attachments');
 
 const app = express();
@@ -50,20 +49,20 @@ app.use('/api', limiter);
 
 app.get('/', (req, res) => {
   res.json({ 
-    message: 'Squirrel 2.0 Backend API',
-    version: '2.0.0',
+    message: 'Pillars Backend API',
+    version: '3.0.0',
     endpoints: {
       auth: '/auth',
       api: '/api',
       users: '/users',
-      projects: '/api/projects',
+      pillars: '/api/pillars',
+      principles: '/api/principles',
+      wisdoms: '/api/wisdoms',
+      resources: '/api/resources',
       conversations: '/api/conversations',
       messages: '/api/messages',
       tasks: '/api/tasks',
-      entries: '/api/entries',
-      thoughts: '/api/thoughts',
       agents: '/api/agents',
-      triggers: '/api/triggers',
       attachments: '/api/attachments'
     }
   });
@@ -73,18 +72,17 @@ app.use('/auth', authRoutes);
 app.use('/auth/phone', phoneAuthRoutes);
 app.use('/api', apiRoutes);
 app.use('/users', userRoutes);
-app.use('/api/projects', projectRoutes);
+app.use('/api/pillars', pillarRoutes);
+app.use('/api/principles', principleRoutes);
+app.use('/api/wisdoms', wisdomRoutes);
+app.use('/api/resources', resourceRoutes);
 app.use('/api/conversations', conversationRoutes);
 app.use('/api/messages', messageRoutes);
 app.use('/api/tasks', taskRoutes);
-app.use('/api/entries', entryRoutes);
-app.use('/api/thoughts', thoughtRoutes);
 app.use('/api/ai', aiRoutes);
 app.use('/api/realtime', realtimeRoutes);
-app.use('/api/workers', workerRoutes);
 app.use('/api/test', testRoutes);
 app.use('/api/agents', agentRoutes);
-app.use('/api/triggers', triggerRoutes);
 app.use('/api/attachments', attachmentRoutes);
 app.use('/connection-admin/api', adminUiRoutes);
 
@@ -104,5 +102,5 @@ app.use((err, req, res, next) => {
 
 // Start server
 app.listen(PORT, () => {
-  logger.info({ port: PORT }, 'Squirrel 2.0 Backend listening');
+  logger.info({ port: PORT }, 'Pillars Backend listening');
 });

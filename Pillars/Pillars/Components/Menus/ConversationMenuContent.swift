@@ -20,12 +20,12 @@ struct ConversationMenuContent: View {
     
     // Projects that this conversation is currently in
     private var assignedProjects: [Project] {
-        projects.filter { conversation.projectIds.contains($0.id) }
+        projects.filter { conversation.pillarIds.contains($0.id) }
     }
     
     // Projects that this conversation is NOT in (for adding)
     private var unassignedProjects: [Project] {
-        projects.filter { !conversation.projectIds.contains($0.id) }
+        projects.filter { !conversation.pillarIds.contains($0.id) }
     }
     
     var body: some View {

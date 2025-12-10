@@ -299,6 +299,23 @@ request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
 3. Clean up in `stopListening()`
 4. Handle errors gracefully
 
+## UI & Styling Preferences
+
+### Use Actual Numbers, Not Design System Tokens
+When writing SwiftUI code, prefer explicit numeric values over design system spacing/sizing tokens:
+
+```swift
+// ❌ AVOID - Design system tokens hide the actual values
+.padding(S2.Spacing.lg)
+.cornerRadius(S2.CornerRadius.md)
+
+// ✅ PREFER - Actual numbers are clearer
+.padding(12)
+.cornerRadius(16)
+```
+
+This makes it easier to see and adjust values during development.
+
 ## Remember
 
 > "Backend for writes, Firebase for reads, ViewModels for logic, Views for UI"

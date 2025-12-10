@@ -9,9 +9,20 @@ router.use(verifyToken);
 
 router.get('/', async (req, res) => {
   try {
-    const projectId = req.query.projectId || null;
-    const conversations = await Conversation.findByUserId(req.user.uid, projectId);
+    const pillarId = req.query.pillarId || null;
+    const includeArchived = req.query.includeArchived === 'true';
+    const conversations = await Conversation.findByUserId(req.user.uid, pillarId, includeArchived);
     res.json(conversations.map(c => c.toJSON()));
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Get or create primary conversation (Home View)
+router.get('/primary', async (req, res) => {
+  try {
+    const conversation = await Conversation.findOrCreatePrimary(req.user.uid);
+    res.json(conversation.toJSON());
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
@@ -35,11 +46,12 @@ router.post('/', async (req, res) => {
   console.log('📨 [CONVERSATIONS] Body:', req.body);
   
   try {
-    let projectIds = req.body.projectIds || [];
+    // Support both pillarIds (new) and projectIds (legacy)
+    let pillarIds = req.body.pillarIds || req.body.projectIds || [];
     
     const conversation = await Conversation.create({
       ...req.body,
-      projectIds,
+      pillarIds,
       userId: req.user.uid
     });
     
@@ -68,11 +80,49 @@ router.put('/:id', async (req, res) => {
   }
 });
 
+// Archive conversation
+router.post('/:id/archive', async (req, res) => {
+  try {
+    const conversation = await Conversation.findById(req.params.id);
+    if (!conversation || conversation.userId !== req.user.uid) {
+      return res.status(404).json({ error: 'Conversation not found' });
+    }
+    
+    if (conversation.isPrimary) {
+      return res.status(400).json({ error: 'Cannot archive primary conversation' });
+    }
+    
+    await conversation.archive();
+    res.json(conversation.toJSON());
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Unarchive conversation
+router.post('/:id/unarchive', async (req, res) => {
+  try {
+    const conversation = await Conversation.findById(req.params.id);
+    if (!conversation || conversation.userId !== req.user.uid) {
+      return res.status(404).json({ error: 'Conversation not found' });
+    }
+    
+    await conversation.unarchive();
+    res.json(conversation.toJSON());
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 router.delete('/:id', async (req, res) => {
   try {
     const conversation = await Conversation.findById(req.params.id);
     if (!conversation || conversation.userId !== req.user.uid) {
       return res.status(404).json({ error: 'Conversation not found' });
+    }
+    
+    if (conversation.isPrimary) {
+      return res.status(400).json({ error: 'Cannot delete primary conversation' });
     }
     
     await conversation.delete();
@@ -171,17 +221,17 @@ router.post('/:id/messages', async (req, res) => {
   }
 });
 
-// Add project to conversation
-router.post('/:id/projects/:projectId', async (req, res) => {
+// Add pillar to conversation
+router.post('/:id/pillars/:pillarId', async (req, res) => {
   try {
     const conversation = await Conversation.findById(req.params.id);
     if (!conversation || conversation.userId !== req.user.uid) {
       return res.status(404).json({ error: 'Conversation not found' });
     }
     
-    const { projectId } = req.params;
-    if (!conversation.projectIds.includes(projectId)) {
-      conversation.projectIds.push(projectId);
+    const { pillarId } = req.params;
+    if (!conversation.pillarIds.includes(pillarId)) {
+      conversation.pillarIds.push(pillarId);
       await conversation.save();
     }
     res.json(conversation.toJSON());
@@ -190,15 +240,15 @@ router.post('/:id/projects/:projectId', async (req, res) => {
   }
 });
 
-// Remove project from conversation
-router.delete('/:id/projects/:projectId', async (req, res) => {
+// Remove pillar from conversation
+router.delete('/:id/pillars/:pillarId', async (req, res) => {
   try {
     const conversation = await Conversation.findById(req.params.id);
     if (!conversation || conversation.userId !== req.user.uid) {
       return res.status(404).json({ error: 'Conversation not found' });
     }
     
-    conversation.projectIds = conversation.projectIds.filter(id => id !== req.params.projectId);
+    conversation.pillarIds = conversation.pillarIds.filter(id => id !== req.params.pillarId);
     await conversation.save();
     res.json(conversation.toJSON());
   } catch (error) {

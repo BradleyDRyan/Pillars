@@ -1,6 +1,11 @@
 const { firestore } = require('../config/firebase');
 const admin = require('firebase-admin');
 
+/**
+ * Message — A single turn within a Conversation (user or assistant)
+ * 
+ * Messages belong to a Conversation. Conversations can optionally be linked to Pillars.
+ */
 class Message {
   constructor(data = {}) {
     this.id = data.id || null;
@@ -12,7 +17,7 @@ class Message {
     this.role = data.role || 'user'; // 'user', 'assistant', 'system', etc.
     this.photoId = data.photoId || null; // Reference to Photo object
     this.attachments = data.attachments || []; // Array of attachment URLs
-    // Block-based content (new)
+    // Block-based content
     this.blocks = data.blocks || null; // Array of blocks for structured content
     this.toolCalls = data.toolCalls || null; // Array of tool calls used in this message
     // Use Firebase Timestamps consistently
@@ -41,16 +46,16 @@ class Message {
     
     const message = new Message(data);
     const docRef = await this.collection(message.conversationId).add({
-      conversationId: message.conversationId,  // Add this field!
+      conversationId: message.conversationId,
       userId: message.userId || null,
-      sender: message.sender || message.userId || null, // Use sender if provided, fallback to userId
+      sender: message.sender || message.userId || null,
       content: message.content,
       type: message.type,
       role: message.role,
       photoId: message.photoId,
       attachments: message.attachments,
-      blocks: message.blocks || null, // Store blocks array
-      toolCalls: message.toolCalls || null, // Store tool calls array
+      blocks: message.blocks || null,
+      toolCalls: message.toolCalls || null,
       createdAt: message.createdAt,
       editedAt: message.editedAt,
       metadata: message.metadata
@@ -163,7 +168,6 @@ class Message {
       attachments: this.attachments,
       blocks: this.blocks || null,
       toolCalls: this.toolCalls || null,
-      // Convert Firestore Timestamps to ISO8601 strings
       createdAt: this.createdAt?.toDate ? this.createdAt.toDate().toISOString() : 
                  this.createdAt?.toISOString ? this.createdAt.toISOString() : 
                  this.createdAt,

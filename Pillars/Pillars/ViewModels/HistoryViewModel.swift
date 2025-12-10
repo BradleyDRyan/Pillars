@@ -57,7 +57,7 @@ class HistoryViewModel: ObservableObject {
                     let data = doc.data()
 
                     // Create Conversation manually from the document data
-                    let projectIds = data["projectIds"] as? [String] ?? []
+                    let pillarIds = data["pillarIds"] as? [String] ?? []
                     
                     guard let userId = data["userId"] as? String,
                           let title = data["title"] as? String,
@@ -78,7 +78,7 @@ class HistoryViewModel: ObservableObject {
                     let conversation = Conversation(
                         id: doc.documentID,
                         userId: userId,
-                        projectIds: projectIds,
+                        pillarIds: pillarIds,
                         title: title,
                         lastMessage: lastMessage,
                         createdAt: createdTimestamp.dateValue(),

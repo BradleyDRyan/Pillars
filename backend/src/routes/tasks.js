@@ -53,11 +53,12 @@ router.get('/:id', async (req, res) => {
 
 router.post('/', async (req, res) => {
   try {
-    const projectIds = req.body.projectIds || [];
+    // Support both pillarIds (new) and projectIds (legacy)
+    const pillarIds = req.body.pillarIds || req.body.projectIds || [];
     
     const task = await UserTask.create({
       ...req.body,
-      projectIds,
+      pillarIds,
       userId: req.user.uid
     });
     res.status(201).json(task);
@@ -127,7 +128,7 @@ router.post('/create-voice-task', flexibleAuth, async (req, res) => {
       priority: priority || 'medium',
       status: 'pending',
       source: 'voice',
-      projectIds: [],
+      pillarIds: [],
       metadata: { 
         source: 'voice',
         createdAt: new Date()

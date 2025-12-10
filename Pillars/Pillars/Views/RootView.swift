@@ -24,8 +24,8 @@ struct RootView: View {
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .background(S2.Colors.squirrelBackground)
             } else if firebaseManager.isAuthenticated {
-                // Show main app with tabs
-                MainTabView()
+                // Show main app
+                HomeView()
                     .environmentObject(firebaseManager)
             } else {
                 // Not authenticated - auto sign in

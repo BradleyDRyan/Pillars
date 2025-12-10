@@ -152,6 +152,27 @@ struct S2 {
         static let lg = (color: Color.black.opacity(0.15), radius: CGFloat(16), x: CGFloat(0), y: CGFloat(8))
         /// Shadow for glass/liquid glass components (buttons, inputs, etc.)
         static let glass = (color: Color.black.opacity(0.04), radius: CGFloat(4), x: CGFloat(0), y: CGFloat(2))
+        /// Elevated glass shadow for lifted states
+        static let glassElevated = (color: Color.black.opacity(0.12), radius: CGFloat(16), x: CGFloat(0), y: CGFloat(8))
+    }
+    
+    // MARK: - Glass Colors
+    struct Glass {
+        /// Base tint for light mode glass
+        static let lightTint = Color.white.opacity(0.7)
+        /// Base tint for dark mode glass
+        static let darkTint = Color(hex: "1C1C1E").opacity(0.7)
+        /// Highlight color for specular effects
+        static let highlight = Color.white
+        /// Border color for glass edges
+        static let border = Color.white.opacity(0.2)
+        /// Inner shadow for depth
+        static let innerShadow = Color.black.opacity(0.05)
+        
+        /// Dynamic glass background that adapts to color scheme
+        static func background(for colorScheme: ColorScheme) -> Color {
+            colorScheme == .dark ? darkTint : lightTint
+        }
     }
 
     // MARK: - Elevation

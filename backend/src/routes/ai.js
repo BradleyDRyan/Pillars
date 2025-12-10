@@ -30,11 +30,11 @@ router.post(['/chat/stream', '/stream-chat-direct'], verifyToken, async (req, re
     temperature, 
     maxTokens,
     conversationId,
-    projectId 
+    pillarId 
   } = req.body;
   
   console.log(`📝 [ai/chat/stream] Model: ${model || 'default'}, Messages: ${messages?.length}`);
-  console.log(`📝 [ai/chat/stream] ProjectId: ${projectId}, ConversationId: ${conversationId}`);
+  console.log(`📝 [ai/chat/stream] PillarId: ${pillarId}, ConversationId: ${conversationId}`);
 
   if (!messages || !Array.isArray(messages)) {
     return res.status(400).json({ error: 'Messages array is required' });
@@ -58,12 +58,12 @@ router.post(['/chat/stream', '/stream-chat-direct'], verifyToken, async (req, re
       requestContext: {
         conversationId: conversationId || null,
         userId: req.user?.uid || null,
-        projectId: projectId || null
+        pillarId: pillarId || null
       },
       handlerContext: {
         userId: req.user?.uid || null,
         conversationId: conversationId || null,
-        project: projectId ? { id: projectId } : null
+        pillar: pillarId ? { id: pillarId } : null
       }
     });
   } catch (error) {
@@ -83,8 +83,8 @@ router.post('/claude/tools/stream', verifyToken, async (req, res) => {
     messages, 
     customTools, 
     conversationId, 
-    project, 
-    projectId,
+    pillar, 
+    pillarId,
     model, 
     temperature, 
     maxTokens 
@@ -100,7 +100,7 @@ router.post('/claude/tools/stream', verifyToken, async (req, res) => {
     }
   });
 
-  const resolvedProjectId = project?.id || projectId || null;
+  const resolvedPillarId = pillar?.id || pillarId || null;
 
   try {
     await runClaudeToolStream({
@@ -113,13 +113,13 @@ router.post('/claude/tools/stream', verifyToken, async (req, res) => {
       requestContext: {
         conversationId: conversationId || null,
         userId: req.user?.uid || null,
-        projectId: resolvedProjectId,
+        pillarId: resolvedPillarId,
         runId: req.body?.runId
       },
       handlerContext: {
         userId: req.user?.uid || null,
         conversationId: conversationId || null,
-        project: resolvedProjectId ? { id: resolvedProjectId } : null
+        pillar: resolvedPillarId ? { id: resolvedPillarId } : null
       }
     });
   } catch (error) {
