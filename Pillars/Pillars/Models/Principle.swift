@@ -50,3 +50,4 @@ struct Principle: Identifiable, Codable, Hashable {
 extension Principle {
     static let collectionName = "principles"
 }
+

@@ -17,7 +17,6 @@ struct InsightsListView: View {
                 title: "No Insights Yet",
                 description: "Capture wisdom and reflections here"
             )
-            .padding(.bottom, 100) // Space for composer
         }
     }
 }
@@ -31,3 +30,4 @@ struct InsightsListView: View {
         icon: .briefcase
     ))
 }
+

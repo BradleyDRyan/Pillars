@@ -97,3 +97,4 @@ class Insight {
 }
 
 module.exports = Insight;
+

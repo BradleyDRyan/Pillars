@@ -55,3 +55,4 @@ enum InsightSource: String, Codable {
 extension Insight {
     static let collectionName = "insights"
 }
+

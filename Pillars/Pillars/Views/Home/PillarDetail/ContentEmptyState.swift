@@ -39,3 +39,4 @@ struct ContentEmptyState: View {
         description: "Add something to get started"
     )
 }
+

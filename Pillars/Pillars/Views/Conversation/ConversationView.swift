@@ -19,7 +19,6 @@ struct ConversationView: View {
     // Navigation callbacks (optional - for drawer integration)
     var onMenuTapped: (() -> Void)?
     var onSettingsTapped: (() -> Void)?
-    var onCreateProjectTapped: (() -> Void)?
     var showHeader: Bool = true
     
     @State private var chatMode: ChatMode = .text
@@ -53,19 +52,12 @@ struct ConversationView: View {
          initialMessage: String? = nil,
          onMenuTapped: (() -> Void)? = nil,
          onSettingsTapped: (() -> Void)? = nil,
-         onCreateProjectTapped: (() -> Void)? = nil,
          showHeader: Bool = true) {
-        print("🎬 [ConversationView] init called")
-        print("🎬 [ConversationView] existingConversation: \(existingConversation?.id ?? "nil")")
-        print("🎬 [ConversationView] pillarIds: \(pillarIds)")
-        print("🎬 [ConversationView] initialMessage: \(initialMessage ?? "nil")")
-        
         self.existingConversation = existingConversation
         self.pillarIds = pillarIds
         self.initialMessage = initialMessage
         self.onMenuTapped = onMenuTapped
         self.onSettingsTapped = onSettingsTapped
-        self.onCreateProjectTapped = onCreateProjectTapped
         self.showHeader = showHeader
     }
     
@@ -347,32 +339,31 @@ struct ConversationView: View {
     }
     
     // MARK: - Menu Content
-    private var headerMenuContent: (() -> ConversationMenuContent)? {
+    private var headerMenuContent: (() -> AnyView)? {
         guard let conversation = conversationForMenu else { return nil }
         return {
-            ConversationMenuContent(
-                conversation: conversation,
-                projects: menuViewModel.projects,
-                onAddToProject: { conv, project in
-                    menuViewModel.assignConversationToProject(conversation: conv, project: project)
-                },
-                onRemoveFromProject: { conv, project in
-                    menuViewModel.removeConversationFromProject(conversation: conv, project: project)
-                },
-                onCreateProject: {
-                    onCreateProjectTapped?()
-                },
-                onRename: { conv in
-                    renameText = conv.title
-                    conversationForMenu = conv
-                    showRenameAlert = true
-                },
-                onShare: { conv in
-                    shareConversation(conv)
-                },
-                onDelete: { conv in
-                    conversationForMenu = conv
-                    showDeleteConfirmation = true
+            AnyView(
+                Group {
+                    Button {
+                        self.renameText = conversation.title
+                        self.showRenameAlert = true
+                    } label: {
+                        Label("Rename", systemImage: "pencil")
+                    }
+                    
+                    Button {
+                        self.shareConversation(conversation)
+                    } label: {
+                        Label("Share", systemImage: "square.and.arrow.up")
+                    }
+                    
+                    Divider()
+                    
+                    Button(role: .destructive) {
+                        self.showDeleteConfirmation = true
+                    } label: {
+                        Label("Delete", systemImage: "trash")
+                    }
                 }
             )
         }

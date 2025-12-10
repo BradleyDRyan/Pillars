@@ -51,3 +51,4 @@ struct PillarHeroSection: View {
         icon: .briefcase
     ))
 }
+

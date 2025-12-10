@@ -35,7 +35,6 @@ struct PrinciplesListView: View {
                     }
                 }
             }
-            .padding(.bottom, 100) // Space for composer
         }
     }
 }
@@ -49,3 +48,4 @@ struct PrinciplesListView: View {
         icon: .heart
     ))
 }
+

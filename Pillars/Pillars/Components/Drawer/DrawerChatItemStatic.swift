@@ -1,24 +1,24 @@
 //
 //  DrawerChatItemStatic.swift
-//  Squirrel2
+//  Pillars
 //
-//  Legacy drawer chat item for static content (backwards compatibility)
+//  Drawer chat item for conversation list with context menu
 //
 
 import SwiftUI
 
-// MARK: - Legacy DrawerChatItem (for static content)
-// Keep for backwards compatibility with hardcoded items
 struct DrawerChatItemStatic: View {
-    let title: String
+    let conversation: Conversation
     let action: () -> Void
+    var onRename: ((Conversation) -> Void)?
+    var onShare: ((Conversation) -> Void)?
+    var onDelete: ((Conversation) -> Void)?
     
     var body: some View {
         Button(action: action) {
             HStack {
-                Text(title)
+                Text(conversation.title)
                     .font(.system(size: 17, weight: .regular))
-                    .lineSpacing(22 - 17)
                     .foregroundColor(S2.Colors.primaryText)
                 Spacer()
             }
@@ -29,6 +29,26 @@ struct DrawerChatItemStatic: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(PlainButtonStyle())
+        .contextMenu {
+            Button {
+                onRename?(conversation)
+            } label: {
+                Label("Rename", systemImage: "pencil")
+            }
+            
+            Button {
+                onShare?(conversation)
+            } label: {
+                Label("Share", systemImage: "square.and.arrow.up")
+            }
+            
+            Divider()
+            
+            Button(role: .destructive) {
+                onDelete?(conversation)
+            } label: {
+                Label("Delete", systemImage: "trash")
+            }
+        }
     }
 }
-

@@ -286,3 +286,4 @@ extension View {
         .navigationTitle("Edge Blur Demo")
     }
 }
+

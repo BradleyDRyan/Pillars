@@ -65,9 +65,5 @@ struct RootView: View {
                 }
             }
         }
-        .onOpenURL { url in
-            // Handle "Copy to Squirrel2" from the iOS share sheet
-            ShareHandoffManager.shared.handleIncomingURLs([url])
-        }
     }
 }

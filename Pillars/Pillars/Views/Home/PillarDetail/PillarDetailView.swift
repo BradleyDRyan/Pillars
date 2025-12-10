@@ -13,56 +13,29 @@ struct PillarDetailView: View {
     @EnvironmentObject var viewModel: PillarsViewModel
     @State private var showingEditSheet = false
     @State private var selectedTab = 0
-    @State private var inputText = ""
-    @FocusState private var isComposerFocused: Bool
     
     var body: some View {
-        ZStack {
-            VStack(spacing: 0) {
-                PillarHeroSection(pillar: pillar)
-                
-                // Segmented control
-                Picker("", selection: $selectedTab) {
-                    Text("Principles").tag(0)
-                    Text("Insights").tag(1)
-                }
-                .pickerStyle(.segmented)
-                .padding(.horizontal, 20)
-                .padding(.bottom, 16)
-                
-                TabView(selection: $selectedTab) {
-                    PrinciplesListView(pillar: pillar)
-                        .tag(0)
-                    
-                    InsightsListView(pillar: pillar)
-                        .tag(1)
-                }
-                .tabViewStyle(.page(indexDisplayMode: .never))
-                .animation(.easeInOut(duration: 0.2), value: selectedTab)
-            }
+        VStack(spacing: 0) {
+            PillarHeroSection(pillar: pillar)
             
-            // Focus overlay
-            FocusOverlay(isActive: isComposerFocused) {
-                isComposerFocused = false
+            // Segmented control
+            Picker("", selection: $selectedTab) {
+                Text("Principles").tag(0)
+                Text("Insights").tag(1)
             }
+            .pickerStyle(.segmented)
+            .padding(.horizontal, 20)
+            .padding(.bottom, 16)
             
-            // Floating composer
-            VStack {
-                Spacer()
-                Composer(
-                    placeholder: "Ask about \(pillar.name)",
-                    text: $inputText,
-                    onSend: {
-                        // TODO: Handle send
-                        inputText = ""
-                        isComposerFocused = false
-                    },
-                    onVoice: {
-                        // TODO: Handle voice
-                    }
-                )
-                .focused($isComposerFocused)
+            TabView(selection: $selectedTab) {
+                PrinciplesListView(pillar: pillar)
+                    .tag(0)
+                
+                InsightsListView(pillar: pillar)
+                    .tag(1)
             }
+            .tabViewStyle(.page(indexDisplayMode: .never))
+            .animation(.easeInOut(duration: 0.2), value: selectedTab)
         }
         .background(Color.white)
         .navigationBarTitleDisplayMode(.inline)
@@ -130,3 +103,4 @@ struct PillarDetailView: View {
         .environmentObject(PillarsViewModel())
     }
 }
+
