@@ -2,7 +2,7 @@
 import PackageDescription
 
 let package = Package(
-    name: "Squirrel2",
+    name: "Pillars",
     platforms: [
         .iOS(.v16)
     ],
@@ -12,7 +12,7 @@ let package = Package(
     ],
     targets: [
         .target(
-            name: "Squirrel2",
+            name: "Pillars",
             dependencies: [
                 .product(name: "FirebaseAuth", package: "firebase-ios-sdk"),
                 .product(name: "FirebaseFirestore", package: "firebase-ios-sdk"),

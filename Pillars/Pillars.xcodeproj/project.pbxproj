@@ -8,7 +8,7 @@
 
 /* Begin PBXBuildFile section */
 		1C0013DD2EDF321400A90A46 /* MarkdownUI in Frameworks */ = {isa = PBXBuildFile; productRef = 1C0013DC2EDF321400A90A46 /* MarkdownUI */; };
-		1C0D77ED2EE365C5004F7163 /* Squirrel2ShareExtension.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 1C0D77E32EE365C5004F7163 /* Squirrel2ShareExtension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		1C0D77ED2EE365C5004F7163 /* PillarsShareExtension.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 1C0D77E32EE365C5004F7163 /* PillarsShareExtension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		1C43998B2E71F91A0081EAF1 /* WebRTC in Frameworks */ = {isa = PBXBuildFile; productRef = 1C43998A2E71F91A0081EAF1 /* WebRTC */; };
 		1C83CD522E7A11DE0002D50A /* SwiftOpenAI in Frameworks */ = {isa = PBXBuildFile; productRef = 1C83CD512E7A11DE0002D50A /* SwiftOpenAI */; };
 		B851DFEB2E5CCA67007AB122 /* FirebaseAuth in Frameworks */ = {isa = PBXBuildFile; productRef = B851DFEA2E5CCA67007AB122 /* FirebaseAuth */; };
@@ -23,7 +23,7 @@
 			containerPortal = B851DFCE2E5CC8CC007AB122 /* Project object */;
 			proxyType = 1;
 			remoteGlobalIDString = 1C0D77E22EE365C5004F7163;
-			remoteInfo = Squirrel2ShareExtension;
+			remoteInfo = PillarsShareExtension;
 		};
 /* End PBXContainerItemProxy section */
 
@@ -34,7 +34,7 @@
 			dstPath = "";
 			dstSubfolderSpec = 13;
 			files = (
-				1C0D77ED2EE365C5004F7163 /* Squirrel2ShareExtension.appex in Embed Foundation Extensions */,
+				1C0D77ED2EE365C5004F7163 /* PillarsShareExtension.appex in Embed Foundation Extensions */,
 			);
 			name = "Embed Foundation Extensions";
 			runOnlyForDeploymentPostprocessing = 0;
@@ -42,32 +42,32 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
-		1C0D77E32EE365C5004F7163 /* Squirrel2ShareExtension.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = Squirrel2ShareExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
-		B851DFD62E5CC8CC007AB122 /* Squirrel2.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Squirrel2.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		1C0D77E32EE365C5004F7163 /* PillarsShareExtension.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = PillarsShareExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		B851DFD62E5CC8CC007AB122 /* Pillars.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Pillars.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
-		1C0D77F12EE365C5004F7163 /* Exceptions for "Squirrel2ShareExtension" folder in "Squirrel2ShareExtension" target */ = {
+		1C0D77F12EE365C5004F7163 /* Exceptions for "PillarsShareExtension" folder in "PillarsShareExtension" target */ = {
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
 				Info.plist,
 			);
-			target = 1C0D77E22EE365C5004F7163 /* Squirrel2ShareExtension */;
+			target = 1C0D77E22EE365C5004F7163 /* PillarsShareExtension */;
 		};
 /* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
-		1C0D77E42EE365C5004F7163 /* Squirrel2ShareExtension */ = {
+		1C0D77E42EE365C5004F7163 /* PillarsShareExtension */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			exceptions = (
-				1C0D77F12EE365C5004F7163 /* Exceptions for "Squirrel2ShareExtension" folder in "Squirrel2ShareExtension" target */,
+				1C0D77F12EE365C5004F7163 /* Exceptions for "PillarsShareExtension" folder in "PillarsShareExtension" target */,
 			);
-			path = Squirrel2ShareExtension;
+			path = PillarsShareExtension;
 			sourceTree = "<group>";
 		};
-		B851DFD82E5CC8CC007AB122 /* Squirrel2 */ = {
+		B851DFD82E5CC8CC007AB122 /* Pillars */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
-			path = Squirrel2;
+			path = Pillars;
 			sourceTree = "<group>";
 		};
 /* End PBXFileSystemSynchronizedRootGroup section */
@@ -100,8 +100,8 @@
 		B851DFCD2E5CC8CC007AB122 = {
 			isa = PBXGroup;
 			children = (
-				B851DFD82E5CC8CC007AB122 /* Squirrel2 */,
-				1C0D77E42EE365C5004F7163 /* Squirrel2ShareExtension */,
+				B851DFD82E5CC8CC007AB122 /* Pillars */,
+				1C0D77E42EE365C5004F7163 /* PillarsShareExtension */,
 				B851DFD72E5CC8CC007AB122 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -109,8 +109,8 @@
 		B851DFD72E5CC8CC007AB122 /* Products */ = {
 			isa = PBXGroup;
 			children = (
-				B851DFD62E5CC8CC007AB122 /* Squirrel2.app */,
-				1C0D77E32EE365C5004F7163 /* Squirrel2ShareExtension.appex */,
+				B851DFD62E5CC8CC007AB122 /* Pillars.app */,
+				1C0D77E32EE365C5004F7163 /* PillarsShareExtension.appex */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -118,9 +118,9 @@
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
-		1C0D77E22EE365C5004F7163 /* Squirrel2ShareExtension */ = {
+		1C0D77E22EE365C5004F7163 /* PillarsShareExtension */ = {
 			isa = PBXNativeTarget;
-			buildConfigurationList = 1C0D77F22EE365C5004F7163 /* Build configuration list for PBXNativeTarget "Squirrel2ShareExtension" */;
+			buildConfigurationList = 1C0D77F22EE365C5004F7163 /* Build configuration list for PBXNativeTarget "PillarsShareExtension" */;
 			buildPhases = (
 				1C0D77DF2EE365C5004F7163 /* Sources */,
 				1C0D77E02EE365C5004F7163 /* Frameworks */,
@@ -131,18 +131,18 @@
 			dependencies = (
 			);
 			fileSystemSynchronizedGroups = (
-				1C0D77E42EE365C5004F7163 /* Squirrel2ShareExtension */,
+				1C0D77E42EE365C5004F7163 /* PillarsShareExtension */,
 			);
-			name = Squirrel2ShareExtension;
+			name = PillarsShareExtension;
 			packageProductDependencies = (
 			);
-			productName = Squirrel2ShareExtension;
-			productReference = 1C0D77E32EE365C5004F7163 /* Squirrel2ShareExtension.appex */;
+			productName = PillarsShareExtension;
+			productReference = 1C0D77E32EE365C5004F7163 /* PillarsShareExtension.appex */;
 			productType = "com.apple.product-type.app-extension";
 		};
-		B851DFD52E5CC8CC007AB122 /* Squirrel2 */ = {
+		B851DFD52E5CC8CC007AB122 /* Pillars */ = {
 			isa = PBXNativeTarget;
-			buildConfigurationList = B851DFE22E5CC8CE007AB122 /* Build configuration list for PBXNativeTarget "Squirrel2" */;
+			buildConfigurationList = B851DFE22E5CC8CE007AB122 /* Build configuration list for PBXNativeTarget "Pillars" */;
 			buildPhases = (
 				B851DFD22E5CC8CC007AB122 /* Sources */,
 				B851DFD32E5CC8CC007AB122 /* Frameworks */,
@@ -155,9 +155,9 @@
 				1C0D77EC2EE365C5004F7163 /* PBXTargetDependency */,
 			);
 			fileSystemSynchronizedGroups = (
-				B851DFD82E5CC8CC007AB122 /* Squirrel2 */,
+				B851DFD82E5CC8CC007AB122 /* Pillars */,
 			);
-			name = Squirrel2;
+			name = Pillars;
 			packageProductDependencies = (
 				B851DFEA2E5CCA67007AB122 /* FirebaseAuth */,
 				B851DFEC2E5CCA67007AB122 /* FirebaseCore */,
@@ -167,8 +167,8 @@
 				1C83CD512E7A11DE0002D50A /* SwiftOpenAI */,
 				1C0013DC2EDF321400A90A46 /* MarkdownUI */,
 			);
-			productName = Squirrel2;
-			productReference = B851DFD62E5CC8CC007AB122 /* Squirrel2.app */;
+			productName = Pillars;
+			productReference = B851DFD62E5CC8CC007AB122 /* Pillars.app */;
 			productType = "com.apple.product-type.application";
 		};
 /* End PBXNativeTarget section */
@@ -189,7 +189,7 @@
 					};
 				};
 			};
-			buildConfigurationList = B851DFD12E5CC8CC007AB122 /* Build configuration list for PBXProject "Squirrel2" */;
+			buildConfigurationList = B851DFD12E5CC8CC007AB122 /* Build configuration list for PBXProject "Pillars" */;
 			developmentRegion = en;
 			hasScannedForEncodings = 0;
 			knownRegions = (
@@ -209,8 +209,8 @@
 			projectDirPath = "";
 			projectRoot = "";
 			targets = (
-				B851DFD52E5CC8CC007AB122 /* Squirrel2 */,
-				1C0D77E22EE365C5004F7163 /* Squirrel2ShareExtension */,
+				B851DFD52E5CC8CC007AB122 /* Pillars */,
+				1C0D77E22EE365C5004F7163 /* PillarsShareExtension */,
 			);
 		};
 /* End PBXProject section */
@@ -252,7 +252,7 @@
 /* Begin PBXTargetDependency section */
 		1C0D77EC2EE365C5004F7163 /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
-			target = 1C0D77E22EE365C5004F7163 /* Squirrel2ShareExtension */;
+			target = 1C0D77E22EE365C5004F7163 /* PillarsShareExtension */;
 			targetProxy = 1C0D77EB2EE365C5004F7163 /* PBXContainerItemProxy */;
 		};
 /* End PBXTargetDependency section */
@@ -261,13 +261,13 @@
 		1C0D77EF2EE365C5004F7163 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				CODE_SIGN_ENTITLEMENTS = Squirrel2ShareExtension.entitlements;
+				CODE_SIGN_ENTITLEMENTS = PillarsShareExtension.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = 7FL62544G7;
 				GENERATE_INFOPLIST_FILE = NO;
-				INFOPLIST_FILE = Squirrel2ShareExtension/Info.plist;
-				INFOPLIST_KEY_CFBundleDisplayName = Sidekick;
+				INFOPLIST_FILE = PillarsShareExtension/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = Pillars;
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
 				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -276,7 +276,7 @@
 					"@executable_path/../../Frameworks",
 				);
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.msldesign.sidekick.Squirrel2ShareExtension;
+				PRODUCT_BUNDLE_IDENTIFIER = com.msldesign.sidekick.PillarsShareExtension;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = iphoneos;
 				SKIP_INSTALL = YES;
@@ -292,13 +292,13 @@
 		1C0D77F02EE365C5004F7163 /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				CODE_SIGN_ENTITLEMENTS = Squirrel2ShareExtension.entitlements;
+				CODE_SIGN_ENTITLEMENTS = PillarsShareExtension.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = 7FL62544G7;
 				GENERATE_INFOPLIST_FILE = NO;
-				INFOPLIST_FILE = Squirrel2ShareExtension/Info.plist;
-				INFOPLIST_KEY_CFBundleDisplayName = Sidekick;
+				INFOPLIST_FILE = PillarsShareExtension/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = Pillars;
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
 				IPHONEOS_DEPLOYMENT_TARGET = 26.0;
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -307,7 +307,7 @@
 					"@executable_path/../../Frameworks",
 				);
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = com.msldesign.sidekick.Squirrel2ShareExtension;
+				PRODUCT_BUNDLE_IDENTIFIER = com.msldesign.sidekick.PillarsShareExtension;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = iphoneos;
 				SKIP_INSTALL = YES;
@@ -440,13 +440,13 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
-				CODE_SIGN_ENTITLEMENTS = Squirrel2/Squirrel2.entitlements;
+				CODE_SIGN_ENTITLEMENTS = Pillars/Pillars.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = 7FL62544G7;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_KEY_CFBundleDisplayName = Sidekick;
+				INFOPLIST_KEY_CFBundleDisplayName = Pillars;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.productivity";
 				INFOPLIST_KEY_NSCameraUsageDescription = "This app needs access to your camera to take photos and videos for your entries";
 				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "We use your location to provide relevant insights and recommendations";
@@ -484,13 +484,13 @@
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
-				CODE_SIGN_ENTITLEMENTS = Squirrel2/Squirrel2.entitlements;
+				CODE_SIGN_ENTITLEMENTS = Pillars/Pillars.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = 7FL62544G7;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_KEY_CFBundleDisplayName = Sidekick;
+				INFOPLIST_KEY_CFBundleDisplayName = Pillars;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.productivity";
 				INFOPLIST_KEY_NSCameraUsageDescription = "This app needs access to your camera to take photos and videos for your entries";
 				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "We use your location to provide relevant insights and recommendations";
@@ -526,7 +526,7 @@
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
-		1C0D77F22EE365C5004F7163 /* Build configuration list for PBXNativeTarget "Squirrel2ShareExtension" */ = {
+		1C0D77F22EE365C5004F7163 /* Build configuration list for PBXNativeTarget "PillarsShareExtension" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				1C0D77EF2EE365C5004F7163 /* Debug */,
@@ -535,7 +535,7 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
-		B851DFD12E5CC8CC007AB122 /* Build configuration list for PBXProject "Squirrel2" */ = {
+		B851DFD12E5CC8CC007AB122 /* Build configuration list for PBXProject "Pillars" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				B851DFE02E5CC8CE007AB122 /* Debug */,
@@ -544,7 +544,7 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
-		B851DFE22E5CC8CE007AB122 /* Build configuration list for PBXNativeTarget "Squirrel2" */ = {
+		B851DFE22E5CC8CE007AB122 /* Build configuration list for PBXNativeTarget "Pillars" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				B851DFE32E5CC8CE007AB122 /* Debug */,

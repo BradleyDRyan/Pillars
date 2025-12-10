@@ -9,7 +9,7 @@ import SwiftUI
 import FirebaseCore
 
 @main
-struct Squirrel2App: App {
+struct PillarsApp: App {
     @StateObject private var firebaseManager: FirebaseManager
     @StateObject private var locationManager = LocationManager.shared
 
