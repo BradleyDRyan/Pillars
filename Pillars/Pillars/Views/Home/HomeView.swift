@@ -70,20 +70,10 @@ struct HomeView: View {
                         Spacer(minLength: 0)
                     }
                     
-                    // Focus mask overlay (inside NavigationStack, behind toolbar)
-                    Color.white
-                        .opacity(isComposerFocused ? 0.7 : 0)
-                        .background {
-                            if isComposerFocused {
-                                BackdropBlurView(radius: 8)
-                            }
-                        }
-                        .ignoresSafeArea()
-                        .allowsHitTesting(isComposerFocused)
-                        .onTapGesture {
-                            isComposerFocused = false
-                        }
-                        .animation(.easeInOut(duration: 0.25), value: isComposerFocused)
+                    // Focus overlay when composer is active
+                    FocusOverlay(isActive: isComposerFocused) {
+                        isComposerFocused = false
+                    }
                 }
                 .toolbar {
                     ToolbarItem(placement: .topBarLeading) {

@@ -13,7 +13,7 @@ struct PillarTile: View {
     var namespace: Namespace.ID?
     
     var body: some View {
-        VStack(alignment: .leading, spacing: S2.Spacing.md) {
+        VStack(alignment: .leading, spacing: 16) {
             // Icon with matched transition source
             if let namespace = namespace {
                 pillarIcon
@@ -22,10 +22,10 @@ struct PillarTile: View {
                 pillarIcon
             }
             
-            // Title
+            // Title - SF Pro Display Medium, 18px
             Text(pillar.name)
-                .font(.squirrelHeadline)
-                .foregroundColor(S2.Colors.primaryText)
+                .font(.system(size: 18, weight: .medium, design: .default))
+                .foregroundColor(Color(hex: "2f2f21"))
                 .lineLimit(1)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -35,37 +35,20 @@ struct PillarTile: View {
     
     @ViewBuilder
     private var pillarIcon: some View {
-        let iconSize: CGFloat = 36
-        
         if let emoji = pillar.emoji, !emoji.isEmpty {
             // Emoji icon
             Text(emoji)
-                .font(.system(size: iconSize * 0.5))
-                .frame(width: iconSize, height: iconSize)
-                .background(
-                    Circle()
-                        .fill(pillar.colorValue.opacity(0.15))
-                )
+                .font(.system(size: 20))
         } else if let icon = pillar.icon {
             // SF Symbol icon
             Image(systemName: icon.systemName)
-                .font(.system(size: iconSize * 0.4, weight: .semibold))
+                .font(.system(size: 20, weight: .medium))
                 .foregroundColor(pillar.colorValue)
-                .frame(width: iconSize, height: iconSize)
-                .background(
-                    Circle()
-                        .fill(pillar.colorValue.opacity(0.15))
-                )
         } else {
             // Fallback icon
             Image(systemName: "star.fill")
-                .font(.system(size: iconSize * 0.4, weight: .semibold))
+                .font(.system(size: 20, weight: .medium))
                 .foregroundColor(pillar.colorValue)
-                .frame(width: iconSize, height: iconSize)
-                .background(
-                    Circle()
-                        .fill(pillar.colorValue.opacity(0.15))
-                )
         }
     }
 }

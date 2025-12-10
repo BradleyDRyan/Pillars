@@ -85,17 +85,13 @@ struct TunedGlassBackground: View {
 
 struct TunedGlassModifier: ViewModifier {
     let cornerRadius: CGFloat
-    let shadowRadius: CGFloat
-    let shadowOpacity: CGFloat
     
     func body(content: Content) -> some View {
         content
             .background(TunedGlassBackground(cornerRadius: cornerRadius))
-            .shadow(
-                color: Color.black.opacity(shadowOpacity),
-                radius: shadowRadius,
-                y: 4
-            )
+            // Figma dual-layer shadow
+            .shadow(color: Color.black.opacity(0.03), radius: 6, x: 0, y: 2)
+            .shadow(color: Color.black.opacity(0.03), radius: 4, x: 0, y: 1)
     }
 }
 
@@ -103,12 +99,8 @@ struct TunedGlassModifier: ViewModifier {
 
 extension View {
     /// Applies the tuned liquid glass effect (calibrated to match Apple's glassEffect)
-    func tunedGlass(cornerRadius: CGFloat = 20.0) -> some View {
-        modifier(TunedGlassModifier(
-            cornerRadius: cornerRadius,
-            shadowRadius: 8.0,
-            shadowOpacity: 0.04
-        ))
+    func tunedGlass(cornerRadius: CGFloat = 12.0) -> some View {
+        modifier(TunedGlassModifier(cornerRadius: cornerRadius))
     }
 }
 
