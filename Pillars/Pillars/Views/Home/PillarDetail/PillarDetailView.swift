@@ -53,7 +53,7 @@ struct PillarDetailView: View {
             
             // Tab bar (always visible)
             PillarTabBar(
-                tabs: ["Principles", "Saves", "Chats"],
+                tabs: ["Principles", "Saves"],
                 selectedIndex: Binding(
                     get: { selectedTab ?? 0 },
                     set: { selectedTab = $0 }
@@ -76,12 +76,6 @@ struct PillarDetailView: View {
                     }
                     .containerRelativeFrame(.horizontal)
                     .id(1)
-                    
-                    TabContentScrollView(offset: selectedTab == 2 ? $scrollOffset : .constant(0)) {
-                        PillarChatsContentView(pillar: pillar)
-                    }
-                    .containerRelativeFrame(.horizontal)
-                    .id(2)
                 }
                 .scrollTargetLayout()
             }

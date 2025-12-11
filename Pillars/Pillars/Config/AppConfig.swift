@@ -12,8 +12,7 @@ struct AppConfig {
     
     /// The base URL for the backend API
     static var baseURL: String {
-        // Using the new Squirrel2 backend deployment
-        return "https://squirrel2-api.vercel.app"
+        return "https://pillars-rho.vercel.app"
     }
     
     /// Full API base URL with /api path
