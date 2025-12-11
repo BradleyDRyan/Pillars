@@ -27,7 +27,8 @@ import {
   Trash2,
   Sparkles,
   Check,
-  ArrowLeft
+  ArrowLeft,
+  FileText
 } from "lucide-react";
 
 // Types
@@ -92,6 +93,21 @@ export function ContentView() {
   const [themeDialogOpen, setThemeDialogOpen] = useState(false);
   const [principleDialogOpen, setPrincipleDialogOpen] = useState(false);
   const [generateDialogOpen, setGenerateDialogOpen] = useState(false);
+  const [extractDialogOpen, setExtractDialogOpen] = useState(false);
+
+  // Extract state
+  const [extractText, setExtractText] = useState("");
+  const [extracting, setExtracting] = useState(false);
+  const [extractResult, setExtractResult] = useState<{
+    pillars: number;
+    themes: number;
+    principles: number;
+    items: {
+      pillars: OnboardingPillar[];
+      themes: OnboardingTheme[];
+      principles: OnboardingPrinciple[];
+    };
+  } | null>(null);
 
   // Form state
   const [editingPillar, setEditingPillar] = useState<OnboardingPillar | null>(null);
@@ -487,6 +503,53 @@ export function ContentView() {
     setSelectedSuggestions(newSelected);
   };
 
+  // Extract content from text
+  const handleExtract = async () => {
+    if (!extractText.trim()) {
+      setStatus({ tone: "error", message: "Please paste some text to extract from" });
+      return;
+    }
+
+    setExtracting(true);
+    setExtractResult(null);
+
+    try {
+      const response = await fetch(`${API_BASE}/extract`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text: extractText })
+      });
+
+      if (!response.ok) {
+        const data = await response.json();
+        throw new Error(data.error || "Failed to extract content");
+      }
+
+      const data = await response.json();
+      setExtractResult({
+        pillars: data.created.pillars,
+        themes: data.created.themes,
+        principles: data.created.principles,
+        items: data.items
+      });
+
+      // Reload data
+      loadPillars();
+
+      setStatus({ 
+        tone: "success", 
+        message: `Extracted ${data.created.pillars} pillars, ${data.created.themes} themes, ${data.created.principles} principles` 
+      });
+    } catch (error) {
+      setStatus({
+        tone: "error",
+        message: error instanceof Error ? error.message : "Failed to extract content"
+      });
+    } finally {
+      setExtracting(false);
+    }
+  };
+
   // Breadcrumb navigation
   const breadcrumbs = [];
   breadcrumbs.push({ label: "Pillars", onClick: () => { setSelectedPillar(null); setSelectedTheme(null); } });
@@ -525,6 +588,18 @@ export function ContentView() {
           </p>
         </div>
         <div className="flex gap-2">
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => {
+              setExtractText("");
+              setExtractResult(null);
+              setExtractDialogOpen(true);
+            }}
+          >
+            <FileText className="h-4 w-4 mr-2" />
+            Extract from Text
+          </Button>
           <Button
             size="sm"
             variant="outline"
@@ -956,6 +1031,127 @@ export function ContentView() {
             <Button onClick={handleSavePrinciple} disabled={saving}>
               {saving ? "Saving..." : (editingPrinciple ? "Update" : "Create")}
             </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Extract Dialog */}
+      <Dialog open={extractDialogOpen} onOpenChange={(open) => {
+        setExtractDialogOpen(open);
+        if (!open) {
+          setExtractText("");
+          setExtractResult(null);
+        }
+      }}>
+        <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>
+              <FileText className="h-5 w-5 inline mr-2" />
+              Extract Content from Text
+            </DialogTitle>
+            <DialogDescription>
+              Paste text (articles, notes, quotes) and AI will extract pillars, themes, and principles.
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="extract-text">Paste your text here</Label>
+              <Textarea
+                id="extract-text"
+                placeholder="Paste an article, quotes, notes, or any text you want to extract wisdom from..."
+                value={extractText}
+                onChange={(e) => setExtractText(e.target.value)}
+                rows={12}
+                className="font-mono text-sm"
+              />
+              <p className="text-xs text-muted-foreground">
+                The AI will analyze the text and create pillars (life domains), themes (focus areas), 
+                and principles (actionable "I" statements) as drafts for your review.
+              </p>
+            </div>
+
+            {extracting && (
+              <div className="text-center py-8 border rounded-lg bg-muted/30">
+                <div className="animate-spin h-8 w-8 border-2 border-primary border-t-transparent rounded-full mx-auto mb-4" />
+                <p className="text-muted-foreground">Analyzing text and extracting content...</p>
+                <p className="text-xs text-muted-foreground mt-2">This may take a moment...</p>
+              </div>
+            )}
+
+            {extractResult && (
+              <div className="border rounded-lg p-4 bg-green-50/50">
+                <h4 className="font-medium text-green-800 mb-3">✓ Extraction Complete</h4>
+                <div className="grid grid-cols-3 gap-4 text-center">
+                  <div className="p-3 bg-white rounded border">
+                    <div className="text-2xl font-bold text-primary">{extractResult.pillars}</div>
+                    <div className="text-xs text-muted-foreground">Pillars Created</div>
+                  </div>
+                  <div className="p-3 bg-white rounded border">
+                    <div className="text-2xl font-bold text-primary">{extractResult.themes}</div>
+                    <div className="text-xs text-muted-foreground">Themes Created</div>
+                  </div>
+                  <div className="p-3 bg-white rounded border">
+                    <div className="text-2xl font-bold text-primary">{extractResult.principles}</div>
+                    <div className="text-xs text-muted-foreground">Principles (Drafts)</div>
+                  </div>
+                </div>
+                
+                {extractResult.items.pillars.length > 0 && (
+                  <div className="mt-4">
+                    <h5 className="text-sm font-medium mb-2">New Pillars:</h5>
+                    <div className="flex flex-wrap gap-2">
+                      {extractResult.items.pillars.map(p => (
+                        <Badge key={p.id} variant="secondary">{p.title}</Badge>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                
+                {extractResult.items.themes.length > 0 && (
+                  <div className="mt-4">
+                    <h5 className="text-sm font-medium mb-2">New Themes:</h5>
+                    <div className="flex flex-wrap gap-2">
+                      {extractResult.items.themes.map(t => (
+                        <Badge key={t.id} variant="outline">{t.title}</Badge>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                
+                {extractResult.items.principles.length > 0 && (
+                  <div className="mt-4">
+                    <h5 className="text-sm font-medium mb-2">New Principles (as drafts):</h5>
+                    <div className="space-y-2 max-h-[200px] overflow-y-auto">
+                      {extractResult.items.principles.map(p => (
+                        <div key={p.id} className="text-sm p-2 bg-white rounded border">
+                          {p.text}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setExtractDialogOpen(false)}>
+              {extractResult ? "Done" : "Cancel"}
+            </Button>
+            {!extractResult && (
+              <Button onClick={handleExtract} disabled={extracting || !extractText.trim()}>
+                {extracting ? "Extracting..." : "Extract Content"}
+              </Button>
+            )}
+            {extractResult && (
+              <Button onClick={() => {
+                setExtractText("");
+                setExtractResult(null);
+              }}>
+                Extract More
+              </Button>
+            )}
           </DialogFooter>
         </DialogContent>
       </Dialog>

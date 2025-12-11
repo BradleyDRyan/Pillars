@@ -699,6 +699,281 @@ No explanation, just the JSON array.`;
 });
 
 // ============================================
+// LLM CONTENT EXTRACTION (with tools)
+// ============================================
+
+/**
+ * POST /api/onboarding-content/extract
+ * Extract pillars, themes, and principles from a blob of text using LLM with tools
+ */
+router.post('/extract', async (req, res) => {
+  try {
+    const { text } = req.body;
+    
+    if (!text || !text.trim()) {
+      return res.status(400).json({ error: 'Text is required' });
+    }
+
+    // Get existing pillars for context
+    const existingPillars = await OnboardingPillar.findAll(true);
+    const pillarContext = existingPillars.map(p => `- ${p.title} (id: ${p.id})`).join('\n');
+
+    // Track created items for response
+    const createdItems = {
+      pillars: [],
+      themes: [],
+      principles: []
+    };
+
+    // Define the tools
+    const tools = [
+      {
+        name: 'create_pillar',
+        description: 'Create a new pillar (major life domain). Only create if it does not already exist.',
+        input_schema: {
+          type: 'object',
+          properties: {
+            title: {
+              type: 'string',
+              description: 'Short title for the pillar (1-3 words), e.g. "Marriage", "Finances", "Parenting"'
+            },
+            description: {
+              type: 'string',
+              description: 'Brief description of what this pillar covers'
+            },
+            color: {
+              type: 'string',
+              description: 'Hex color code for the pillar, e.g. "#6366f1"'
+            }
+          },
+          required: ['title']
+        }
+      },
+      {
+        name: 'create_theme',
+        description: 'Create a new theme (the "one thing" to get right) under a pillar. A theme represents a specific focus area within a pillar.',
+        input_schema: {
+          type: 'object',
+          properties: {
+            pillar_id: {
+              type: 'string',
+              description: 'ID of the pillar this theme belongs to'
+            },
+            title: {
+              type: 'string',
+              description: 'Short title for the theme (1-2 words), e.g. "Commitment", "Generosity", "Communication"'
+            },
+            description: {
+              type: 'string',
+              description: 'Brief description of this theme'
+            }
+          },
+          required: ['pillar_id', 'title']
+        }
+      },
+      {
+        name: 'create_principle',
+        description: 'Create a new principle (an actionable statement users can adopt). Principles should be first-person "I" statements that are actionable and inspiring.',
+        input_schema: {
+          type: 'object',
+          properties: {
+            theme_id: {
+              type: 'string',
+              description: 'ID of the theme this principle belongs to'
+            },
+            text: {
+              type: 'string',
+              description: 'The principle text. Should be a first-person "I" statement that is actionable, specific, and inspiring. 1-2 sentences max.'
+            }
+          },
+          required: ['theme_id', 'text']
+        }
+      }
+    ];
+
+    // System prompt
+    const systemPrompt = `You are a content extraction assistant for a life coaching app called "Pillars". Your job is to read text and extract meaningful content into a structured hierarchy:
+
+1. **Pillars** - Major life domains (e.g., Marriage, Finances, Family, Faith, Health)
+2. **Themes** - The "one thing" to focus on within a pillar (e.g., Communication, Generosity, Commitment)
+3. **Principles** - Actionable first-person "I" statements that users can adopt
+
+When reading text:
+- Identify overarching life domains → create pillars
+- Identify specific focus areas or key insights → create themes
+- Convert advice, wisdom, or insights into first-person principle statements
+
+Existing pillars in the system:
+${pillarContext || '(none yet)'}
+
+Guidelines for principles:
+- Always use first-person "I" statements
+- Make them actionable and specific
+- Keep them to 1-2 sentences
+- Make them inspiring but practical
+- Example: "I aim to give more than I get. Both of us trying to give 60% creates a surplus of generosity."
+
+When you find relevant content, use the tools to create the appropriate items. Create pillars first if needed, then themes, then principles.`;
+
+    // Call Claude with tools
+    let messages = [
+      { role: 'user', content: `Please analyze this text and extract relevant pillars, themes, and principles:\n\n${text}` }
+    ];
+
+    let continueLoop = true;
+    let iterations = 0;
+    const maxIterations = 20; // Safety limit
+
+    while (continueLoop && iterations < maxIterations) {
+      iterations++;
+      
+      const response = await anthropic.messages.create({
+        model: 'claude-sonnet-4-20250514',
+        max_tokens: 4096,
+        system: systemPrompt,
+        tools,
+        messages
+      });
+
+      // Process tool uses
+      if (response.stop_reason === 'tool_use') {
+        const assistantMessage = { role: 'assistant', content: response.content };
+        messages.push(assistantMessage);
+
+        const toolResults = [];
+        
+        for (const block of response.content) {
+          if (block.type === 'tool_use') {
+            let result;
+            
+            try {
+              switch (block.name) {
+                case 'create_pillar': {
+                  const { title, description, color } = block.input;
+                  
+                  // Check if pillar already exists
+                  const existing = existingPillars.find(p => 
+                    p.title.toLowerCase() === title.toLowerCase()
+                  );
+                  
+                  if (existing) {
+                    result = { success: true, pillar_id: existing.id, message: `Pillar "${title}" already exists` };
+                  } else {
+                    const pillar = await OnboardingPillar.create({
+                      title: title.trim(),
+                      description: description?.trim() || '',
+                      color: color || '#6366f1',
+                      order: existingPillars.length,
+                      isActive: true
+                    });
+                    existingPillars.push(pillar); // Add to our tracking
+                    createdItems.pillars.push(pillar.toJSON());
+                    result = { success: true, pillar_id: pillar.id, message: `Created pillar "${title}"` };
+                  }
+                  break;
+                }
+                
+                case 'create_theme': {
+                  const { pillar_id, title, description } = block.input;
+                  
+                  // Verify pillar exists
+                  const pillar = existingPillars.find(p => p.id === pillar_id);
+                  if (!pillar) {
+                    result = { success: false, error: `Pillar with id "${pillar_id}" not found` };
+                  } else {
+                    // Check if theme already exists
+                    const existingThemes = await OnboardingTheme.findByPillarId(pillar_id, true);
+                    const existingTheme = existingThemes.find(t => 
+                      t.title.toLowerCase() === title.toLowerCase()
+                    );
+                    
+                    if (existingTheme) {
+                      result = { success: true, theme_id: existingTheme.id, message: `Theme "${title}" already exists` };
+                    } else {
+                      const theme = await OnboardingTheme.create({
+                        pillarId: pillar_id,
+                        title: title.trim(),
+                        description: description?.trim() || '',
+                        order: existingThemes.length,
+                        isActive: true
+                      });
+                      createdItems.themes.push(theme.toJSON());
+                      result = { success: true, theme_id: theme.id, message: `Created theme "${title}"` };
+                    }
+                  }
+                  break;
+                }
+                
+                case 'create_principle': {
+                  const { theme_id, text: principleText } = block.input;
+                  
+                  // Verify theme exists
+                  const theme = await OnboardingTheme.findById(theme_id);
+                  if (!theme) {
+                    result = { success: false, error: `Theme with id "${theme_id}" not found` };
+                  } else {
+                    const existingPrinciples = await OnboardingPrinciple.findByThemeId(theme_id, true, true);
+                    
+                    // Check for duplicate
+                    const isDuplicate = existingPrinciples.some(p => 
+                      p.text.toLowerCase().trim() === principleText.toLowerCase().trim()
+                    );
+                    
+                    if (isDuplicate) {
+                      result = { success: true, message: `Principle already exists` };
+                    } else {
+                      const principle = await OnboardingPrinciple.create({
+                        themeId: theme_id,
+                        text: principleText.trim(),
+                        order: existingPrinciples.length,
+                        isActive: true,
+                        isDraft: true // Created as draft for review
+                      });
+                      createdItems.principles.push(principle.toJSON());
+                      result = { success: true, principle_id: principle.id, message: `Created principle (as draft)` };
+                    }
+                  }
+                  break;
+                }
+                
+                default:
+                  result = { error: `Unknown tool: ${block.name}` };
+              }
+            } catch (toolError) {
+              result = { error: toolError.message };
+            }
+            
+            toolResults.push({
+              type: 'tool_result',
+              tool_use_id: block.id,
+              content: JSON.stringify(result)
+            });
+          }
+        }
+        
+        messages.push({ role: 'user', content: toolResults });
+      } else {
+        // No more tool calls, we're done
+        continueLoop = false;
+      }
+    }
+
+    res.json({
+      success: true,
+      created: {
+        pillars: createdItems.pillars.length,
+        themes: createdItems.themes.length,
+        principles: createdItems.principles.length
+      },
+      items: createdItems
+    });
+  } catch (error) {
+    logger.error({ error: error.message }, 'Failed to extract content');
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// ============================================
 // FULL CONTENT EXPORT (for mobile app)
 // ============================================
 
