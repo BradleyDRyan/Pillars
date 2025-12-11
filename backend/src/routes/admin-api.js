@@ -6,8 +6,7 @@
 
 const express = require('express');
 const router = express.Router();
-const { db, admin } = require('../config/firebase');
-const { logger } = require('../config/firebase');
+const { firestore: db, logger } = require('../config/firebase');
 
 // Simple admin auth check - in production, use proper admin authentication
 const checkAdmin = async (req, res, next) => {
