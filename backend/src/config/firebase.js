@@ -106,10 +106,13 @@ const initializeFirebase = () => {
 };
 
 const firebaseInstance = initializeFirebase();
+const firestoreDb = firebaseInstance.firestore();
 
 module.exports = {
   admin: firebaseInstance,
   auth: firebaseInstance.auth(),
-  firestore: firebaseInstance.firestore(),
+  firestore: firestoreDb,
+  db: firestoreDb, // alias for convenience
+  FieldValue: firebaseInstance.firestore.FieldValue,
   logger
 };
