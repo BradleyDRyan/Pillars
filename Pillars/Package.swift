@@ -7,7 +7,7 @@ let package = Package(
         .iOS(.v16)
     ],
     dependencies: [
-        .package(url: "https://github.com/firebase/firebase-ios-sdk.git", from: "11.0.0"),
+        .package(url: "https://github.com/firebase/firebase-ios-sdk.git", from: "11.1.0"),
         .package(url: "https://github.com/gonzalezreal/swift-markdown-ui", from: "2.4.1")
     ],
     targets: [

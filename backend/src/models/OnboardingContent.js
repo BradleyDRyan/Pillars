@@ -50,8 +50,9 @@ class OnboardingPillar {
     if (!includeInactive) {
       query = query.where('isActive', '==', true);
     }
-    const snapshot = await query.orderBy('order', 'asc').get();
-    return snapshot.docs.map(doc => new OnboardingPillar({ id: doc.id, ...doc.data() }));
+    const snapshot = await query.get();
+    const pillars = snapshot.docs.map(doc => new OnboardingPillar({ id: doc.id, ...doc.data() }));
+    return pillars.sort((a, b) => a.order - b.order);
   }
 
   async save() {
@@ -146,8 +147,9 @@ class OnboardingTheme {
     if (!includeInactive) {
       query = query.where('isActive', '==', true);
     }
-    const snapshot = await query.orderBy('order', 'asc').get();
-    return snapshot.docs.map(doc => new OnboardingTheme({ id: doc.id, ...doc.data() }));
+    const snapshot = await query.get();
+    const themes = snapshot.docs.map(doc => new OnboardingTheme({ id: doc.id, ...doc.data() }));
+    return themes.sort((a, b) => a.order - b.order);
   }
 
   static async findAll(includeInactive = false) {
@@ -155,8 +157,9 @@ class OnboardingTheme {
     if (!includeInactive) {
       query = query.where('isActive', '==', true);
     }
-    const snapshot = await query.orderBy('order', 'asc').get();
-    return snapshot.docs.map(doc => new OnboardingTheme({ id: doc.id, ...doc.data() }));
+    const snapshot = await query.get();
+    const themes = snapshot.docs.map(doc => new OnboardingTheme({ id: doc.id, ...doc.data() }));
+    return themes.sort((a, b) => a.order - b.order);
   }
 
   async save() {
@@ -245,27 +248,29 @@ class OnboardingPrinciple {
   }
 
   static async findByThemeId(themeId, includeInactive = false, includeDrafts = false) {
-    let query = this.collection().where('themeId', '==', themeId);
+    // Fetch all for this theme then filter in JS to avoid composite index requirements
+    const snapshot = await this.collection().where('themeId', '==', themeId).get();
+    let principles = snapshot.docs.map(doc => new OnboardingPrinciple({ id: doc.id, ...doc.data() }));
     if (!includeInactive) {
-      query = query.where('isActive', '==', true);
+      principles = principles.filter(p => p.isActive);
     }
     if (!includeDrafts) {
-      query = query.where('isDraft', '==', false);
+      principles = principles.filter(p => !p.isDraft);
     }
-    const snapshot = await query.orderBy('order', 'asc').get();
-    return snapshot.docs.map(doc => new OnboardingPrinciple({ id: doc.id, ...doc.data() }));
+    return principles.sort((a, b) => a.order - b.order);
   }
 
   static async findAll(includeInactive = false, includeDrafts = false) {
-    let query = this.collection();
+    // Fetch all then filter in JS to avoid composite index requirements
+    const snapshot = await this.collection().get();
+    let principles = snapshot.docs.map(doc => new OnboardingPrinciple({ id: doc.id, ...doc.data() }));
     if (!includeInactive) {
-      query = query.where('isActive', '==', true);
+      principles = principles.filter(p => p.isActive);
     }
     if (!includeDrafts) {
-      query = query.where('isDraft', '==', false);
+      principles = principles.filter(p => !p.isDraft);
     }
-    const snapshot = await query.orderBy('order', 'asc').get();
-    return snapshot.docs.map(doc => new OnboardingPrinciple({ id: doc.id, ...doc.data() }));
+    return principles.sort((a, b) => a.order - b.order);
   }
 
   async save() {

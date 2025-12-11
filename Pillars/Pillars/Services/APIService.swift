@@ -158,6 +158,23 @@ class APIService: ObservableObject {
         let (data, response) = try await session.data(for: request)
         return try await handleResponse(data, response, nil, type: [Insight].self)
     }
+    
+    // MARK: - Onboarding Content
+    
+    /// Fetch all onboarding content (pillars, themes, principles)
+    /// This endpoint doesn't require authentication
+    func fetchOnboardingContent() async throws -> OnboardingContent {
+        guard let url = URL(string: "\(baseURL)/onboarding-content/full") else {
+            throw APIError.invalidURL("\(baseURL)/onboarding-content/full")
+        }
+        var request = URLRequest(url: url)
+        request.httpMethod = "GET"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        // Note: Not adding auth token since this is public content
+        
+        let (data, response) = try await session.data(for: request)
+        return try await handleResponse(data, response, nil, type: OnboardingContent.self)
+    }
 }
 
 enum APIError: LocalizedError {

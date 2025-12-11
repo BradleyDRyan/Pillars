@@ -102,6 +102,14 @@ struct ProfileView: View {
                     } label: {
                         Label("Glass Playground", systemImage: "slider.horizontal.3")
                     }
+                    
+                    Button {
+                        Task {
+                            await firebaseManager.resetOnboarding()
+                        }
+                    } label: {
+                        Label("Reset Onboarding", systemImage: "arrow.counterclockwise")
+                    }
                 }
                 #endif
                 

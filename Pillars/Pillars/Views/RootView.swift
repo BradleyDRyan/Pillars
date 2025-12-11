@@ -12,17 +12,19 @@ struct RootView: View {
     var body: some View {
         Group {
             if firebaseManager.isAuthenticated {
-                // Show main app with tab bar
-                MainTabBarView()
-                    .environmentObject(firebaseManager)
+                if firebaseManager.hasCompletedOnboarding {
+                    // Show main app with tab bar
+                    MainTabBarView()
+                        .environmentObject(firebaseManager)
+                } else {
+                    // Show onboarding flow
+                    OnboardingContainerView()
+                        .environmentObject(firebaseManager)
+                }
             } else {
                 // Not authenticated - show phone auth
                 PhoneAuthView()
             }
-        }
-        // Required for Firebase phone auth reCAPTCHA callback handling in SwiftUI lifecycle.
-        .onOpenURL { url in
-            _ = Auth.auth().canHandle(url)
         }
     }
 }

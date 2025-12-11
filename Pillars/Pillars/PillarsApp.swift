@@ -1,42 +1,28 @@
 //
-//  Squirrel2App.swift
-//  Squirrel2
-//
-//  Created by Bradley Ryan on 8/25/25.
+//  PillarsApp.swift
+//  Pillars
 //
 
 import SwiftUI
 import FirebaseCore
+import FirebaseAuth
 
 @main
 struct PillarsApp: App {
-    @StateObject private var firebaseManager: FirebaseManager
+    // AppDelegate handles Firebase configuration and push notification setup
+    @UIApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
+    @StateObject private var firebaseManager = FirebaseManager()
     @StateObject private var locationManager = LocationManager.shared
 
     init() {
-        // Configure Firebase FIRST, before anything else
-        if FirebaseApp.app() == nil {
-            FirebaseApp.configure()
-        }
-
-        // Now create the FirebaseManager after Firebase is configured
-        let manager = FirebaseManager()
-        _firebaseManager = StateObject(wrappedValue: manager)
-
         // Log font availability on app startup
-        print("🚀 [FONT DEBUG] App initializing - checking fonts...")
+        print("🚀 [FONT DEBUG] App initializing...")
         Font.logAvailableFonts()
 
-        // Kick off any other async setup after Firebase is ready
+        // Request location permissions
         Task { @MainActor in
-            // Give Firebase a moment to initialize
-            try? await Task.sleep(nanoseconds: 100_000_000) // 0.1 seconds
-            // Request location permissions
+            try? await Task.sleep(nanoseconds: 100_000_000)
             LocationManager.shared.requestPermission()
-            
-            // Check fonts again after a delay to see if they're loaded
-            print("⏰ [FONT DEBUG] Checking fonts again after initialization delay...")
-            Font.logAvailableFonts()
         }
     }
     
@@ -44,6 +30,10 @@ struct PillarsApp: App {
         WindowGroup {
             RootView()
                 .environmentObject(firebaseManager)
+                .onOpenURL { url in
+                    print("📱 onOpenURL: \(url)")
+                    Auth.auth().canHandle(url)
+                }
         }
     }
 }
