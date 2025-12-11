@@ -2,15 +2,11 @@
   "version": 2,
   "rewrites": [
     {
-      "source": "/api/:path*",
-      "destination": "/api"
+      "source": "/api/title-worker",
+      "destination": "/api/title-worker"
     },
     {
-      "source": "/auth/:path*",
-      "destination": "/api"
-    },
-    {
-      "source": "/users/:path*",
+      "source": "/(.*)",
       "destination": "/api"
     }
   ],
