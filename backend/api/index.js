@@ -24,6 +24,7 @@ const photoRoutes = require('../src/routes/photos');
 const workerRoutes = require('../src/routes/workers');
 const testRoutes = require('../src/routes/test');
 const attachmentRoutes = require('../src/routes/attachments');
+const smsRoutes = require('../src/routes/sms');
 
 // Initialize background tasks
 const { initializeTasks } = require('../src/services/tasks');
@@ -106,6 +107,7 @@ app.use('/api/ai', aiRoutes);
 app.use('/api/realtime', realtimeRoutes);
 app.use('/api/photos', photoRoutes);
 app.use('/api/attachments', attachmentRoutes);
+app.use('/api/sms', smsRoutes);
 
 // Mount LAST - collectionEntryRoutes has catch-all at /api with verifyToken
 app.use('/api', collectionEntryRoutes);
