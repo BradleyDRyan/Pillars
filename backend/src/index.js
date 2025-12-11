@@ -23,6 +23,7 @@ const messageRoutes = require('./routes/messages');
 const taskRoutes = require('./routes/tasks');
 const pillarRoutes = require('./routes/pillars');
 const principleRoutes = require('./routes/principles');
+const insightRoutes = require('./routes/insights');
 const wisdomRoutes = require('./routes/wisdoms');
 const resourceRoutes = require('./routes/resources');
 const aiRoutes = require('./routes/ai');
@@ -31,6 +32,7 @@ const testRoutes = require('./routes/test');
 const adminUiRoutes = require('./routes/admin');
 const agentRoutes = require('./routes/agents');
 const attachmentRoutes = require('./routes/attachments');
+const smsRoutes = require('./routes/sms');
 
 const app = express();
 const PORT = process.env.PORT || 4310;
@@ -57,13 +59,15 @@ app.get('/', (req, res) => {
       users: '/users',
       pillars: '/api/pillars',
       principles: '/api/principles',
+      insights: '/api/insights',
       wisdoms: '/api/wisdoms',
       resources: '/api/resources',
       conversations: '/api/conversations',
       messages: '/api/messages',
       tasks: '/api/tasks',
       agents: '/api/agents',
-      attachments: '/api/attachments'
+      attachments: '/api/attachments',
+      sms: '/api/sms'
     }
   });
 });
@@ -74,6 +78,7 @@ app.use('/api', apiRoutes);
 app.use('/users', userRoutes);
 app.use('/api/pillars', pillarRoutes);
 app.use('/api/principles', principleRoutes);
+app.use('/api/insights', insightRoutes);
 app.use('/api/wisdoms', wisdomRoutes);
 app.use('/api/resources', resourceRoutes);
 app.use('/api/conversations', conversationRoutes);
@@ -84,6 +89,7 @@ app.use('/api/realtime', realtimeRoutes);
 app.use('/api/test', testRoutes);
 app.use('/api/agents', agentRoutes);
 app.use('/api/attachments', attachmentRoutes);
+app.use('/api/sms', smsRoutes);
 app.use('/connection-admin/api', adminUiRoutes);
 
 const adminPublicPath = path.join(__dirname, '../public/connection-admin');
