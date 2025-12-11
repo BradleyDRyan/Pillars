@@ -3,34 +3,27 @@
 //  Pillars
 //
 //  A tile displaying a single pillar with icon and title
-//  Uses custom Liquid Glass effect for modern iOS 26 aesthetic
 //
 
 import SwiftUI
 
 struct PillarTile: View {
     let pillar: Pillar
-    var namespace: Namespace.ID?
     
     var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            // Icon with matched transition source
-            if let namespace = namespace {
-                pillarIcon
-                    .matchedTransitionSource(id: "pillar-\(pillar.id)", in: namespace)
-            } else {
-                pillarIcon
-            }
+        VStack(alignment: .leading, spacing: 10) {
+            pillarIcon
             
-            // Title - SF Pro Display Medium, 18px
+            // Title - SF Pro Display Medium, 16px
             Text(pillar.name)
-                .font(.system(size: 18, weight: .medium, design: .default))
-                .foregroundColor(Color(hex: "2f2f21"))
+                .font(.system(size: 16, weight: .medium, design: .default))
+                .foregroundColor(Color(hex: "555555"))
                 .lineLimit(1)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(12)
-        .tunedGlass(cornerRadius: 16)
+        .padding(14)
+        .background(Color(hex: "F3F3F3"))
+        .clipShape(RoundedRectangle(cornerRadius: 20))
     }
     
     @ViewBuilder
@@ -38,16 +31,16 @@ struct PillarTile: View {
         if let emoji = pillar.emoji, !emoji.isEmpty {
             // Emoji icon
             Text(emoji)
-                .font(.system(size: 20))
+                .font(.system(size: 17))
         } else if let icon = pillar.icon {
             // SF Symbol icon
             Image(systemName: icon.systemName)
-                .font(.system(size: 20, weight: .medium))
+                .font(.system(size: 17, weight: .medium))
                 .foregroundColor(pillar.colorValue)
         } else {
             // Fallback icon
             Image(systemName: "star.fill")
-                .font(.system(size: 20, weight: .medium))
+                .font(.system(size: 17, weight: .medium))
                 .foregroundColor(pillar.colorValue)
         }
     }

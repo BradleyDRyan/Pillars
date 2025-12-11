@@ -23,14 +23,12 @@ struct ConversationView: View {
     
     @State private var chatMode: ChatMode = .text
     @State private var conversationId: String?
-    @State private var inputText = ""
     @Environment(\.dismiss) private var dismiss
     @State private var isInitializing = false
     @State private var hasInitialized = false
     @State private var lastInputSignature: String?
     @State private var setupTask: Task<Void, Never>?
     @State private var hasScrolledToBottom = false
-    @FocusState private var isInputFocused: Bool
     
     // Menu state
     @State private var showRenameAlert = false
@@ -59,6 +57,15 @@ struct ConversationView: View {
         self.onMenuTapped = onMenuTapped
         self.onSettingsTapped = onSettingsTapped
         self.showHeader = showHeader
+        
+        // Log conversation initialization
+        if let existing = existingConversation {
+            print("💬 [ConversationView] init with EXISTING conversation: \(existing.id), pillarIds: \(existing.pillarIds)")
+        } else if !pillarIds.isEmpty {
+            print("💬 [ConversationView] init for NEW conversation with pillarIds: \(pillarIds)")
+        } else {
+            print("💬 [ConversationView] init for NEW conversation WITHOUT pillar association")
+        }
     }
     
     enum ChatMode: String, CaseIterable {
@@ -109,17 +116,6 @@ struct ConversationView: View {
                                 hasScrolledToBottom = true
                             }
                         }
-                    }
-                    .safeAreaBar(edge: .bottom) {
-                        // Composer bar - enables bottom scroll edge effect
-                        Composer(
-                            placeholder: "Ask Meta AI",
-                            text: $inputText,
-                            isLoading: textViewModel.isStreaming,
-                            onSend: sendMessage,
-                            onVoice: { chatMode = .voice }
-                        )
-                        .focused($isInputFocused)
                     }
                 }
             }
@@ -222,16 +218,6 @@ struct ConversationView: View {
     
     // MARK: - Actions
     
-    private func sendMessage() {
-        let text = inputText.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !text.isEmpty else { return }
-        
-        inputText = ""
-        
-        // Use the send() method from ConversationViewModel
-        textViewModel.send(text)
-    }
-    
     private func toggleVoice() {
         if voiceAI.isListening {
             Task { await voiceAI.stopListening() }
@@ -332,7 +318,6 @@ struct ConversationView: View {
         setupTask?.cancel()
         textViewModel.cleanup()
         conversationId = existingConversation?.id
-        inputText = ""
         hasInitialized = false
         isInitializing = false
         hasScrolledToBottom = false

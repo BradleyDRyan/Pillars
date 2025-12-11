@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const { Pillar, Conversation, UserTask, Principle, Wisdom, Resource } = require('../models');
+const { Pillar, Conversation, Principle } = require('../models');
 const { verifyToken } = require('../middleware/auth');
 
 router.use(verifyToken);

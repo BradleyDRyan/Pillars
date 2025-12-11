@@ -70,6 +70,15 @@ class Insight {
     return snapshot.docs.map(doc => new Insight({ id: doc.id, ...doc.data() }));
   }
 
+  static async findUnassigned(userId) {
+    const snapshot = await this.collection()
+      .where('userId', '==', userId)
+      .where('pillarId', '==', null)
+      .orderBy('createdAt', 'desc')
+      .get();
+    return snapshot.docs.map(doc => new Insight({ id: doc.id, ...doc.data() }));
+  }
+
   async save() {
     this.updatedAt = new Date();
     if (this.id) {

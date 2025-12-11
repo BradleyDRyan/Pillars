@@ -7,30 +7,26 @@ const cors = require('cors');
 const helmet = require('helmet');
 const morgan = require('morgan');
 const rateLimit = require('express-rate-limit');
-const path = require('path');
 
 const { logger } = require('./config/firebase');
 const { initializeTasks } = require('./services/tasks');
-const apiRoutes = require('./routes/api');
 
 // Initialize background tasks
 initializeTasks();
+
+// Routes
+const apiRoutes = require('./routes/api');
 const authRoutes = require('./routes/auth');
 const userRoutes = require('./routes/users');
 const phoneAuthRoutes = require('./routes/phone-auth');
 const conversationRoutes = require('./routes/conversations');
 const messageRoutes = require('./routes/messages');
-const taskRoutes = require('./routes/tasks');
 const pillarRoutes = require('./routes/pillars');
 const principleRoutes = require('./routes/principles');
 const insightRoutes = require('./routes/insights');
-const wisdomRoutes = require('./routes/wisdoms');
-const resourceRoutes = require('./routes/resources');
 const aiRoutes = require('./routes/ai');
 const realtimeRoutes = require('./routes/realtime');
 const testRoutes = require('./routes/test');
-const adminUiRoutes = require('./routes/admin');
-const agentRoutes = require('./routes/agents');
 const attachmentRoutes = require('./routes/attachments');
 const smsRoutes = require('./routes/sms');
 
@@ -60,12 +56,8 @@ app.get('/', (req, res) => {
       pillars: '/api/pillars',
       principles: '/api/principles',
       insights: '/api/insights',
-      wisdoms: '/api/wisdoms',
-      resources: '/api/resources',
       conversations: '/api/conversations',
       messages: '/api/messages',
-      tasks: '/api/tasks',
-      agents: '/api/agents',
       attachments: '/api/attachments',
       sms: '/api/sms'
     }
@@ -79,24 +71,13 @@ app.use('/users', userRoutes);
 app.use('/api/pillars', pillarRoutes);
 app.use('/api/principles', principleRoutes);
 app.use('/api/insights', insightRoutes);
-app.use('/api/wisdoms', wisdomRoutes);
-app.use('/api/resources', resourceRoutes);
 app.use('/api/conversations', conversationRoutes);
 app.use('/api/messages', messageRoutes);
-app.use('/api/tasks', taskRoutes);
 app.use('/api/ai', aiRoutes);
 app.use('/api/realtime', realtimeRoutes);
 app.use('/api/test', testRoutes);
-app.use('/api/agents', agentRoutes);
 app.use('/api/attachments', attachmentRoutes);
 app.use('/api/sms', smsRoutes);
-app.use('/connection-admin/api', adminUiRoutes);
-
-const adminPublicPath = path.join(__dirname, '../public/connection-admin');
-app.use('/connection-admin', express.static(adminPublicPath, { index: 'index.html' }));
-app.get('/connection-admin/*', (req, res) => {
-  res.sendFile(path.join(adminPublicPath, 'index.html'));
-});
 
 app.use((err, req, res, next) => {
   logger.error({ err }, 'Unhandled error middleware');

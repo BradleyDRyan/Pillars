@@ -57,7 +57,7 @@ struct HomeView: View {
                                             selectedPillar = pillar
                                         }
                                     } label: {
-                                        PillarTile(pillar: pillar, namespace: namespace)
+                                        PillarTile(pillar: pillar)
                                     }
                                     .buttonStyle(.pressScale)
                                 }
@@ -101,11 +101,11 @@ struct HomeView: View {
                 }
                 .navigationDestination(item: $selectedPillar) { pillar in
                     PillarDetailView(pillar: pillar)
-                        .navigationTransition(.zoom(sourceID: "pillar-\(pillar.id)", in: namespace))
                         .environmentObject(viewModel)
                 }
                 .navigationDestination(isPresented: $showConversation) {
                     ConversationView(
+                        pillarIds: selectedPillar != nil ? [selectedPillar!.id] : [],
                         initialMessage: initialMessage,
                         showHeader: false
                     )
@@ -124,6 +124,13 @@ struct HomeView: View {
                         onSend: {
                             let message = inputText.trimmingCharacters(in: .whitespacesAndNewlines)
                             guard !message.isEmpty else { return }
+                            
+                            // Log conversation creation context
+                            if let pillar = selectedPillar {
+                                print("🏛️ [HomeView] Starting conversation FROM PILLAR: '\(pillar.name)' (id: \(pillar.id))")
+                            } else {
+                                print("🏛️ [HomeView] Starting conversation WITHOUT pillar context")
+                            }
                             
                             // Dismiss keyboard for clean transition
                             isComposerFocused = false

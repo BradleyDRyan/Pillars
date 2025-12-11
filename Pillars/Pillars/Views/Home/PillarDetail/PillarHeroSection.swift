@@ -11,32 +11,31 @@ struct PillarHeroSection: View {
     let pillar: Pillar
     
     var body: some View {
-        VStack(spacing: 12) {
-            // Icon - 40px
+        VStack(spacing: 6) {
+            // Icon
             pillarIcon
             
-            // Title - 32px, pillar color
+            // Title
             Text(pillar.name)
-                .font(.system(size: 32, weight: .medium))
+                .font(.system(size: 24, weight: .medium))
                 .foregroundColor(pillar.colorValue)
         }
-        .frame(maxWidth: .infinity)
-        .padding(.top, 20)
-        .padding(.bottom, 40)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
+        .padding(.vertical, 8)
     }
     
     @ViewBuilder
     private var pillarIcon: some View {
         if let emoji = pillar.emoji, !emoji.isEmpty {
             Text(emoji)
-                .font(.system(size: 40))
+                .font(.system(size: 28))
         } else if let icon = pillar.icon {
             Image(systemName: icon.systemName)
-                .font(.system(size: 40, weight: .semibold, design: .rounded))
+                .font(.system(size: 28, weight: .semibold, design: .rounded))
                 .foregroundColor(pillar.colorValue)
         } else {
             Image(systemName: "star.fill")
-                .font(.system(size: 40, weight: .semibold, design: .rounded))
+                .font(.system(size: 28, weight: .semibold, design: .rounded))
                 .foregroundColor(pillar.colorValue)
         }
     }

@@ -12,15 +12,6 @@ struct RealtimeVoiceModeView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var isRecording = false
     @State private var showError = false
-    @State private var showCamera = false
-    @State private var capturedImage: UIImage?
-    @State private var isCapturingQuick = false
-    @State private var useQuickCapture = true  // Toggle between quick and standard camera
-
-    // Conversation ID for photo uploads
-    private var conversationId: String {
-        voiceAI.conversationId
-    }
     
     var body: some View {
         ZStack {
@@ -68,16 +59,6 @@ struct RealtimeVoiceModeView: View {
                 await voiceAI.closeVoiceMode()
             }
         }
-        .fullScreenCover(isPresented: $showCamera) {
-            VoiceCameraView(
-                isPresented: $showCamera,
-                capturedImage: $capturedImage,
-                conversationId: conversationId,
-                useRealtimeMode: true,  // Enable realtime mode for voice AI photo questions
-                autoSendMode: true,  // Auto-send for speed
-                defaultQuestion: "Check this out!"  // Contextual default
-            )
-        }
     }
     
     private var backgroundGradient: some View {
@@ -119,38 +100,10 @@ struct RealtimeVoiceModeView: View {
 
                         Spacer()
 
-                        HStack(spacing: 12) {
-                            if useQuickCapture {
-                                // Quick camera button with instant capture
-                                QuickCameraButton(
-                                    isCapturing: $isCapturingQuick,
-                                    onCapture: { image in
-                                        handleQuickCapture(image)
-                                    }
-                                )
-                                .disabled(!voiceAI.isConnected)
-                                .opacity(voiceAI.isConnected ? 1.0 : 0.5)
-                            } else {
-                                // Standard camera button
-                                Button(action: {
-                                    showCamera = true
-                                }) {
-                                    Image(systemName: "camera.fill")
-                                        .font(.system(size: 20))
-                                        .foregroundColor(voiceAI.isConnected ? S2.Colors.squirrelPrimary : S2.Colors.squirrelTextSecondary)
-                                        .frame(width: 36, height: 36)
-                                        .background(Circle().fill(Color.white))
-                                        .shadow(radius: 2)
-                                }
-                                .disabled(!voiceAI.isConnected)
-                                .opacity(voiceAI.isConnected ? 1.0 : 0.5)
-                            }
-
-                            // Connection status indicator
-                            Circle()
-                                .fill(voiceAI.isConnected ? Color.green : Color.red)
-                                .frame(width: 10, height: 10)
-                        }
+                        // Connection status indicator
+                        Circle()
+                            .fill(voiceAI.isConnected ? Color.green : Color.red)
+                            .frame(width: 10, height: 10)
                 }
                 .padding(.horizontal)
                 .padding(.top)
@@ -300,26 +253,6 @@ struct RealtimeVoiceModeView: View {
         }
     }
 
-    private func handleQuickCapture(_ image: UIImage) {
-        Task {
-            do {
-                // Instantly send the photo with a contextual message
-                guard let imageData = image.jpegData(compressionQuality: 0.5) else { return }
-
-                // Send with minimal context for speed
-                try await voiceAI.sendImageQuestion(
-                    imageData: imageData,
-                    text: "What do you see?"
-                )
-
-                // Quick haptic feedback for success
-                let notification = UINotificationFeedbackGenerator()
-                notification.notificationOccurred(.success)
-            } catch {
-                voiceAI.error = "Failed to send photo: \(error.localizedDescription)"
-            }
-        }
-    }
 }
 
 // Animated waveform visualization

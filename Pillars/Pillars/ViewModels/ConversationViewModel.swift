@@ -128,6 +128,13 @@ final class ConversationViewModel: ObservableObject {
                 "pillarIds": pillarIds,
                 "metadata": locationMetadata
             ]
+            
+            if pillarIds.isEmpty {
+                print("⚠️ [ConversationViewModel] Creating conversation WITHOUT pillar association")
+            } else {
+                print("🏛️ [ConversationViewModel] Creating conversation WITH pillarIds: \(pillarIds)")
+            }
+            
             request.httpBody = try JSONSerialization.data(withJSONObject: body)
 
             let (data, response) = try await URLSession.shared.data(for: request)
@@ -155,7 +162,7 @@ final class ConversationViewModel: ObservableObject {
             decoder.dateDecodingStrategy = .iso8601WithFractionalSeconds
             conversation = try decoder.decode(Conversation.self, from: data)
             
-            print("✅ [ConversationViewModel] Created conversation: \(conversation?.id ?? "nil")")
+            print("✅ [ConversationViewModel] Created conversation: \(conversation?.id ?? "nil"), pillarIds: \(conversation?.pillarIds ?? [])")
 
             // Start listening to messages
             if let conversationId = conversation?.id {

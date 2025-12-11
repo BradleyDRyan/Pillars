@@ -6,18 +6,12 @@
 //
 
 import SwiftUI
-import FirebaseAuth
 
 struct VoiceModeView: View {
     @ObservedObject var voiceAI: VoiceAIManager
     let onModeSwitch: () -> Void
     let onDismiss: () -> Void
     let onToggleVoice: () -> Void
-    @State private var showCamera = false
-    @State private var capturedImage: UIImage?
-    @State private var isCapturing = false
-    @State private var isUploading = false
-    @State private var uploadError: String?
     @State private var showSettings = false
 
     var body: some View {
@@ -26,153 +20,35 @@ struct VoiceModeView: View {
             VoiceModeHeader(
                 onDismiss: onDismiss,
                 onModeSwitch: onModeSwitch,
-                onCameraPress: {
-                    withAnimation(.easeInOut(duration: 0.3)) {
-                        showCamera.toggle()
-                        if !showCamera {
-                            capturedImage = nil
-                        }
-                    }
-                },
                 onSettingsPress: {
                     showSettings = true
                 },
-                isConnected: voiceAI.isConnected,
-                isCameraActive: showCamera
+                isConnected: voiceAI.isConnected
             )
 
             // Voice mode content
-            ZStack {
-                // Voice mode UI (always visible but dimmed when camera is active)
-                VStack {
-                    Spacer()
+            VStack {
+                Spacer()
 
-                    // Voice mode ring animation
-                    VoiceRingAnimation(
-                        isListening: voiceAI.isListening,
-                        onToggle: onToggleVoice
-                    )
+                // Voice mode ring animation
+                VoiceRingAnimation(
+                    isListening: voiceAI.isListening,
+                    onToggle: onToggleVoice
+                )
 
-                    // Voice mode status
-                    VoiceStatusIndicator(
-                        isListening: voiceAI.isListening,
-                        isConnected: voiceAI.isConnected
-                    )
+                // Voice mode status
+                VoiceStatusIndicator(
+                    isListening: voiceAI.isListening,
+                    isConnected: voiceAI.isConnected
+                )
 
-                    Spacer()
-                }
-                .opacity(showCamera ? 0.3 : 1)  // Dim but still visible
-                .scaleEffect(showCamera ? 0.7 : 1)  // Make smaller when camera is active
-                .animation(.easeInOut(duration: 0.3), value: showCamera)
-
-                // Camera view overlays on top when active
-                if showCamera {
-                    GeometryReader { geometry in
-                        VStack {
-                            Spacer()
-
-                            InlineCameraView(
-                                capturedImage: $capturedImage,
-                                isCapturing: $isCapturing,
-                                isUploading: $isUploading,
-                                onSend: { image in
-                                    Task {
-                                        await uploadPhoto(image)
-                                    }
-                                },
-                                onRetake: { }, // Not used anymore but kept for interface
-                                onClose: {
-                                    withAnimation(.easeInOut(duration: 0.3)) {
-                                        showCamera = false
-                                        capturedImage = nil
-                                    }
-                                }
-                            )
-                            .frame(maxHeight: geometry.size.height * 0.5) // Take up bottom half
-                            .transition(.move(edge: .bottom).combined(with: .opacity))
-
-                            Spacer(minLength: 50)
-                        }
-                    }
-                }
+                Spacer()
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .background(Color(.systemBackground))
         }
-        .alert("Upload Error", isPresented: .constant(uploadError != nil)) {
-            Button("OK") {
-                uploadError = nil
-            }
-        } message: {
-            Text(uploadError ?? "")
-        }
         .sheet(isPresented: $showSettings) {
             VoiceSettingsView()
-        }
-    }
-
-    private func uploadPhoto(_ image: UIImage) async {
-        await MainActor.run {
-            uploadError = nil
-            isUploading = false // Keep overlay hidden while we process in the background
-        }
-
-        do {
-            let maxRealtimeDimension: CGFloat = 768
-            guard let scaledImage = image.scaledTo(maxDimension: maxRealtimeDimension),
-                  let imageDataForAI = scaledImage.jpegData(compressionQuality: 0.6) else {
-                throw NSError(
-                    domain: "VoiceModeView",
-                    code: 0,
-                    userInfo: [NSLocalizedDescriptionKey: "Couldn't prepare photo data"]
-                )
-            }
-
-            // Kick the photo to the realtime session first so acknowledgement starts immediately
-            do {
-                try await voiceAI.sendImageQuestion(
-                    imageData: imageDataForAI,
-                    shouldPersist: false
-                )
-            } catch {
-                print("Failed to forward photo to AI session: \(error)")
-                await MainActor.run {
-                    uploadError = "Photo saved, but voice couldn't view it yet."
-                }
-            }
-
-            // Reset immediately so the user can capture again
-            await MainActor.run {
-                capturedImage = nil
-            }
-
-            // Persist to backend quietly in the background
-            Task {
-                do {
-                    guard let user = Auth.auth().currentUser else {
-                        throw NSError(
-                            domain: "Auth",
-                            code: 0,
-                            userInfo: [NSLocalizedDescriptionKey: "Not authenticated"]
-                        )
-                    }
-
-                    let token = try await user.getIDToken()
-                    APIService.shared.setAuthToken(token)
-
-                    let response = try await APIService.shared.uploadPhoto(image, conversationId: voiceAI.conversationId) { progress in
-                        print("Upload progress: \(progress)")
-                    }
-
-                    print("Photo uploaded successfully: \(response.entryId)")
-                } catch {
-                    print("Failed to persist photo to backend: \(error)")
-                }
-            }
-        } catch {
-            await MainActor.run {
-                uploadError = error.localizedDescription
-            }
         }
     }
 }
@@ -181,10 +57,8 @@ struct VoiceModeView: View {
 struct VoiceModeHeader: View {
     let onDismiss: () -> Void
     let onModeSwitch: () -> Void
-    let onCameraPress: () -> Void
     let onSettingsPress: () -> Void
     let isConnected: Bool
-    let isCameraActive: Bool
 
     var body: some View {
         HStack {
@@ -196,22 +70,10 @@ struct VoiceModeHeader: View {
 
             Spacer()
 
-            Text(isCameraActive ? "Voice + Camera" : "Voice")
+            Text("Voice")
                 .font(.squirrelHeadline)
 
             Spacer()
-
-            // Camera button
-            Button(action: onCameraPress) {
-                Image(systemName: isCameraActive ? "mic.fill" : "camera.fill")
-                    .font(.squirrelSubheadline)
-                    .foregroundColor(isConnected ? .blue : .gray)
-                    .frame(width: 32, height: 32)
-                    .background(Circle().fill(isCameraActive ? Color.blue.opacity(0.1) : Color(.systemGray6)))
-            }
-            .disabled(!isConnected)
-            .opacity(isConnected ? 1.0 : 0.5)
-            .padding(.trailing, 4)
 
             // Settings button
             Button(action: onSettingsPress) {
