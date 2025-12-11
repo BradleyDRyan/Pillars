@@ -6,7 +6,15 @@
       "destination": "/api/title-worker"
     },
     {
-      "source": "/(.*)",
+      "source": "/connection-admin",
+      "destination": "/connection-admin/index.html"
+    },
+    {
+      "source": "/connection-admin/(.*)",
+      "destination": "/connection-admin/$1"
+    },
+    {
+      "source": "/((?!connection-admin).*)",
       "destination": "/api"
     }
   ],
