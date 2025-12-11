@@ -70,7 +70,7 @@ app.use('/api', limiter);
 app.get('/', (req, res) => {
   res.json({ 
     message: 'Pillars Backend API',
-    version: '3.0.0',
+    version: '3.1.0',
     endpoints: {
       auth: '/auth',
       api: '/api',
@@ -82,7 +82,9 @@ app.get('/', (req, res) => {
       messages: '/api/messages',
       attachments: '/api/attachments',
       sms: '/api/sms',
-      coachPreferences: '/api/coach-preferences'
+      coachPreferences: '/api/coach-preferences',
+      admin: '/api/admin',
+      cron: '/api/cron'
     }
   });
 });
