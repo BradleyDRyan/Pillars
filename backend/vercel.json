@@ -2,19 +2,15 @@
   "version": 2,
   "rewrites": [
     {
-      "source": "/api/title-worker",
-      "destination": "/api/title-worker"
+      "source": "/api/:path*",
+      "destination": "/api"
     },
     {
-      "source": "/connection-admin",
-      "destination": "/connection-admin/index.html"
+      "source": "/auth/:path*",
+      "destination": "/api"
     },
     {
-      "source": "/connection-admin/(.*)",
-      "destination": "/connection-admin/$1"
-    },
-    {
-      "source": "/((?!connection-admin).*)",
+      "source": "/users/:path*",
       "destination": "/api"
     }
   ],
