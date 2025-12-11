@@ -18,7 +18,7 @@ const principleRoutes = require('../src/routes/principles');
 const insightRoutes = require('../src/routes/insights');
 const wisdomRoutes = require('../src/routes/wisdoms');
 const resourceRoutes = require('../src/routes/resources');
-const thoughtRoutes = require('../src/routes/thoughts');
+// const thoughtRoutes = require('../src/routes/thoughts'); // Disabled - Thought model doesn't exist
 const aiRoutes = require('../src/routes/ai');
 const realtimeRoutes = require('../src/routes/realtime');
 const testRoutes = require('../src/routes/test');
@@ -98,7 +98,7 @@ app.use('/api/resources', resourceRoutes);
 app.use('/api/conversations', conversationRoutes);
 app.use('/api/messages', messageRoutes);
 app.use('/api/tasks', taskRoutes);
-app.use('/api/thoughts', thoughtRoutes);
+// app.use('/api/thoughts', thoughtRoutes); // Disabled - Thought model doesn't exist
 app.use('/api/ai', aiRoutes);
 app.use('/api/realtime', realtimeRoutes);
 app.use('/api/test', testRoutes);
