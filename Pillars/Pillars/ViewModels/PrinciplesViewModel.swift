@@ -91,14 +91,21 @@ class PrinciplesViewModel: ObservableObject {
     
     func createPrinciple(pillarId: String, title: String, description: String, priority: Int = 3) async throws {
         guard let user = Auth.auth().currentUser else {
+            print("❌ [PrinciplesViewModel] Not authenticated")
             throw PrincipleError.notAuthenticated
         }
         
         isSaving = true
         defer { isSaving = false }
         
+        print("🔐 [PrinciplesViewModel] Getting ID token for user: \(user.uid)")
         let token = try await user.getIDToken()
-        guard let url = URL(string: "\(AppConfig.apiBaseURL)/principles") else {
+        
+        let urlString = "\(AppConfig.apiBaseURL)/principles"
+        print("🌐 [PrinciplesViewModel] URL: \(urlString)")
+        
+        guard let url = URL(string: urlString) else {
+            print("❌ [PrinciplesViewModel] Invalid URL: \(urlString)")
             throw PrincipleError.invalidURL
         }
         
@@ -117,19 +124,35 @@ class PrinciplesViewModel: ObservableObject {
         
         request.httpBody = try JSONSerialization.data(withJSONObject: body)
         
-        let (data, response) = try await URLSession.shared.data(for: request)
+        print("📤 [PrinciplesViewModel] Creating principle:")
+        print("   - pillarId: \(pillarId)")
+        print("   - title: \(title)")
+        print("   - description: \(description)")
+        print("   - priority: \(priority)")
         
-        guard let httpResponse = response as? HTTPURLResponse else {
-            throw PrincipleError.invalidResponse
+        do {
+            let (data, response) = try await URLSession.shared.data(for: request)
+            
+            guard let httpResponse = response as? HTTPURLResponse else {
+                print("❌ [PrinciplesViewModel] Invalid response type")
+                throw PrincipleError.invalidResponse
+            }
+            
+            let responseBody = String(data: data, encoding: .utf8) ?? "Unknown error"
+            print("📥 [PrinciplesViewModel] Response status: \(httpResponse.statusCode), body: \(responseBody)")
+            
+            if httpResponse.statusCode != 201 {
+                print("❌ [PrinciplesViewModel] Create failed with status \(httpResponse.statusCode): \(responseBody)")
+                throw PrincipleError.serverError(responseBody)
+            }
+            
+            print("✅ [PrinciplesViewModel] Created principle '\(title)'")
+        } catch let error as PrincipleError {
+            throw error
+        } catch {
+            print("❌ [PrinciplesViewModel] Network error: \(error.localizedDescription)")
+            throw PrincipleError.serverError(error.localizedDescription)
         }
-        
-        if httpResponse.statusCode != 201 {
-            let errorMessage = String(data: data, encoding: .utf8) ?? "Unknown error"
-            print("❌ [PrinciplesViewModel] Create failed: \(errorMessage)")
-            throw PrincipleError.createFailed
-        }
-        
-        print("✅ [PrinciplesViewModel] Created principle '\(title)'")
     }
     
     // MARK: - Update (Writes to Backend)
@@ -210,6 +233,7 @@ enum PrincipleError: LocalizedError {
     case createFailed
     case updateFailed
     case deleteFailed
+    case serverError(String)
     
     var errorDescription: String? {
         switch self {
@@ -225,6 +249,8 @@ enum PrincipleError: LocalizedError {
             return "Failed to update principle"
         case .deleteFailed:
             return "Failed to delete principle"
+        case .serverError(let message):
+            return "Server error: \(message)"
         }
     }
 }

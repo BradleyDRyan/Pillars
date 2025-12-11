@@ -69,18 +69,11 @@ class FirebaseManager: NSObject, ObservableObject {
                     self?.currentUser = user
                     self?.isAuthenticated = user != nil
                     
-                }
-            }
-        }
-        
-        // Sign in anonymously on first launch if no user
-        Task {
-            if auth?.currentUser == nil {
-                do {
-                    try await self.signInAnonymously()
-                    print("✅ Signed in anonymously")
-                } catch {
-                    print("❌ Anonymous sign in failed: \(error)")
+                    if let user = user {
+                        print("✅ Auth state changed - User: \(user.uid), Phone: \(user.phoneNumber ?? "none")")
+                    } else {
+                        print("📱 Auth state changed - No user signed in")
+                    }
                 }
             }
         }

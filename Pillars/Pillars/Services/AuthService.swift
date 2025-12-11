@@ -276,8 +276,17 @@ class AuthService: ObservableObject {
     }
     
     func signOut() {
+        // Sign out from Firebase
+        do {
+            try Auth.auth().signOut()
+            print("✅ Signed out from Firebase")
+        } catch {
+            print("❌ Error signing out from Firebase: \(error)")
+        }
+        
         // Clear auth token
         UserDefaults.standard.removeObject(forKey: "authToken")
+        UserDefaults.standard.removeObject(forKey: "isAnonymous")
         
         // Clear user state on main thread
         Task { @MainActor in
