@@ -41,9 +41,12 @@ const initializeFirebase = () => {
   try {
     if (hasIndividualCreds) {
       initMode = 'individual-credentials';
+      // Sanitize env vars - remove any accidental whitespace/newlines
+      const projectId = process.env.FIREBASE_PROJECT_ID?.trim();
+      const clientEmail = process.env.FIREBASE_CLIENT_EMAIL?.trim();
       const serviceAccount = {
-        projectId: process.env.FIREBASE_PROJECT_ID,
-        clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
+        projectId,
+        clientEmail,
         privateKey: process.env.FIREBASE_PRIVATE_KEY.replace(/\\n/g, '\n')
       };
 

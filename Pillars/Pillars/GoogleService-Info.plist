@@ -3,28 +3,28 @@
 <plist version="1.0">
 <dict>
 	<key>API_KEY</key>
-	<string>AIzaSyCEoGFsJcpFjRE59PsNUOeAvitnXx9XflA</string>
+	<string>AIzaSyC7fj6JWgv4fc6bgqi0vTMEYICdnCzdYvw</string>
 	<key>GCM_SENDER_ID</key>
-	<string>610672134073</string>
+	<string>765320680674</string>
 	<key>PLIST_VERSION</key>
 	<string>1</string>
 	<key>BUNDLE_ID</key>
 	<string>bradley.Squirrel2</string>
 	<key>PROJECT_ID</key>
-	<string>connections-3f798</string>
+	<string>pillars-83757</string>
 	<key>STORAGE_BUCKET</key>
-	<string>connections-3f798.firebasestorage.app</string>
+	<string>pillars-83757.firebasestorage.app</string>
 	<key>IS_ADS_ENABLED</key>
-	<false/>
+	<false></false>
 	<key>IS_ANALYTICS_ENABLED</key>
-	<false/>
+	<false></false>
 	<key>IS_APPINVITE_ENABLED</key>
-	<true/>
+	<true></true>
 	<key>IS_GCM_ENABLED</key>
-	<true/>
+	<true></true>
 	<key>IS_SIGNIN_ENABLED</key>
-	<true/>
+	<true></true>
 	<key>GOOGLE_APP_ID</key>
-	<string>1:610672134073:ios:c0c4f8ae8b68236b979868</string>
+	<string>1:765320680674:ios:31a61b25db1bc0383f3abb</string>
 </dict>
 </plist>
