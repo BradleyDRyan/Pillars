@@ -1,35 +1,33 @@
-import { useState } from 'react'
-import reactLogo from './assets/react.svg'
-import viteLogo from '/vite.svg'
-import './App.css'
+import { BrowserRouter, Routes, Route } from 'react-router-dom'
+import { Layout } from '@/components/Layout'
+import { Dashboard } from '@/pages/Dashboard'
+import { Users } from '@/pages/Users'
+import { Conversations } from '@/pages/Conversations'
+import { ConversationDetail } from '@/pages/ConversationDetail'
 
-function App() {
-  const [count, setCount] = useState(0)
-
+function Settings() {
   return (
-    <>
+    <div className="space-y-6">
       <div>
-        <a href="https://vite.dev" target="_blank">
-          <img src={viteLogo} className="logo" alt="Vite logo" />
-        </a>
-        <a href="https://react.dev" target="_blank">
-          <img src={reactLogo} className="logo react" alt="React logo" />
-        </a>
+        <h1 className="text-3xl font-bold">Settings</h1>
+        <p className="text-muted-foreground">Admin settings coming soon...</p>
       </div>
-      <h1>Vite + React</h1>
-      <div className="card">
-        <button onClick={() => setCount((count) => count + 1)}>
-          count is {count}
-        </button>
-        <p>
-          Edit <code>src/App.tsx</code> and save to test HMR
-        </p>
-      </div>
-      <p className="read-the-docs">
-        Click on the Vite and React logos to learn more
-      </p>
-    </>
+    </div>
   )
 }
 
-export default App
+export default function App() {
+  return (
+    <BrowserRouter>
+      <Routes>
+        <Route path="/" element={<Layout />}>
+          <Route index element={<Dashboard />} />
+          <Route path="users" element={<Users />} />
+          <Route path="conversations" element={<Conversations />} />
+          <Route path="conversations/:id" element={<ConversationDetail />} />
+          <Route path="settings" element={<Settings />} />
+        </Route>
+      </Routes>
+    </BrowserRouter>
+  )
+}
