@@ -39,6 +39,41 @@ interface DashboardStats {
   activeToday: number
 }
 
+interface TriggerTemplate {
+  id: string
+  name: string
+  description: string
+  type: 'schedule' | 'condition' | 'event'
+  defaultCron: string
+  defaultTimezone: string
+  messageTemplate?: string
+  enabled: boolean
+}
+
+interface UserTrigger {
+  id: string
+  templateId?: string
+  enabled: boolean
+  cron: string
+  timezone: string
+  nextFireAt?: string
+  lastFiredAt?: string
+  fireCount: number
+  createdAt: string
+}
+
+interface NudgeHistoryItem {
+  id: string
+  userId: string
+  triggerId: string
+  templateId?: string
+  content: string
+  channel: string
+  status: 'delivered' | 'failed'
+  error?: string
+  sentAt: string
+}
+
 class AdminAPI {
   private adminToken: string | null = null
 
@@ -109,7 +144,42 @@ class AdminAPI {
   async getMessages(conversationId: string): Promise<Message[]> {
     return this.fetch(`/api/admin/conversations/${conversationId}/messages`)
   }
+
+  // Trigger Templates
+  async getTriggerTemplates(): Promise<TriggerTemplate[]> {
+    return this.fetch('/api/admin/trigger-templates')
+  }
+
+  // User Triggers
+  async getUserTriggers(userId: string): Promise<UserTrigger[]> {
+    return this.fetch(`/api/admin/users/${userId}/triggers`)
+  }
+
+  async createUserTrigger(userId: string, data: Partial<UserTrigger>): Promise<UserTrigger> {
+    return this.fetch(`/api/admin/users/${userId}/triggers`, {
+      method: 'POST',
+      body: JSON.stringify(data)
+    })
+  }
+
+  async updateUserTrigger(userId: string, triggerId: string, data: Partial<UserTrigger>): Promise<UserTrigger> {
+    return this.fetch(`/api/admin/users/${userId}/triggers/${triggerId}`, {
+      method: 'PUT',
+      body: JSON.stringify(data)
+    })
+  }
+
+  async deleteUserTrigger(userId: string, triggerId: string): Promise<void> {
+    await this.fetch(`/api/admin/users/${userId}/triggers/${triggerId}`, {
+      method: 'DELETE'
+    })
+  }
+
+  // Nudge History
+  async getUserNudgeHistory(userId: string, limit = 50): Promise<NudgeHistoryItem[]> {
+    return this.fetch(`/api/admin/users/${userId}/nudge-history?limit=${limit}`)
+  }
 }
 
 export const api = new AdminAPI()
-export type { User, Conversation, Message, DashboardStats }
+export type { User, Conversation, Message, DashboardStats, TriggerTemplate, UserTrigger, NudgeHistoryItem }

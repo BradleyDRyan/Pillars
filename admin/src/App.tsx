@@ -4,6 +4,7 @@ import { Dashboard } from '@/pages/Dashboard'
 import { Users } from '@/pages/Users'
 import { Conversations } from '@/pages/Conversations'
 import { ConversationDetail } from '@/pages/ConversationDetail'
+import { UserTriggers } from '@/pages/UserTriggers'
 
 function Settings() {
   return (
@@ -23,6 +24,7 @@ export default function App() {
         <Route path="/" element={<Layout />}>
           <Route index element={<Dashboard />} />
           <Route path="users" element={<Users />} />
+          <Route path="users/:userId/triggers" element={<UserTriggers />} />
           <Route path="conversations" element={<Conversations />} />
           <Route path="conversations/:id" element={<ConversationDetail />} />
           <Route path="settings" element={<Settings />} />

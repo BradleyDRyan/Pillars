@@ -4,6 +4,7 @@
 //
 
 import SwiftUI
+import FirebaseAuth
 
 struct RootView: View {
     @EnvironmentObject var firebaseManager: FirebaseManager
@@ -18,6 +19,10 @@ struct RootView: View {
                 // Not authenticated - show phone auth
                 PhoneAuthView()
             }
+        }
+        // Required for Firebase phone auth reCAPTCHA callback handling in SwiftUI lifecycle.
+        .onOpenURL { url in
+            _ = Auth.auth().canHandle(url)
         }
     }
 }

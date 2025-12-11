@@ -75,14 +75,18 @@ class APIService: ObservableObject {
         if let pillarId = pillarId {
             urlString += "?pillarId=\(pillarId)"
         }
-        let url = URL(string: urlString)!
+        guard let url = URL(string: urlString) else {
+            throw APIError.invalidURL(urlString)
+        }
         let request = createRequest(url: url)
         let (data, response) = try await session.data(for: request)
         return try await handleResponse(data, response, nil, type: [Conversation].self)
     }
     
     func createConversation(_ conversation: Conversation) async throws -> Conversation {
-        let url = URL(string: "\(baseURL)/conversations")!
+        guard let url = URL(string: "\(baseURL)/conversations") else {
+            throw APIError.invalidURL("\(baseURL)/conversations")
+        }
         let encoder = JSONEncoder()
         encoder.dateEncodingStrategy = .iso8601WithFractionalSeconds
         let body = try encoder.encode(conversation)
@@ -94,14 +98,18 @@ class APIService: ObservableObject {
     // MARK: - Messages
     
     func fetchMessages(conversationId: String) async throws -> [Message] {
-        let url = URL(string: "\(baseURL)/conversations/\(conversationId)/messages")!
+        guard let url = URL(string: "\(baseURL)/conversations/\(conversationId)/messages") else {
+            throw APIError.invalidURL("\(baseURL)/conversations/\(conversationId)/messages")
+        }
         let request = createRequest(url: url)
         let (data, response) = try await session.data(for: request)
         return try await handleResponse(data, response, nil, type: [Message].self)
     }
     
     func sendMessage(_ message: Message) async throws -> Message {
-        let url = URL(string: "\(baseURL)/messages")!
+        guard let url = URL(string: "\(baseURL)/messages") else {
+            throw APIError.invalidURL("\(baseURL)/messages")
+        }
         let encoder = JSONEncoder()
         encoder.dateEncodingStrategy = .iso8601WithFractionalSeconds
         let body = try encoder.encode(message)
@@ -113,7 +121,9 @@ class APIService: ObservableObject {
     // MARK: - Pillars
     
     func fetchPillars() async throws -> [Pillar] {
-        let url = URL(string: "\(baseURL)/pillars")!
+        guard let url = URL(string: "\(baseURL)/pillars") else {
+            throw APIError.invalidURL("\(baseURL)/pillars")
+        }
         let request = createRequest(url: url)
         let (data, response) = try await session.data(for: request)
         return try await handleResponse(data, response, nil, type: [Pillar].self)
@@ -126,7 +136,9 @@ class APIService: ObservableObject {
         if let pillarId = pillarId {
             urlString += "?pillarId=\(pillarId)"
         }
-        let url = URL(string: urlString)!
+        guard let url = URL(string: urlString) else {
+            throw APIError.invalidURL(urlString)
+        }
         let request = createRequest(url: url)
         let (data, response) = try await session.data(for: request)
         return try await handleResponse(data, response, nil, type: [Principle].self)
@@ -139,7 +151,9 @@ class APIService: ObservableObject {
         if let pillarId = pillarId {
             urlString += "?pillarId=\(pillarId)"
         }
-        let url = URL(string: urlString)!
+        guard let url = URL(string: urlString) else {
+            throw APIError.invalidURL(urlString)
+        }
         let request = createRequest(url: url)
         let (data, response) = try await session.data(for: request)
         return try await handleResponse(data, response, nil, type: [Insight].self)
@@ -151,6 +165,7 @@ enum APIError: LocalizedError {
     case invalidResponse
     case httpError(Int)
     case decodingError(Error)
+    case invalidURL(String)
     
     var errorDescription: String? {
         switch self {
@@ -162,6 +177,8 @@ enum APIError: LocalizedError {
             return "HTTP error: \(code)"
         case .decodingError(let error):
             return "Failed to decode response: \(error.localizedDescription)"
+        case .invalidURL(let url):
+            return "Invalid URL: \(url)"
         }
     }
 }

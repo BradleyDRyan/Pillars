@@ -15,6 +15,12 @@
       "maxDuration": 30
     }
   },
+  "crons": [
+    {
+      "path": "/api/cron/process-triggers",
+      "schedule": "*/15 * * * *"
+    }
+  ],
   "env": {
     "NODE_ENV": "production"
   }

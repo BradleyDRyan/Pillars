@@ -7,6 +7,14 @@
 const express = require('express');
 const router = express.Router();
 const { db, logger } = require('../config/firebase');
+const { 
+  getUserTriggers, 
+  createUserTrigger, 
+  updateUserTrigger, 
+  deleteUserTrigger,
+  getTriggerTemplates 
+} = require('../services/triggers');
+const { FieldValue } = require('../config/firebase');
 
 // Simple admin auth check - in production, use proper admin authentication
 const checkAdmin = async (req, res, next) => {
@@ -214,6 +222,178 @@ router.get('/conversations/:id/messages', async (req, res) => {
     res.json(messages);
   } catch (error) {
     logger.error({ error: error.message }, 'Failed to get messages');
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// ============================================
+// TRIGGER ENDPOINTS
+// ============================================
+
+/**
+ * GET /api/admin/trigger-templates
+ * List all available trigger templates
+ */
+router.get('/trigger-templates', async (req, res) => {
+  try {
+    const templates = await getTriggerTemplates();
+    res.json(templates);
+  } catch (error) {
+    logger.error({ error: error.message }, 'Failed to get trigger templates');
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * GET /api/admin/users/:id/triggers
+ * Get all triggers for a user
+ */
+router.get('/users/:id/triggers', async (req, res) => {
+  try {
+    const triggers = await getUserTriggers(req.params.id);
+    res.json(triggers);
+  } catch (error) {
+    logger.error({ error: error.message }, 'Failed to get user triggers');
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * POST /api/admin/users/:id/triggers
+ * Create a trigger for a user
+ */
+router.post('/users/:id/triggers', async (req, res) => {
+  try {
+    const trigger = await createUserTrigger(req.params.id, req.body);
+    res.status(201).json(trigger);
+  } catch (error) {
+    logger.error({ error: error.message }, 'Failed to create trigger');
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * PUT /api/admin/users/:id/triggers/:triggerId
+ * Update a user's trigger
+ */
+router.put('/users/:id/triggers/:triggerId', async (req, res) => {
+  try {
+    const trigger = await updateUserTrigger(req.params.id, req.params.triggerId, req.body);
+    res.json(trigger);
+  } catch (error) {
+    logger.error({ error: error.message }, 'Failed to update trigger');
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * DELETE /api/admin/users/:id/triggers/:triggerId
+ * Delete a user's trigger
+ */
+router.delete('/users/:id/triggers/:triggerId', async (req, res) => {
+  try {
+    await deleteUserTrigger(req.params.id, req.params.triggerId);
+    res.status(204).send();
+  } catch (error) {
+    logger.error({ error: error.message }, 'Failed to delete trigger');
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * GET /api/admin/users/:id/nudge-history
+ * Get nudge history for a user
+ */
+router.get('/users/:id/nudge-history', async (req, res) => {
+  try {
+    const limit = parseInt(req.query.limit) || 50;
+    
+    const snapshot = await db.collection('nudgeHistory')
+      .where('userId', '==', req.params.id)
+      .orderBy('sentAt', 'desc')
+      .limit(limit)
+      .get();
+
+    const history = snapshot.docs.map(doc => ({
+      id: doc.id,
+      ...doc.data(),
+      sentAt: doc.data().sentAt?.toDate?.() || doc.data().sentAt,
+    }));
+
+    res.json(history);
+  } catch (error) {
+    logger.error({ error: error.message }, 'Failed to get nudge history');
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/**
+ * POST /api/admin/seed-trigger-templates
+ * Seed the default trigger templates
+ */
+router.post('/seed-trigger-templates', async (req, res) => {
+  try {
+    const templates = [
+      {
+        id: 'morning-checkin',
+        name: 'Morning Check-in',
+        description: 'Daily morning motivation and planning prompt',
+        type: 'schedule',
+        defaultCron: '0 9 * * *',
+        defaultTimezone: 'user',
+        messageTemplate: null,
+        enabled: true
+      },
+      {
+        id: 'evening-reflection',
+        name: 'Evening Reflection',
+        description: 'End of day reflection and gratitude prompt',
+        type: 'schedule',
+        defaultCron: '0 20 * * *',
+        defaultTimezone: 'user',
+        messageTemplate: null,
+        enabled: true
+      },
+      {
+        id: 'weekly-review',
+        name: 'Weekly Review',
+        description: 'Sunday weekly review and planning',
+        type: 'schedule',
+        defaultCron: '0 10 * * 0',
+        defaultTimezone: 'user',
+        messageTemplate: null,
+        enabled: true
+      },
+      {
+        id: 'midday-momentum',
+        name: 'Midday Momentum',
+        description: 'Quick midday check-in to maintain focus',
+        type: 'schedule',
+        defaultCron: '0 13 * * 1-5',
+        defaultTimezone: 'user',
+        messageTemplate: null,
+        enabled: true
+      }
+    ];
+
+    const batch = db.batch();
+    
+    for (const template of templates) {
+      const { id, ...data } = template;
+      const ref = db.collection('triggerTemplates').doc(id);
+      batch.set(ref, {
+        ...data,
+        createdAt: FieldValue.serverTimestamp(),
+        updatedAt: FieldValue.serverTimestamp()
+      }, { merge: true });
+    }
+    
+    await batch.commit();
+    
+    logger.info({ count: templates.length }, 'Seeded trigger templates');
+    res.json({ success: true, count: templates.length });
+  } catch (error) {
+    logger.error({ error: error.message }, 'Failed to seed trigger templates');
     res.status(500).json({ error: error.message });
   }
 });

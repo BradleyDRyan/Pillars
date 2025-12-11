@@ -5,7 +5,7 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { api, type User } from '@/services/api'
 import { formatRelativeTime } from '@/lib/utils'
-import { Phone, Mail, MessageSquare } from 'lucide-react'
+import { Phone, Mail, MessageSquare, Bell } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 
 export function Users() {
@@ -107,14 +107,24 @@ export function Users() {
                     {user.lastActive ? formatRelativeTime(user.lastActive) : '-'}
                   </TableCell>
                   <TableCell className="text-right">
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => navigate(`/users/${user.id}/conversations`)}
-                    >
-                      <MessageSquare className="h-4 w-4 mr-1" />
-                      Chats
-                    </Button>
+                    <div className="flex items-center justify-end gap-1">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => navigate(`/users/${user.id}/triggers`)}
+                      >
+                        <Bell className="h-4 w-4 mr-1" />
+                        Triggers
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => navigate(`/users/${user.id}/conversations`)}
+                      >
+                        <MessageSquare className="h-4 w-4 mr-1" />
+                        Chats
+                      </Button>
+                    </div>
                   </TableCell>
                 </TableRow>
               ))}

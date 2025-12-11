@@ -97,5 +97,22 @@ service cloud.firestore {
     match /coachPreferences/{userId} {
       allow read, write: if request.auth != null && request.auth.uid == userId;
     }
+    
+    // Trigger templates - read by authenticated users, write by backend only
+    match /triggerTemplates/{templateId} {
+      allow read: if request.auth != null;
+      allow write: if false; // Backend only via admin SDK
+    }
+    
+    // User triggers - subcollection under users
+    match /users/{userId}/triggers/{triggerId} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+    }
+    
+    // Nudge history - write by backend, read by authenticated users for their own
+    match /nudgeHistory/{nudgeId} {
+      allow read: if request.auth != null && resource.data.userId == request.auth.uid;
+      allow write: if false; // Backend only via admin SDK
+    }
   }
 }

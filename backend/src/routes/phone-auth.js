@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const { auth, firestore } = require('../config/firebase');
+const { sendSMS, isConfigured: isTwilioConfigured } = require('../services/twilio');
 
 // Store verification sessions temporarily (in production, use Redis or similar)
 const verificationSessions = new Map();
@@ -69,12 +70,18 @@ router.post('/send-code', async (req, res) => {
       isTest: isTestNumber
     });
     
-    // Log the code for development
-    if (process.env.NODE_ENV === 'development') {
-      console.log(`Verification code for ${phoneNumber}: ${verificationCode}`);
-      if (isTestNumber) {
-        console.log('(Test number detected)');
+    // Send SMS via Twilio (or log in development)
+    if (isTwilioConfigured()) {
+      try {
+        await sendSMS(formattedPhone, `Your Pillars verification code is: ${verificationCode}`);
+        console.log(`✅ SMS sent to ${formattedPhone}`);
+      } catch (smsError) {
+        console.error('Failed to send SMS:', smsError.message);
+        // Still continue - code is logged for development
       }
+    } else {
+      console.log(`📱 Verification code for ${phoneNumber}: ${verificationCode}`);
+      console.log('⚠️ Twilio not configured - SMS not sent');
     }
     
     // Clean up old sessions after 10 minutes

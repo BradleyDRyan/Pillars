@@ -31,6 +31,7 @@ const attachmentRoutes = require('./routes/attachments');
 const smsRoutes = require('./routes/sms');
 const coachPreferencesRoutes = require('./routes/coach-preferences');
 const adminApiRoutes = require('./routes/admin-api');
+const cronRoutes = require('./routes/cron');
 
 const app = express();
 const PORT = process.env.PORT || 4310;
@@ -82,6 +83,7 @@ app.use('/api/attachments', attachmentRoutes);
 app.use('/api/sms', smsRoutes);
 app.use('/api/coach-preferences', coachPreferencesRoutes);
 app.use('/api/admin', adminApiRoutes);
+app.use('/api/cron', cronRoutes);
 
 app.use((err, req, res, next) => {
   logger.error({ err }, 'Unhandled error middleware');

@@ -10,22 +10,20 @@ import FirebaseCore
 import FirebaseAuth
 import FirebaseFirestore
 import FirebaseStorage
-import SwiftUI
 
-class FirebaseManager: NSObject, ObservableObject {
+class FirebaseManager: ObservableObject {
     static let shared = FirebaseManager()
     
     @Published var isAuthenticated = false
+    @Published var isReady = false
     @Published var currentUser: FirebaseAuth.User?
-    @Published var verificationID: String?
     
     private var auth: Auth?
     private var firestore: Firestore?
     private var storage: Storage?
     private var authStateListener: AuthStateDidChangeListenerHandle?
     
-    override init() {
-        super.init()
+    init() {
         setupFirebase()
     }
     
@@ -39,10 +37,10 @@ class FirebaseManager: NSObject, ObservableObject {
         print("✅ Firebase configured successfully")
         print("📱 App Name: \(app.name)")
         print("🔑 Project ID: \(app.options.projectID ?? "nil")")
-        print("📦 Bundle ID: \(app.options.bundleID)")
+        print("📦 Bundle ID: \(app.options.bundleID ?? "nil")")
         print("🔗 API Key: \(app.options.apiKey ?? "nil")")
         print("🗄️ Storage Bucket: \(app.options.storageBucket ?? "nil")")
-        print("🆔 Google App ID: \(app.options.googleAppID)")
+        print("🆔 Google App ID: \(app.options.googleAppID ?? "nil")")
 
         // WARNING if using wrong project
         if app.options.projectID == "squirrel-2" {
@@ -77,14 +75,21 @@ class FirebaseManager: NSObject, ObservableObject {
                 }
             }
         }
+        
+        // Mark as ready
+        DispatchQueue.main.async {
+            self.isReady = true
+            print("✅ FirebaseManager is ready")
+        }
     }
     
     private func configureAuthSettings() {
         guard let auth = auth else { return }
         
-        // Use test phone numbers in debug mode
+        // Configure for testing - skip app verification in debug
         #if DEBUG
         auth.settings?.isAppVerificationDisabledForTesting = true
+        print("✅ Auth settings configured - isAppVerificationDisabledForTesting: \(auth.settings?.isAppVerificationDisabledForTesting ?? false)")
         #endif
         
         // Set language code
@@ -101,39 +106,30 @@ class FirebaseManager: NSObject, ObservableObject {
         print("✅ Anonymous auth successful: \(result.user.uid)")
     }
     
-    // Send verification code to phone number
+    // Verification ID from Firebase Phone Auth
+    private var verificationID: String?
+    
+    // Send verification code using Firebase Phone Auth
     @MainActor
     func sendVerificationCode(to phoneNumber: String) async throws {
-        // Ensure Firebase is configured
-        guard FirebaseApp.app() != nil else {
-            print("ERROR: FirebaseApp.app() is nil")
-            throw FirebaseError.firebaseNotConfigured
-        }
-        
-        // Ensure we have auth configured
         guard let auth = auth else {
-            print("ERROR: Auth instance is nil")
             throw FirebaseError.firebaseNotConfigured
         }
         
-        print("Attempting to send verification to: \(phoneNumber)")
-        print("Auth instance: \(auth)")
-        print("FirebaseApp: \(String(describing: FirebaseApp.app()))")
+        print("📞 Sending verification code to: \(phoneNumber)")
+        print("📞 Auth settings: \(String(describing: auth.settings))")
+        print("📞 isAppVerificationDisabledForTesting: \(auth.settings?.isAppVerificationDisabledForTesting ?? false)")
         
-        // Use completion handler version which is more stable
-        return try await withCheckedThrowingContinuation { continuation in
-            PhoneAuthProvider.provider().verifyPhoneNumber(phoneNumber, uiDelegate: nil) { verificationID, error in
-                if let error = error {
-                    print("Phone auth error: \(error.localizedDescription)")
-                    continuation.resume(throwing: error)
-                } else if let verificationID = verificationID {
-                    self.verificationID = verificationID
-                    print("Verification code sent successfully, ID: \(verificationID)")
-                    continuation.resume(returning: ())
-                } else {
-                    continuation.resume(throwing: FirebaseError.missingVerificationID)
-                }
-            }
+        do {
+            let verificationID = try await PhoneAuthProvider.provider().verifyPhoneNumber(
+                phoneNumber,
+                uiDelegate: nil
+            )
+            self.verificationID = verificationID
+            print("✅ Verification code sent, ID: \(verificationID)")
+        } catch {
+            print("❌ Phone auth error: \(error)")
+            throw error
         }
     }
     
@@ -153,6 +149,8 @@ class FirebaseManager: NSObject, ObservableObject {
         )
         
         try await auth.signIn(with: credential)
+        self.verificationID = nil
+        print("✅ Signed in successfully")
     }
     
     func signOut() throws {
@@ -192,9 +190,10 @@ enum FirebaseError: LocalizedError {
     var errorDescription: String? {
         switch self {
         case .missingVerificationID:
-            return "Verification ID is missing. Please request a new code."
+            return "Session expired. Please request a new code."
         case .firebaseNotConfigured:
-            return "Firebase is not properly configured. Please restart the app."
+            return "Firebase is not properly configured."
         }
     }
 }
+

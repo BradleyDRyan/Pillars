@@ -12,12 +12,29 @@ struct PhoneAuthView: View {
     @EnvironmentObject var firebaseManager: FirebaseManager
     @State private var phoneNumber = ""
     @State private var verificationCode = ""
-    @State private var verificationID: String?
     @State private var isLoading = false
     @State private var errorMessage: String?
     @State private var showVerificationField = false
     
     var body: some View {
+        Group {
+            if !firebaseManager.isReady {
+                // Loading while Firebase initializes
+                VStack(spacing: 16) {
+                    ProgressView()
+                        .scaleEffect(1.2)
+                    Text("Loading...")
+                        .font(.system(size: 15))
+                        .foregroundColor(.secondary)
+                }
+            } else {
+                authContent
+            }
+        }
+        .background(Color(UIColor.systemBackground))
+    }
+    
+    private var authContent: some View {
         VStack(spacing: 32) {
             Spacer()
             
@@ -114,7 +131,6 @@ struct PhoneAuthView: View {
                     Button {
                         showVerificationField = false
                         verificationCode = ""
-                        verificationID = nil
                     } label: {
                         Text("Use a different number")
                             .font(.system(size: 15))
@@ -132,18 +148,7 @@ struct PhoneAuthView: View {
             .padding(.horizontal, 24)
             
             Spacer()
-            
-            // Skip button for anonymous auth
-            Button {
-                Task { await signInAnonymously() }
-            } label: {
-                Text("Continue without account")
-                    .font(.system(size: 15))
-                    .foregroundColor(.secondary)
-            }
-            .padding(.bottom, 32)
         }
-        .background(Color(UIColor.systemBackground))
     }
     
     // MARK: - Auth Methods
@@ -156,9 +161,10 @@ struct PhoneAuthView: View {
         let formattedNumber = phoneNumber.hasPrefix("+") ? phoneNumber : "+1\(phoneNumber.filter { $0.isNumber })"
         
         do {
-            verificationID = try await PhoneAuthProvider.provider().verifyPhoneNumber(formattedNumber, uiDelegate: nil)
+            try await firebaseManager.sendVerificationCode(to: formattedNumber)
             showVerificationField = true
         } catch {
+            print("❌ Phone auth error: \(error)")
             errorMessage = error.localizedDescription
         }
         
@@ -166,31 +172,13 @@ struct PhoneAuthView: View {
     }
     
     private func verifyCode() async {
-        guard let verificationID = verificationID else { return }
-        
         isLoading = true
         errorMessage = nil
         
         do {
-            let credential = PhoneAuthProvider.provider().credential(
-                withVerificationID: verificationID,
-                verificationCode: verificationCode
-            )
-            try await Auth.auth().signIn(with: credential)
+            try await firebaseManager.verifyCode(verificationCode)
         } catch {
-            errorMessage = error.localizedDescription
-        }
-        
-        isLoading = false
-    }
-    
-    private func signInAnonymously() async {
-        isLoading = true
-        errorMessage = nil
-        
-        do {
-            try await Auth.auth().signInAnonymously()
-        } catch {
+            print("❌ Verification error: \(error)")
             errorMessage = error.localizedDescription
         }
         
