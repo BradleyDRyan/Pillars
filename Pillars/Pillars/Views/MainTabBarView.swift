@@ -74,3 +74,4 @@ struct MainTabBarView: View {
     MainTabBarView()
         .environmentObject(FirebaseManager.shared)
 }
+

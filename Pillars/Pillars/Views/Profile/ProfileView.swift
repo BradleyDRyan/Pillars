@@ -166,3 +166,4 @@ struct ProfileView: View {
     ProfileView()
         .environmentObject(FirebaseManager.shared)
 }
+

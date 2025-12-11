@@ -9,19 +9,51 @@ const router = express.Router();
 const { User, Conversation, Message } = require('../models');
 const { sendSMS, validateWebhook, normalizePhoneNumber } = require('../services/twilio');
 const { chatCompletion } = require('../services/anthropic');
-const { logger } = require('../config/firebase');
+const { logger, db } = require('../config/firebase');
+const { generatePromptInstructions } = require('./coach-preferences');
 
-// System prompt for SMS conversations
-const SMS_SYSTEM_PROMPT = `You are a helpful, concise AI assistant communicating via SMS text message.
+// Base system prompt for SMS conversations
+const SMS_BASE_PROMPT = `You are a personal AI coach communicating via SMS text message.
 
 Key guidelines:
 - Keep responses SHORT and to the point (SMS has character limits)
-- Be warm and conversational, like texting a knowledgeable friend
+- Be conversational, like texting a thoughtful friend who knows you
 - Use simple language, avoid jargon
-- If a topic requires a long explanation, offer to break it into multiple messages or suggest they check the app for more detail
+- If a topic requires a long explanation, offer to break it into multiple messages
 - Remember context from the conversation history provided
 
-The user is texting you on their phone. Respond naturally and helpfully.`;
+The user is texting you on their phone.`;
+
+/**
+ * Build system prompt with user's coach preferences
+ */
+async function buildSystemPrompt(userId) {
+  try {
+    // Get user's coach preferences
+    const prefsDoc = await db.collection('coachPreferences').doc(userId).get();
+    
+    if (prefsDoc.exists) {
+      const prefs = prefsDoc.data();
+      const personalizedInstructions = generatePromptInstructions(prefs);
+      
+      logger.info({ userId, hasPrefs: true }, '📱 [SMS] Using personalized coach preferences');
+      
+      return `${SMS_BASE_PROMPT}
+
+User's coaching preferences:
+${personalizedInstructions}
+
+Respond according to these preferences.`;
+    }
+  } catch (error) {
+    logger.warn({ error: error.message, userId }, '📱 [SMS] Could not load coach preferences, using defaults');
+  }
+  
+  // Default prompt if no preferences found
+  return `${SMS_BASE_PROMPT}
+
+Be supportive and balanced in your approach. Keep responses concise (2-4 sentences). Feel free to use emojis occasionally.`;
+}
 
 /**
  * Get or create an SMS conversation for a user
@@ -111,13 +143,16 @@ router.post('/webhook', async (req, res) => {
     // 4. Get conversation history for context
     const history = await getRecentMessages(conversation.id);
     
-    // 5. Build messages for Claude (system + history)
+    // 5. Build personalized system prompt with user's coach preferences
+    const systemPrompt = await buildSystemPrompt(user.id);
+    
+    // 6. Build messages for Claude (system + history)
     const claudeMessages = [
-      { role: 'system', content: SMS_SYSTEM_PROMPT },
+      { role: 'system', content: systemPrompt },
       ...history
     ];
     
-    // 6. Call Claude for response
+    // 7. Call Claude for response
     logger.info({ historyLength: history.length }, '📱 [SMS] Calling Claude');
     const aiResponse = await chatCompletion(claudeMessages, {
       maxTokens: 500, // Keep SMS responses concise
@@ -127,7 +162,7 @@ router.post('/webhook', async (req, res) => {
     const responseText = aiResponse.content || "I'm sorry, I couldn't generate a response. Please try again.";
     logger.info({ responseLength: responseText.length }, '📱 [SMS] Got Claude response');
     
-    // 7. Save AI response message
+    // 8. Save AI response message
     const outboundMessage = await Message.create({
       conversationId: conversation.id,
       userId: user.id,
@@ -142,11 +177,11 @@ router.post('/webhook', async (req, res) => {
     });
     logger.info({ messageId: outboundMessage.id }, '📱 [SMS] Saved outbound message');
     
-    // 8. Update conversation's last message
+    // 9. Update conversation's last message
     conversation.lastMessage = responseText;
     await conversation.save();
     
-    // 9. Send response via Twilio SMS
+    // 10. Send response via Twilio SMS
     await sendSMS(normalizedPhone, responseText);
     
     const duration = Date.now() - startTime;
@@ -193,3 +228,4 @@ router.get('/status', (req, res) => {
 });
 
 module.exports = router;
+

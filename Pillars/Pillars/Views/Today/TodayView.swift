@@ -173,3 +173,4 @@ struct QuickActionCard: View {
     TodayView()
         .environmentObject(FirebaseManager.shared)
 }
+

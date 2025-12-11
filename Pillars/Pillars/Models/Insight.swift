@@ -56,3 +56,4 @@ extension Insight {
     static let collectionName = "insights"
 }
 
+

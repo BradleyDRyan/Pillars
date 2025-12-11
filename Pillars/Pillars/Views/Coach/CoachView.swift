@@ -9,6 +9,7 @@ import SwiftUI
 
 struct CoachView: View {
     @EnvironmentObject var firebaseManager: FirebaseManager
+    @State private var showingPreferences = false
     
     var body: some View {
         NavigationStack {
@@ -30,6 +31,19 @@ struct CoachView: View {
             .background(Color(UIColor.systemBackground))
             .navigationTitle("Coach")
             .navigationBarTitleDisplayMode(.large)
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button {
+                        showingPreferences = true
+                    } label: {
+                        Image(systemName: "slider.horizontal.3")
+                            .font(.system(size: 16, weight: .medium))
+                    }
+                }
+            }
+            .sheet(isPresented: $showingPreferences) {
+                CoachPreferencesView()
+            }
         }
     }
     
@@ -177,3 +191,4 @@ struct ConversationStarterCard: View {
     CoachView()
         .environmentObject(FirebaseManager.shared)
 }
+

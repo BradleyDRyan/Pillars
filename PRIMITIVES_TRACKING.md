@@ -234,3 +234,4 @@ Located in `/backend/admin-ui/src/`
 - **Legacy Support:** Several models support legacy field names (e.g., `projectIds` → `pillarIds`, `collectionId` → `collectionIds`)
 - **Swift Models:** There are also Swift models in `/Pillars/Pillars/Models/` for the iOS app, but they are not tracked in this document
 - **Subcollections:** Messages are stored as a subcollection of conversations, which is reflected in the backend model but not explicitly in frontend types
+

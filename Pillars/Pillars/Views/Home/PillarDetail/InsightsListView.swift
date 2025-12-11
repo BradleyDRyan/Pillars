@@ -31,3 +31,4 @@ struct InsightsListView: View {
     ))
 }
 
+

@@ -29,6 +29,7 @@ const realtimeRoutes = require('./routes/realtime');
 const testRoutes = require('./routes/test');
 const attachmentRoutes = require('./routes/attachments');
 const smsRoutes = require('./routes/sms');
+const coachPreferencesRoutes = require('./routes/coach-preferences');
 
 const app = express();
 const PORT = process.env.PORT || 4310;
@@ -78,6 +79,7 @@ app.use('/api/realtime', realtimeRoutes);
 app.use('/api/test', testRoutes);
 app.use('/api/attachments', attachmentRoutes);
 app.use('/api/sms', smsRoutes);
+app.use('/api/coach-preferences', coachPreferencesRoutes);
 
 app.use((err, req, res, next) => {
   logger.error({ err }, 'Unhandled error middleware');

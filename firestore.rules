@@ -92,5 +92,10 @@ service cloud.firestore {
       allow update, delete: if request.auth != null && 
         resource.data.userId == request.auth.uid;
     }
+    
+    // Allow authenticated users to read/write their own coach preferences
+    match /coachPreferences/{userId} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+    }
   }
 }
