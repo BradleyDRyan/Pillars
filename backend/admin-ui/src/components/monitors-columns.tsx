@@ -17,26 +17,31 @@ export type Monitor = {
   id: string
   monitorId: string
   personId: string
-  userId: string
+  userId?: string | null
   status: string
   runCount: number
   lastRunAt: string | null
-  lastResult: any
-  lastError: string | null
+  lastResult?: any
+  lastError?: string | null
   monitor: {
     id: string
     name: string
-    type: string
+    type?: string
     instructions: string
-    model: string | null
+    model?: string | null
     enableWebSearch: boolean
   } | null
-  person: {
+  person?: {
     id: string
-    userId: string
+    userId?: string
     name: string
-    relationship: string
-    sharedInterests: string[]
+    relationship?: string
+    sharedInterests?: string[]
+    importantDates?: Array<{
+      type: string
+      date: string
+      label: string
+    }>
   } | null
 }
 

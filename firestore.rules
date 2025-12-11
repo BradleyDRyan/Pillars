@@ -114,5 +114,21 @@ service cloud.firestore {
       allow read: if request.auth != null && resource.data.userId == request.auth.uid;
       allow write: if false; // Backend only via admin SDK
     }
+    
+    // Onboarding content - read by authenticated users, write by backend only
+    match /onboardingPillars/{pillarId} {
+      allow read: if request.auth != null;
+      allow write: if false; // Backend only via admin SDK
+    }
+    
+    match /onboardingThemes/{themeId} {
+      allow read: if request.auth != null;
+      allow write: if false; // Backend only via admin SDK
+    }
+    
+    match /onboardingPrinciples/{principleId} {
+      allow read: if request.auth != null;
+      allow write: if false; // Backend only via admin SDK
+    }
   }
 }

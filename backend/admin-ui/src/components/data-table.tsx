@@ -56,6 +56,14 @@ export function DataTable<TData, TValue>({
   const rowSelection = externalRowSelection ?? internalRowSelection
   const setRowSelection = onRowSelectionChange ?? setInternalRowSelection
 
+  // Handle the row selection change with proper typing for react-table
+  const handleRowSelectionChange = React.useCallback((updaterOrValue: RowSelectionState | ((old: RowSelectionState) => RowSelectionState)) => {
+    const newValue = typeof updaterOrValue === 'function' 
+      ? updaterOrValue(rowSelection)
+      : updaterOrValue
+    setRowSelection(newValue)
+  }, [rowSelection, setRowSelection])
+
   const table = useReactTable({
     data,
     columns,
@@ -65,7 +73,7 @@ export function DataTable<TData, TValue>({
     getSortedRowModel: getSortedRowModel(),
     onColumnFiltersChange: setColumnFilters,
     getFilteredRowModel: getFilteredRowModel(),
-    onRowSelectionChange: setRowSelection,
+    onRowSelectionChange: handleRowSelectionChange,
     enableRowSelection,
     meta,
     state: {

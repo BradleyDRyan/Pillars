@@ -7,6 +7,7 @@
  * - Insight: User-captured experiences, lessons, reflections
  * - Conversation: An ongoing dialogue between user and system
  * - Message: A single turn within a Conversation
+ * - OnboardingPillar/Theme/Principle: Global content templates for onboarding
  */
 
 const User = require('./User');
@@ -15,6 +16,7 @@ const Principle = require('./Principle');
 const Insight = require('./Insight');
 const Conversation = require('./Conversation');
 const Message = require('./Message');
+const { OnboardingPillar, OnboardingTheme, OnboardingPrinciple } = require('./OnboardingContent');
 
 module.exports = {
   User,
@@ -22,5 +24,8 @@ module.exports = {
   Principle,
   Insight,
   Conversation,
-  Message
+  Message,
+  OnboardingPillar,
+  OnboardingTheme,
+  OnboardingPrinciple
 };
