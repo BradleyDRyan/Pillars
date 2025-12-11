@@ -5,7 +5,7 @@ const morgan = require('morgan');
 const rateLimit = require('express-rate-limit');
 require('dotenv').config();
 
-const firebaseAdmin = require('../src/config/firebase');
+const { logger } = require('../src/config/firebase');
 const apiRoutes = require('../src/routes/api');
 const authRoutes = require('../src/routes/auth');
 const userRoutes = require('../src/routes/users');
@@ -13,16 +13,17 @@ const phoneAuthRoutes = require('../src/routes/phone-auth');
 const conversationRoutes = require('../src/routes/conversations');
 const messageRoutes = require('../src/routes/messages');
 const taskRoutes = require('../src/routes/tasks');
-const entryRoutes = require('../src/routes/entries');
-const collectionRoutes = require('../src/routes/collections');
-const collectionEntryRoutes = require('../src/routes/collectionEntries');
+const pillarRoutes = require('../src/routes/pillars');
+const principleRoutes = require('../src/routes/principles');
+const insightRoutes = require('../src/routes/insights');
+const wisdomRoutes = require('../src/routes/wisdoms');
+const resourceRoutes = require('../src/routes/resources');
 const thoughtRoutes = require('../src/routes/thoughts');
-const projectRoutes = require('../src/routes/projects');
 const aiRoutes = require('../src/routes/ai');
 const realtimeRoutes = require('../src/routes/realtime');
-const photoRoutes = require('../src/routes/photos');
-const workerRoutes = require('../src/routes/workers');
 const testRoutes = require('../src/routes/test');
+const adminUiRoutes = require('../src/routes/admin');
+const agentRoutes = require('../src/routes/agents');
 const attachmentRoutes = require('../src/routes/attachments');
 const smsRoutes = require('../src/routes/sms');
 
@@ -40,11 +41,8 @@ const limiter = rateLimit({
   max: 100,
   standardHeaders: true,
   legacyHeaders: false,
-  // Skip rate limiting in development
   skip: (req) => process.env.NODE_ENV === 'development',
-  // Use custom key generator for Vercel
   keyGenerator: (req) => {
-    // Use X-Forwarded-For header from Vercel
     return req.headers['x-forwarded-for']?.split(',')[0] || 
            req.connection.remoteAddress || 
            'unknown';
@@ -67,53 +65,50 @@ app.use('/api', limiter);
 
 app.get('/', (req, res) => {
   res.json({ 
-    message: 'Squirrel 2.0 Backend API',
-    version: '2.0.0',
+    message: 'Pillars Backend API',
+    version: '3.0.0',
     endpoints: {
       auth: '/auth',
       api: '/api',
       users: '/users',
-      projects: '/api/projects',
+      pillars: '/api/pillars',
+      principles: '/api/principles',
+      insights: '/api/insights',
+      wisdoms: '/api/wisdoms',
+      resources: '/api/resources',
       conversations: '/api/conversations',
       messages: '/api/messages',
       tasks: '/api/tasks',
-      entries: '/api/entries',
-      collections: '/api/collections',
-      thoughts: '/api/thoughts',
-      attachments: '/api/attachments'
+      agents: '/api/agents',
+      attachments: '/api/attachments',
+      sms: '/api/sms'
     }
   });
 });
 
 app.use('/auth', authRoutes);
 app.use('/auth/phone', phoneAuthRoutes);
-
-// Mount worker and test routes FIRST (no auth)
-app.use('/api/workers', workerRoutes);
-app.use('/api/test', testRoutes);
-
-// Then mount other API routes
-// Remove the catch-all /api route - it was intercepting everything
-// app.use('/api', apiRoutes); // REMOVED - this was catching all /api/* requests
+app.use('/api', apiRoutes);
 app.use('/users', userRoutes);
-app.use('/api/projects', projectRoutes);
+app.use('/api/pillars', pillarRoutes);
+app.use('/api/principles', principleRoutes);
+app.use('/api/insights', insightRoutes);
+app.use('/api/wisdoms', wisdomRoutes);
+app.use('/api/resources', resourceRoutes);
 app.use('/api/conversations', conversationRoutes);
 app.use('/api/messages', messageRoutes);
 app.use('/api/tasks', taskRoutes);
-app.use('/api/entries', entryRoutes);
-app.use('/api/collections', collectionRoutes);
 app.use('/api/thoughts', thoughtRoutes);
 app.use('/api/ai', aiRoutes);
 app.use('/api/realtime', realtimeRoutes);
-app.use('/api/photos', photoRoutes);
+app.use('/api/test', testRoutes);
+app.use('/api/agents', agentRoutes);
 app.use('/api/attachments', attachmentRoutes);
 app.use('/api/sms', smsRoutes);
-
-// Mount LAST - collectionEntryRoutes has catch-all at /api with verifyToken
-app.use('/api', collectionEntryRoutes);
+app.use('/connection-admin/api', adminUiRoutes);
 
 app.use((err, req, res, next) => {
-  console.error(err.stack);
+  logger.error({ err }, 'Unhandled error');
   res.status(500).json({ 
     error: 'Something went wrong!',
     message: process.env.NODE_ENV === 'development' ? err.message : undefined

@@ -198,6 +198,39 @@ See `BACKEND_API_GUIDELINES.md` for full list. Key endpoints:
 
 **IMPORTANT**: Do NOT attempt to build the iOS app yourself. The user will handle building and will report any build errors that need to be fixed.
 
+## CLI Tools - Use Them!
+
+You have access to the Firebase and Vercel CLIs. **Proactively use them** instead of asking the user to run commands.
+
+### Firebase CLI
+```bash
+# Deploy Firestore rules
+firebase deploy --only firestore:rules
+
+# Deploy Firestore indexes (required for compound queries!)
+firebase deploy --only firestore:indexes
+
+# Deploy both rules and indexes
+firebase deploy --only firestore
+
+# Check deployment status
+firebase projects:list
+```
+
+### Vercel CLI
+```bash
+# Check deployment status
+vercel ls
+
+# View logs
+vercel logs <deployment-url>
+
+# Check environment variables
+vercel env ls
+```
+
+**Pro tip**: After modifying `firestore.rules` or `firestore.indexes.json`, immediately deploy them - don't wait for the user to do it.
+
 ## Backend Deployment
 
 **IMPORTANT**: Vercel is connected to the Git repository and automatically deploys when you push to GitHub.
@@ -212,9 +245,28 @@ git push
 
 ⚠️ **DO NOT USE `vercel --prod`**: This is unnecessary and creates deployment conflicts. Vercel automatically deploys from the Git repository when you push changes.
 
-## Firestore Security Rules
+### ⚠️ TWO ENTRY POINTS - Common Gotcha!
 
-**IMPORTANT**: After modifying `firestore.rules`, always deploy them:
+The backend has **two separate entry points** that BOTH need to be updated when adding new routes:
+
+1. **`backend/src/index.js`** - Local development entry point
+2. **`backend/api/index.js`** - Vercel serverless function entry point
+
+When adding a new route (e.g., SMS, webhooks, etc.), you MUST:
+```javascript
+// In BOTH files, add the require:
+const smsRoutes = require('../src/routes/sms'); // or './routes/sms' for src/index.js
+
+// In BOTH files, add the app.use:
+app.use('/api/sms', smsRoutes);
+```
+
+If you only update `src/index.js`, the route will work locally but **fail on Vercel production**.
+
+## Firestore Security Rules & Indexes
+
+### Rules
+After modifying `firestore.rules`, **deploy them immediately**:
 ```bash
 firebase deploy --only firestore:rules
 ```
@@ -224,8 +276,16 @@ Common permission errors ("Missing or insufficient permissions") are usually fix
 2. Ensuring authenticated users can read (at minimum)
 3. Deploying the rules after any changes
 
+### Indexes
+Compound queries (e.g., `userId` + `pillarIds` array-contains) require composite indexes. After modifying `firestore.indexes.json`, **deploy them immediately**:
+```bash
+firebase deploy --only firestore:indexes
+```
+
+Index creation can take a few minutes. Check the Firebase Console if queries fail with index errors.
+
 Current collections that need rules:
-- `users`, `conversations`, `messages`, `tasks`, `collections`, `entries`, `spaces`
+- `users`, `conversations`, `messages`, `tasks`, `collections`, `entries`, `spaces`, `pillars`, `principles`, `insights`
 
 ## Key Development Principles
 
