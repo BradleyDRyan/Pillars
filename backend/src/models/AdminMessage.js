@@ -37,19 +37,28 @@ class AdminMessage {
   static async findByConversationId(conversationId, limit = 100) {
     if (!conversationId) return [];
     
-    // Simple query without composite index requirement
-    // We filter and sort in memory instead
+    // Use the composite index for efficient querying
     const snapshot = await this.collection()
       .where('conversationId', '==', conversationId)
+      .orderBy('createdAt', 'asc')
       .limit(limit)
       .get();
     
     const messages = snapshot.docs.map(doc => new AdminMessage({ id: doc.id, ...doc.data() }));
     
-    // Sort by createdAt in memory
+    // Messages are already sorted by Firestore, but ensure proper ordering
+    // Convert Firestore timestamps to comparable values
     messages.sort((a, b) => {
-      const aTime = a.createdAt?._seconds || a.createdAt?.seconds || 0;
-      const bTime = b.createdAt?._seconds || b.createdAt?.seconds || 0;
+      const aTime = a.createdAt?.toMillis?.() || 
+                   a.createdAt?._seconds * 1000 || 
+                   (a.createdAt?.seconds || 0) * 1000 ||
+                   (typeof a.createdAt === 'string' ? new Date(a.createdAt).getTime() : 0) ||
+                   0;
+      const bTime = b.createdAt?.toMillis?.() || 
+                   b.createdAt?._seconds * 1000 || 
+                   (b.createdAt?.seconds || 0) * 1000 ||
+                   (typeof b.createdAt === 'string' ? new Date(b.createdAt).getTime() : 0) ||
+                   0;
       return aTime - bTime;
     });
     
@@ -164,6 +173,16 @@ class AdminMessage {
    * Convert to plain object
    */
   toJSON() {
+    // Convert Firestore timestamp to ISO string for JSON serialization
+    let createdAtValue = this.createdAt;
+    if (this.createdAt && typeof this.createdAt.toDate === 'function') {
+      // Firestore Timestamp
+      createdAtValue = this.createdAt.toDate().toISOString();
+    } else if (this.createdAt && typeof this.createdAt === 'object' && 'seconds' in this.createdAt) {
+      // Already serialized timestamp object
+      createdAtValue = new Date(this.createdAt.seconds * 1000).toISOString();
+    }
+    
     return {
       id: this.id,
       conversationId: this.conversationId,
@@ -173,7 +192,7 @@ class AdminMessage {
       agentName: this.agentName,
       contents: this.contents,
       mentions: this.mentions,
-      createdAt: this.createdAt
+      createdAt: createdAtValue
     };
   }
 
@@ -217,3 +236,4 @@ class AdminMessage {
 }
 
 module.exports = AdminMessage;
+

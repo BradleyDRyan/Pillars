@@ -40,7 +40,7 @@ type Message = {
   agentName: string | null;
   contents: ContentBlock[];
   mentions: string[];
-  createdAt: string;
+  createdAt: string | { seconds: number; nanoseconds?: number } | Date;
 };
 
 type Conversation = {
@@ -358,7 +358,33 @@ export function GroupChatView() {
       const response = await fetch(`/api/admin-conversations/${conversationId}/messages`);
       if (!response.ok) throw new Error("Failed to load messages");
       const data = await response.json();
-      setMessages(data.messages || []);
+      const messages = data.messages || [];
+      
+      // Sort messages by createdAt to ensure correct order
+      // Backend should send ISO string format, but handle both formats
+      const sortedMessages = [...messages].sort((a, b) => {
+        const getTime = (msg: Message): number => {
+          const ts = msg.createdAt;
+          if (!ts) return 0;
+          // ISO string format (preferred, from backend toJSON)
+          if (typeof ts === 'string') {
+            return new Date(ts).getTime();
+          }
+          // Firestore timestamp format: { seconds: number, nanoseconds?: number }
+          if (typeof ts === 'object' && ts !== null && 'seconds' in ts) {
+            return (ts.seconds as number) * 1000 + ((ts.nanoseconds as number) || 0) / 1000000;
+          }
+          // Date object
+          if (ts instanceof Date) {
+            return ts.getTime();
+          }
+          return 0;
+        };
+        
+        return getTime(a) - getTime(b);
+      });
+      
+      setMessages(sortedMessages);
     } catch (error) {
       console.error(error);
     }
@@ -767,3 +793,4 @@ export function GroupChatView() {
     </div>
   );
 }
+

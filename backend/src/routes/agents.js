@@ -20,8 +20,11 @@ router.get('/', async (req, res) => {
     const agents = await Agent.findAll(includeInactive);
     res.json({ agents: agents.map(a => a.toJSON()) });
   } catch (error) {
-    logger.error({ error: error.message }, 'Error listing agents');
-    res.status(500).json({ error: 'Failed to list agents' });
+    logger.error({ error: error.message, stack: error.stack }, 'Error listing agents');
+    res.status(500).json({ 
+      error: 'Failed to list agents',
+      details: process.env.NODE_ENV === 'development' ? error.message : undefined
+    });
   }
 });
 
@@ -188,3 +191,4 @@ router.delete('/:id', async (req, res) => {
 });
 
 module.exports = router;
+
