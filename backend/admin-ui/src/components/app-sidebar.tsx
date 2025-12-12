@@ -11,9 +11,9 @@ import {
   SidebarMenuItem,
   SidebarRail
 } from "@/components/ui/sidebar";
-import { Bot, ListTodo, Radar, Users, BookOpen } from "lucide-react";
+import { Bot, ListTodo, Radar, Users, BookOpen, MessageSquare, MessagesSquare } from "lucide-react";
 
-type NavigationKey = "people" | "scheduled-triggers" | "monitors" | "signals" | "content";
+type NavigationKey = "people" | "scheduled-triggers" | "monitors" | "signals" | "content" | "chat" | "agents" | "group-chat";
 
 type SidebarItem = {
   navKey: NavigationKey;
@@ -55,6 +55,27 @@ const contentItems: SidebarItem[] = [
     title: "Onboarding Content",
     description: "Pillars, themes, principles",
     icon: BookOpen
+  },
+  {
+    navKey: "chat",
+    title: "Content Assistant",
+    description: "AI-powered content creation",
+    icon: MessageSquare
+  }
+];
+
+const agentItems: SidebarItem[] = [
+  {
+    navKey: "agents",
+    title: "Agents",
+    description: "Configure AI agents",
+    icon: Bot
+  },
+  {
+    navKey: "group-chat",
+    title: "Group Chat",
+    description: "Chat with @ mentions",
+    icon: MessagesSquare
   }
 ];
 
@@ -114,6 +135,37 @@ export function AppSidebar({ active, onSelect }: AppSidebarProps) {
           <SidebarGroupContent>
             <SidebarMenu>
               {contentItems.map(item => (
+                <SidebarMenuItem key={item.title}>
+                  <SidebarMenuButton
+                    asChild
+                    isActive={active === item.navKey}
+                    className="flex flex-col items-start gap-1 text-left"
+                  >
+                    <button
+                      type="button"
+                      className="w-full"
+                      onClick={() => onSelect(item.navKey)}
+                    >
+                      <div className="flex w-full items-center gap-2">
+                        <item.icon className="h-4 w-4" />
+                        <span className="text-sm font-medium">{item.title}</span>
+                      </div>
+                      <span className="text-xs font-normal text-muted-foreground">
+                        {item.description}
+                      </span>
+                    </button>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              ))}
+            </SidebarMenu>
+          </SidebarGroupContent>
+        </SidebarGroup>
+
+        <SidebarGroup>
+          <SidebarGroupLabel>Agent System</SidebarGroupLabel>
+          <SidebarGroupContent>
+            <SidebarMenu>
+              {agentItems.map(item => (
                 <SidebarMenuItem key={item.title}>
                   <SidebarMenuButton
                     asChild

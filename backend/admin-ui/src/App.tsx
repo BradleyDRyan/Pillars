@@ -37,6 +37,9 @@ import { columns as signalsColumns } from "@/components/signals-columns";
 import { columns as triggersColumns } from "@/components/triggers-columns";
 import { createMonitorsColumns } from "@/components/monitors-columns";
 import { ContentView } from "@/components/ContentView";
+import { AdminChat } from "@/components/AdminChat";
+import { AgentView } from "@/components/AgentView";
+import { GroupChatView } from "@/components/GroupChatView";
 
 type PersonOption = {
   id: string;
@@ -221,7 +224,7 @@ const normalizeAssignment = (assignment: any): Assignment => ({
   person: assignment?.person ?? null
 });
 
-type NavItem = "people" | "scheduled-triggers" | "monitors" | "signals" | "content";
+type NavItem = "people" | "scheduled-triggers" | "monitors" | "signals" | "content" | "chat" | "agents" | "group-chat";
 type TriggerFormState = ReturnType<typeof defaultFormState>;
 type TriggerFieldUpdater = (key: keyof TriggerFormState, value: string | number) => void;
 type MonitorFieldUpdater = <K extends keyof MonitorFormState>(key: K, value: MonitorFormState[K]) => void;
@@ -1133,6 +1136,15 @@ function App() {
           )}
           {activeView === "content" && (
             <ContentView />
+          )}
+          {activeView === "chat" && (
+            <AdminChat />
+          )}
+          {activeView === "agents" && (
+            <AgentView />
+          )}
+          {activeView === "group-chat" && (
+            <GroupChatView />
           )}
         </main>
       </div>

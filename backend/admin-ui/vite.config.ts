@@ -14,8 +14,8 @@ export default defineConfig({
   server: {
     port: 3002, // Admin UI dev server on :3002 to avoid conflicts
     proxy: {
-      '/connection-admin/api': {
-        target: 'http://localhost:3001', // Backend server (changed from 3000 to avoid pm2 conflict)
+      '/api': {
+        target: 'http://localhost:4310', // Backend server
         changeOrigin: true,
       }
     }

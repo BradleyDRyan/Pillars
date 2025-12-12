@@ -26,6 +26,10 @@ const coachPreferencesRoutes = require('../src/routes/coach-preferences');
 const adminApiRoutes = require('../src/routes/admin-api');
 const cronRoutes = require('../src/routes/cron');
 const onboardingContentRoutes = require('../src/routes/onboarding-content');
+const adminChatRoutes = require('../src/routes/admin-chat');
+const agentRoutes = require('../src/routes/agents');
+const adminConversationRoutes = require('../src/routes/admin-conversations');
+const adminStreamingRoutes = require('../src/routes/admin-streaming');
 
 // Disabled routes - models don't exist (cleanup needed)
 // const taskRoutes = require('../src/routes/tasks');        // UserTask model missing
@@ -108,6 +112,10 @@ app.use('/api/coach-preferences', coachPreferencesRoutes);
 app.use('/api/admin', adminApiRoutes);
 app.use('/api/cron', cronRoutes);
 app.use('/api/onboarding-content', onboardingContentRoutes);
+app.use('/api/admin-chat', adminChatRoutes);
+app.use('/api/agents', agentRoutes);
+app.use('/api/admin-conversations', adminConversationRoutes);
+app.use('/api/admin-streaming', adminStreamingRoutes);
 
 app.use((err, req, res, next) => {
   logger.error({ err }, 'Unhandled error');

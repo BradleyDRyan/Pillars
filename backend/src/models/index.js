@@ -8,6 +8,8 @@
  * - Conversation: An ongoing dialogue between user and system
  * - Message: A single turn within a Conversation
  * - OnboardingPillar/Theme/Principle: Global content templates for onboarding
+ * - Agent: AI agents that can be invoked via @ mentions
+ * - AdminConversation/AdminMessage: Admin chat with block sequencing
  */
 
 const User = require('./User');
@@ -17,6 +19,9 @@ const Insight = require('./Insight');
 const Conversation = require('./Conversation');
 const Message = require('./Message');
 const { OnboardingPillar, OnboardingTheme, OnboardingPrinciple } = require('./OnboardingContent');
+const Agent = require('./Agent');
+const AdminConversation = require('./AdminConversation');
+const AdminMessage = require('./AdminMessage');
 
 module.exports = {
   User,
@@ -27,5 +32,8 @@ module.exports = {
   Message,
   OnboardingPillar,
   OnboardingTheme,
-  OnboardingPrinciple
+  OnboardingPrinciple,
+  Agent,
+  AdminConversation,
+  AdminMessage
 };

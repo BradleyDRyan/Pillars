@@ -33,6 +33,10 @@ const coachPreferencesRoutes = require('./routes/coach-preferences');
 const adminApiRoutes = require('./routes/admin-api');
 const cronRoutes = require('./routes/cron');
 const onboardingContentRoutes = require('./routes/onboarding-content');
+const adminChatRoutes = require('./routes/admin-chat');
+const agentRoutes = require('./routes/agents');
+const adminConversationRoutes = require('./routes/admin-conversations');
+const adminStreamingRoutes = require('./routes/admin-streaming');
 
 const app = express();
 const PORT = process.env.PORT || 4310;
@@ -86,6 +90,10 @@ app.use('/api/coach-preferences', coachPreferencesRoutes);
 app.use('/api/admin', adminApiRoutes);
 app.use('/api/cron', cronRoutes);
 app.use('/api/onboarding-content', onboardingContentRoutes);
+app.use('/api/admin-chat', adminChatRoutes);
+app.use('/api/agents', agentRoutes);
+app.use('/api/admin-conversations', adminConversationRoutes);
+app.use('/api/admin-streaming', adminStreamingRoutes);
 
 app.use((err, req, res, next) => {
   logger.error({ err }, 'Unhandled error middleware');
