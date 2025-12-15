@@ -192,3 +192,5 @@ struct ConversationStarterCard: View {
         .environmentObject(FirebaseManager.shared)
 }
 
+
+

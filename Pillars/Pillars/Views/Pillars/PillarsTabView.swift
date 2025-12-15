@@ -117,3 +117,5 @@ struct PillarsTabView: View {
         .environmentObject(FirebaseManager.shared)
 }
 
+
+

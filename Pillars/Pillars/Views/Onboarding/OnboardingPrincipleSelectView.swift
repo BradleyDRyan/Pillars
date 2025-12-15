@@ -71,3 +71,5 @@ struct OnboardingPrincipleSelectView: View {
     .padding(.top, S2.Spacing.xxxl)
     .background(S2.Colors.primarySurface)
 }
+
+

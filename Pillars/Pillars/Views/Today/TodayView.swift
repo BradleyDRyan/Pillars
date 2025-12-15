@@ -174,3 +174,5 @@ struct QuickActionCard: View {
         .environmentObject(FirebaseManager.shared)
 }
 
+
+

@@ -300,3 +300,5 @@ struct FocusAreasPickerView: View {
 #Preview {
     CoachPreferencesView()
 }
+
+

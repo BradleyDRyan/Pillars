@@ -4,3 +4,5 @@ source venv/bin/activate
 export $(grep -v '^#' .env | xargs)
 python bot.py
 
+
+

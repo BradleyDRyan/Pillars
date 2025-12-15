@@ -156,3 +156,5 @@ class PillarsAppCheckProviderFactory: NSObject, FirebaseAppCheck.AppCheckProvide
         #endif
     }
 }
+
+

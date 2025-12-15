@@ -190,3 +190,5 @@ struct PhoneAuthView: View {
     PhoneAuthView()
         .environmentObject(FirebaseManager.shared)
 }
+
+

@@ -115,10 +115,46 @@ async function runAgent(res, ctx, agent, messages, tools) {
     return { role: m.role, content: m.content || m.getTextContent?.() || '' };
   });
   
+  // Anthropic requires alternating user/assistant messages
+  // Insert synthetic user messages between consecutive assistant messages
+  const fixedMessages = [];
+  for (let i = 0; i < conversationMessages.length; i++) {
+    const msg = conversationMessages[i];
+    const prevMsg = fixedMessages[fixedMessages.length - 1];
+    
+    // If we have two assistant messages in a row, insert a continuation prompt
+    if (prevMsg && prevMsg.role === 'assistant' && msg.role === 'assistant') {
+      fixedMessages.push({
+        role: 'user',
+        content: '[Continue the conversation]'
+      });
+    }
+    fixedMessages.push(msg);
+  }
+  
+  // If the conversation ends with an assistant message, add a prompt for this agent to respond
+  if (fixedMessages.length > 0 && fixedMessages[fixedMessages.length - 1].role === 'assistant') {
+    const promptText = agent 
+      ? `@${agent.handle}, please respond to what was just said.`
+      : 'Please continue the conversation.';
+    fixedMessages.push({
+      role: 'user', 
+      content: promptText
+    });
+  }
+  
+  conversationMessages = fixedMessages;
+  
   while (continueLoop && iterations < maxIterations) {
     iterations++;
     
     try {
+      logger.info({ 
+        agent: agent?.handle || 'default',
+        messageCount: conversationMessages.length,
+        lastRole: conversationMessages[conversationMessages.length - 1]?.role
+      }, 'Starting agent stream');
+      
       const stream = await anthropic.messages.stream({
         model: agent?.model || 'claude-sonnet-4-20250514',
         max_tokens: 4096,
@@ -193,6 +229,13 @@ async function runAgent(res, ctx, agent, messages, tools) {
       }
       
       const finalMessage = await stream.finalMessage();
+      
+      logger.info({
+        agent: agent?.handle || 'default',
+        stopReason: finalMessage.stop_reason,
+        contentLength: finalMessage.content?.length || 0,
+        blocksCollected: blocks.length
+      }, 'Agent stream completed');
       
       if (finalMessage.stop_reason === 'tool_use') {
         // Add assistant message to conversation
@@ -341,33 +384,64 @@ router.post('/chat', async (req, res) => {
       }
     }
     
-    // Run each agent
+    // Run agents with chaining - when an agent mentions another, trigger that agent
     const allBlocks = [];
+    const responseCount = new Map(); // Track how many times each agent has responded
+    let currentAgents = agentsToInvoke;
+    let chainIterations = 0;
+    const maxChainIterations = 10; // Prevent infinite loops
+    const maxResponsesPerAgent = 5; // Max times a single agent can respond
     
-    for (const agent of agentsToInvoke) {
-      const agentBlocks = await runAgent(res, ctx, agent, history, allTools);
-      allBlocks.push(...agentBlocks);
-    }
-    
-    // Save assistant message with all blocks
-    if (allBlocks.length > 0) {
-      const assistantMessage = await AdminMessage.createAssistantMessage(
-        conversation.id,
-        allBlocks,
-        agentsToInvoke[0] ? {
-          id: agentsToInvoke[0].id,
-          handle: agentsToInvoke[0].handle,
-          name: agentsToInvoke[0].name
-        } : {}
-      );
-      await conversation.incrementMessageCount();
+    while (currentAgents.length > 0 && chainIterations < maxChainIterations) {
+      chainIterations++;
+      const nextAgents = [];
       
-      emitMessageSaved(res, { id: assistantMessage.id, conversationId: conversation.id });
-      
-      // Generate title if this is a new conversation
-      if (conversation.messageCount <= 2) {
-        // Could call title generation here
+      for (const agent of currentAgents) {
+        // Skip if this agent has responded too many times
+        const agentKey = agent?.id || 'default';
+        const count = responseCount.get(agentKey) || 0;
+        if (count >= maxResponsesPerAgent) continue;
+        responseCount.set(agentKey, count + 1);
+        
+        // Reload history to include previous responses in this chain
+        const currentHistory = await AdminMessage.findByConversationId(conversation.id);
+        
+        const agentBlocks = await runAgent(res, ctx, agent, currentHistory, allTools);
+        
+        // Save this agent's response immediately
+        if (agentBlocks.length > 0) {
+          const assistantMessage = await AdminMessage.createAssistantMessage(
+            conversation.id,
+            agentBlocks,
+            agent ? { id: agent.id, handle: agent.handle, name: agent.name } : {}
+          );
+          await conversation.incrementMessageCount();
+          emitMessageSaved(res, { id: assistantMessage.id, conversationId: conversation.id });
+          
+          allBlocks.push(...agentBlocks);
+          
+          // Check if this response mentions other agents
+          const responseText = agentBlocks
+            .filter(b => b.type === 'text')
+            .map(b => b.data?.text || '')
+            .join('');
+          
+          const mentionedHandles = parseMentions(responseText);
+          
+          // Add mentioned agents to next round (if they haven't hit their response limit)
+          for (const handle of mentionedHandles) {
+            const mentionedAgent = await Agent.findByHandle(handle);
+            if (mentionedAgent) {
+              const agentCount = responseCount.get(mentionedAgent.id) || 0;
+              if (agentCount < maxResponsesPerAgent) {
+                nextAgents.push(mentionedAgent);
+              }
+            }
+          }
+        }
       }
+      
+      currentAgents = nextAgents;
     }
     
     emitDone(res);
@@ -380,4 +454,6 @@ router.post('/chat', async (req, res) => {
 });
 
 module.exports = router;
+
+
 

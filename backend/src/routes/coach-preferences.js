@@ -141,3 +141,5 @@ function generatePromptInstructions(preferences) {
 // Export both router and helper
 module.exports = router;
 module.exports.generatePromptInstructions = generatePromptInstructions;
+
+
