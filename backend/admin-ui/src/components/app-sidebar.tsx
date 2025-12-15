@@ -11,9 +11,9 @@ import {
   SidebarMenuItem,
   SidebarRail
 } from "@/components/ui/sidebar";
-import { Bot, ListTodo, Radar, Users, BookOpen, MessageSquare, MessagesSquare } from "lucide-react";
+import { Bot, BookOpen, MessageSquare, MessagesSquare } from "lucide-react";
 
-type NavigationKey = "people" | "scheduled-triggers" | "monitors" | "signals" | "content" | "chat" | "agents" | "group-chat";
+type NavigationKey = "content" | "chat" | "agents" | "group-chat";
 
 type SidebarItem = {
   navKey: NavigationKey;
@@ -21,33 +21,6 @@ type SidebarItem = {
   description: string;
   icon: typeof Bot;
 };
-
-const pipelineItems: SidebarItem[] = [
-  {
-    navKey: "people",
-    title: "People",
-    description: "Manage contacts and dates",
-    icon: Users
-  },
-  {
-    navKey: "scheduled-triggers",
-    title: "Triggers",
-    description: "Scheduled monitor runs",
-    icon: ListTodo
-  },
-  {
-    navKey: "monitors",
-    title: "Monitors",
-    description: "Claude-driven collectors",
-    icon: Bot
-  },
-  {
-    navKey: "signals",
-    title: "Signals",
-    description: "Events from monitors",
-    icon: Radar
-  }
-];
 
 const contentItems: SidebarItem[] = [
   {
@@ -99,37 +72,6 @@ export function AppSidebar({ active, onSelect }: AppSidebarProps) {
       </SidebarHeader>
 
       <SidebarContent>
-        <SidebarGroup>
-          <SidebarGroupLabel>Context Pipeline</SidebarGroupLabel>
-          <SidebarGroupContent>
-            <SidebarMenu>
-              {pipelineItems.map(item => (
-                <SidebarMenuItem key={item.title}>
-                  <SidebarMenuButton
-                    asChild
-                    isActive={active === item.navKey}
-                    className="flex flex-col items-start gap-1 text-left"
-                  >
-                    <button
-                      type="button"
-                      className="w-full"
-                      onClick={() => onSelect(item.navKey)}
-                    >
-                      <div className="flex w-full items-center gap-2">
-                        <item.icon className="h-4 w-4" />
-                        <span className="text-sm font-medium">{item.title}</span>
-                      </div>
-                      <span className="text-xs font-normal text-muted-foreground">
-                        {item.description}
-                      </span>
-                    </button>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-              ))}
-            </SidebarMenu>
-          </SidebarGroupContent>
-        </SidebarGroup>
-
         <SidebarGroup>
           <SidebarGroupLabel>Content Management</SidebarGroupLabel>
           <SidebarGroupContent>
