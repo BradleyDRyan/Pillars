@@ -9,8 +9,8 @@ import SwiftUI
 
 enum OnboardingStep {
     case pillarSelect
-    case themeSelect
     case principleSelect
+    case reviewSaves
 }
 
 struct OnboardingContainerView: View {
@@ -19,20 +19,22 @@ struct OnboardingContainerView: View {
     
     @State private var currentStep: OnboardingStep = .pillarSelect
     @State private var selectedPillar: PillarOption?
-    @State private var selectedTheme: OnboardingTheme?
     @State private var selectedPrinciple: String?
     @State private var lockedPrinciples: [String] = []
-    @State private var usedThemeIds: Set<String> = []
     
-    // Compute available themes (excluding used ones) - now using ViewModel
-    private var availableThemes: [OnboardingTheme] {
+    // Track the pillar that principles were selected for
+    // If user goes back and selects the same pillar, keep the locked principles
+    @State private var previousPillarId: String?
+    
+    // All principles for the current pillar (flattened from themes)
+    private var availablePrinciples: [String] {
         guard let pillar = selectedPillar else { return [] }
-        return viewModel.themes(for: pillar.id).filter { !usedThemeIds.contains($0.id) }
+        let allPrinciples = viewModel.allPrinciples(for: pillar.id)
+        return allPrinciples.filter { !lockedPrinciples.contains($0) }
     }
     
     // Dynamic progress based on principles locked
     private var progressStep: Int {
-        // After pillar select, progress grows with each principle
         if currentStep == .pillarSelect {
             return 1
         }
@@ -41,73 +43,152 @@ struct OnboardingContainerView: View {
     
     private let totalSteps: Int = 5
     
+    // Check if back navigation is available
+    private var canGoBack: Bool {
+        switch currentStep {
+        case .pillarSelect:
+            return false
+        case .principleSelect:
+            return true
+        }
+    }
+    
     var body: some View {
-        VStack(spacing: 0) {
-            // Progress bar
-            OnboardingProgressBar(currentStep: progressStep, totalSteps: totalSteps)
-                .padding(.horizontal, S2.Spacing.xl)
-                .padding(.top, S2.Spacing.lg)
-            
-            // Content
-            Group {
-                if viewModel.isLoading {
-                    // Loading state
-                    VStack(spacing: S2.Spacing.lg) {
-                        Spacer()
-                        ProgressView()
-                            .scaleEffect(1.5)
-                        Text("Loading...")
-                            .font(.system(size: 15))
-                            .foregroundColor(S2.Colors.secondaryText)
-                        Spacer()
+        Group {
+            switch currentStep {
+            case .principleSelect:
+                if let pillar = selectedPillar {
+                    // Full-screen TikTok-style principle selector
+                    ZStack(alignment: .topLeading) {
+                        OnboardingPrincipleSelectView(
+                            pillar: pillar,
+                            availablePrinciples: availablePrinciples,
+                            savedPrinciples: lockedPrinciples,
+                            selectedPrinciple: $selectedPrinciple,
+                            onSavePrinciple: {
+                                lockPrinciple()
+                            },
+                            onReviewSaves: {
+                                advanceTo(.reviewSaves)
+                            }
+                        )
+                        .ignoresSafeArea()
+                        
+                        // Back button overlay
+                        Button {
+                            goBack()
+                        } label: {
+                            Image(systemName: "chevron.left")
+                                .font(.system(size: 20, weight: .semibold))
+                                .foregroundColor(.white)
+                                .padding(12)
+                                .background(
+                                    Circle()
+                                        .fill(Color.white.opacity(0.2))
+                                )
+                        }
+                        .padding(.leading, 16)
+                        .padding(.top, 8)
+                    }
+                }
+                
+            case .reviewSaves:
+                if let pillar = selectedPillar {
+                    OnboardingReviewView(
+                        pillar: pillar,
+                        savedPrinciples: $lockedPrinciples,
+                        onAddMore: {
+                            advanceTo(.principleSelect)
+                        },
+                        onConfirm: {
+                            completeOnboarding()
+                        }
+                    )
+                }
+                
+            case .pillarSelect:
+                // Standard layout for pillar selection
+                VStack(spacing: 0) {
+                    // Header with back button and progress bar
+                    HStack(spacing: S2.Spacing.md) {
+                        // Back button
+                        Button {
+                            goBack()
+                        } label: {
+                            Image(systemName: "chevron.left")
+                                .font(.system(size: 20, weight: .medium))
+                                .foregroundColor(canGoBack ? S2.Colors.primaryText : S2.Colors.tertiaryText)
+                        }
+                        .disabled(!canGoBack)
+                        .opacity(canGoBack ? 1.0 : 0.3)
+                        
+                        // Progress bar
+                        OnboardingProgressBar(currentStep: progressStep, totalSteps: totalSteps)
                     }
                     .padding(.horizontal, S2.Spacing.xl)
-                } else {
-                    switch currentStep {
-                    case .pillarSelect:
+                    .padding(.top, S2.Spacing.lg)
+                    
+                    // Content
+                    if viewModel.isLoading {
+                        // Loading state
+                        VStack(spacing: S2.Spacing.lg) {
+                            Spacer()
+                            ProgressView()
+                                .scaleEffect(1.5)
+                            Text("Loading...")
+                                .font(.system(size: 15))
+                                .foregroundColor(S2.Colors.secondaryText)
+                            Spacer()
+                        }
+                        .padding(.horizontal, S2.Spacing.xl)
+                    } else {
                         OnboardingFocusView(
                             selectedPillar: $selectedPillar,
                             pillars: viewModel.pillars
                         ) {
-                            advanceTo(.themeSelect)
+                            handlePillarSelected()
                         }
                         .padding(.horizontal, S2.Spacing.xl)
                         .padding(.top, S2.Spacing.xxxl)
-                        
-                    case .themeSelect:
-                        if let pillar = selectedPillar {
-                            OnboardingThemeView(
-                                pillar: pillar,
-                                themes: availableThemes,
-                                lockedPrinciples: lockedPrinciples,
-                                selectedTheme: $selectedTheme,
-                                onContinue: {
-                                    advanceTo(.principleSelect)
-                                },
-                                onFinish: {
-                                    completeOnboarding()
-                                }
-                            )
-                            .padding(.horizontal, S2.Spacing.xl)
-                            .padding(.top, S2.Spacing.xxl)
-                        }
-                        
-                    case .principleSelect:
-                        if let theme = selectedTheme {
-                            OnboardingPrincipleSelectView(
-                                theme: theme,
-                                selectedPrinciple: $selectedPrinciple
-                            ) {
-                                lockPrincipleAndLoop()
-                            }
-                            .padding(.horizontal, S2.Spacing.xl)
-                            .padding(.top, S2.Spacing.xxxl)
-                        }
                     }
+                }
+                .background(S2.Colors.primarySurface.ignoresSafeArea())
+            }
+        }
+    }
+    
+    private func handlePillarSelected() {
+        guard let pillar = selectedPillar else { return }
+        
+        // Check if this is a different pillar than before
+        if previousPillarId != pillar.id {
+            // Different pillar - clear locked principles
+            lockedPrinciples = []
+        }
+        // If same pillar, keep the locked principles
+        
+        previousPillarId = pillar.id
+        advanceTo(.principleSelect)
+    }
+    
+    private func goBack() {
+        withAnimation(.easeInOut(duration: 0.3)) {
+            switch currentStep {
+            case .pillarSelect:
+                // Already at beginning, do nothing
+                break
+                
+            case .principleSelect:
+                // If we have locked principles, unlock the last one
+                if !lockedPrinciples.isEmpty {
+                    lockedPrinciples.removeLast()
+                } else {
+                    // No locked principles - go back to pillar select
+                    selectedPrinciple = nil
+                    currentStep = .pillarSelect
                 }
             }
         }
-        .background(S2.Colors.primarySurface.ignoresSafeArea())
     }
     
     private func advanceTo(_ step: OnboardingStep) {
@@ -116,26 +197,17 @@ struct OnboardingContainerView: View {
         }
     }
     
-    private func lockPrincipleAndLoop() {
-        // Lock the principle
-        if let principle = selectedPrinciple {
+    private func lockPrinciple() {
+        guard let principle = selectedPrinciple else { return }
+        
+        withAnimation(.easeInOut(duration: 0.3)) {
             lockedPrinciples.append(principle)
+            selectedPrinciple = nil
         }
         
-        // Mark theme as used
-        if let theme = selectedTheme {
-            usedThemeIds.insert(theme.id)
-        }
-        
-        // Reset selections
-        selectedTheme = nil
-        selectedPrinciple = nil
-        
-        // Loop back to theme select (or complete if no themes left)
-        if availableThemes.isEmpty {
+        // Auto-complete if no more principles available
+        if availablePrinciples.isEmpty {
             completeOnboarding()
-        } else {
-            advanceTo(.themeSelect)
         }
     }
     

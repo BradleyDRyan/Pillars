@@ -12,7 +12,12 @@ struct AppConfig {
     
     /// The base URL for the backend API
     static var baseURL: String {
+        #if DEBUG
+        // Use local backend for development
+        return "http://localhost:4310"
+        #else
         return "https://pillars-rho.vercel.app"
+        #endif
     }
     
     /// Full API base URL with /api path

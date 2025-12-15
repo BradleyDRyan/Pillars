@@ -26,7 +26,7 @@ const contentItems: SidebarItem[] = [
   {
     navKey: "content",
     title: "Onboarding Content",
-    description: "Pillars, themes, principles",
+    description: "Pillars & principles",
     icon: BookOpen
   },
   {
@@ -46,8 +46,8 @@ const agentItems: SidebarItem[] = [
   },
   {
     navKey: "group-chat",
-    title: "Group Chat",
-    description: "Chat with @ mentions",
+    title: "Rooms",
+    description: "Group chats with agents",
     icon: MessagesSquare
   }
 ];

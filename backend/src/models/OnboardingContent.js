@@ -76,10 +76,10 @@ class OnboardingPillar {
 
   async delete() {
     if (this.id) {
-      // Also delete all themes and principles under this pillar
-      const themes = await OnboardingTheme.findByPillarId(this.id);
-      for (const theme of themes) {
-        await theme.delete();
+      // Delete all principles directly under this pillar
+      const principles = await OnboardingPrinciple.findByPillarId(this.id, true, true);
+      for (const principle of principles) {
+        await principle.delete();
       }
       await OnboardingPillar.collection().doc(this.id).delete();
     }
@@ -101,117 +101,13 @@ class OnboardingPillar {
 }
 
 /**
- * OnboardingTheme — The "one thing" within a pillar (e.g., Awareness, Debt Freedom)
- */
-class OnboardingTheme {
-  constructor(data = {}) {
-    this.id = data.id || null;
-    this.pillarId = data.pillarId || null;
-    this.title = data.title || '';
-    this.description = data.description || '';
-    this.order = data.order || 0;
-    this.isActive = data.isActive !== undefined ? data.isActive : true;
-    this.createdAt = data.createdAt || new Date();
-    this.updatedAt = data.updatedAt || new Date();
-  }
-
-  static collection() {
-    return firestore.collection('onboardingThemes');
-  }
-
-  static async create(data) {
-    const theme = new OnboardingTheme(data);
-    const docRef = await this.collection().add({
-      pillarId: theme.pillarId,
-      title: theme.title,
-      description: theme.description,
-      order: theme.order,
-      isActive: theme.isActive,
-      createdAt: theme.createdAt,
-      updatedAt: theme.updatedAt
-    });
-    theme.id = docRef.id;
-    return theme;
-  }
-
-  static async findById(id) {
-    const doc = await this.collection().doc(id).get();
-    if (!doc.exists) {
-      return null;
-    }
-    return new OnboardingTheme({ id: doc.id, ...doc.data() });
-  }
-
-  static async findByPillarId(pillarId, includeInactive = false) {
-    let query = this.collection().where('pillarId', '==', pillarId);
-    if (!includeInactive) {
-      query = query.where('isActive', '==', true);
-    }
-    const snapshot = await query.get();
-    const themes = snapshot.docs.map(doc => new OnboardingTheme({ id: doc.id, ...doc.data() }));
-    return themes.sort((a, b) => a.order - b.order);
-  }
-
-  static async findAll(includeInactive = false) {
-    let query = this.collection();
-    if (!includeInactive) {
-      query = query.where('isActive', '==', true);
-    }
-    const snapshot = await query.get();
-    const themes = snapshot.docs.map(doc => new OnboardingTheme({ id: doc.id, ...doc.data() }));
-    return themes.sort((a, b) => a.order - b.order);
-  }
-
-  async save() {
-    this.updatedAt = new Date();
-    if (this.id) {
-      await OnboardingTheme.collection().doc(this.id).update({
-        pillarId: this.pillarId,
-        title: this.title,
-        description: this.description,
-        order: this.order,
-        isActive: this.isActive,
-        updatedAt: this.updatedAt
-      });
-    } else {
-      const created = await OnboardingTheme.create(this);
-      this.id = created.id;
-    }
-    return this;
-  }
-
-  async delete() {
-    if (this.id) {
-      // Also delete all principles under this theme
-      const principles = await OnboardingPrinciple.findByThemeId(this.id);
-      for (const principle of principles) {
-        await principle.delete();
-      }
-      await OnboardingTheme.collection().doc(this.id).delete();
-    }
-  }
-
-  toJSON() {
-    return {
-      id: this.id,
-      pillarId: this.pillarId,
-      title: this.title,
-      description: this.description,
-      order: this.order,
-      isActive: this.isActive,
-      createdAt: this.createdAt,
-      updatedAt: this.updatedAt
-    };
-  }
-}
-
-/**
  * OnboardingPrinciple — The specific principle statements users can select
+ * Now linked directly to pillars (simplified from pillar -> theme -> principle)
  */
 class OnboardingPrinciple {
   constructor(data = {}) {
     this.id = data.id || null;
-    this.themeId = data.themeId || null;
+    this.pillarId = data.pillarId || null;
     this.text = data.text || '';
     this.order = data.order || 0;
     this.isActive = data.isActive !== undefined ? data.isActive : true;
@@ -227,7 +123,7 @@ class OnboardingPrinciple {
   static async create(data) {
     const principle = new OnboardingPrinciple(data);
     const docRef = await this.collection().add({
-      themeId: principle.themeId,
+      pillarId: principle.pillarId,
       text: principle.text,
       order: principle.order,
       isActive: principle.isActive,
@@ -247,9 +143,8 @@ class OnboardingPrinciple {
     return new OnboardingPrinciple({ id: doc.id, ...doc.data() });
   }
 
-  static async findByThemeId(themeId, includeInactive = false, includeDrafts = false) {
-    // Fetch all for this theme then filter in JS to avoid composite index requirements
-    const snapshot = await this.collection().where('themeId', '==', themeId).get();
+  static async findByPillarId(pillarId, includeInactive = false, includeDrafts = false) {
+    const snapshot = await this.collection().where('pillarId', '==', pillarId).get();
     let principles = snapshot.docs.map(doc => new OnboardingPrinciple({ id: doc.id, ...doc.data() }));
     if (!includeInactive) {
       principles = principles.filter(p => p.isActive);
@@ -261,7 +156,6 @@ class OnboardingPrinciple {
   }
 
   static async findAll(includeInactive = false, includeDrafts = false) {
-    // Fetch all then filter in JS to avoid composite index requirements
     const snapshot = await this.collection().get();
     let principles = snapshot.docs.map(doc => new OnboardingPrinciple({ id: doc.id, ...doc.data() }));
     if (!includeInactive) {
@@ -277,7 +171,7 @@ class OnboardingPrinciple {
     this.updatedAt = new Date();
     if (this.id) {
       await OnboardingPrinciple.collection().doc(this.id).update({
-        themeId: this.themeId,
+        pillarId: this.pillarId,
         text: this.text,
         order: this.order,
         isActive: this.isActive,
@@ -305,7 +199,7 @@ class OnboardingPrinciple {
   toJSON() {
     return {
       id: this.id,
-      themeId: this.themeId,
+      pillarId: this.pillarId,
       text: this.text,
       order: this.order,
       isActive: this.isActive,
@@ -318,6 +212,5 @@ class OnboardingPrinciple {
 
 module.exports = {
   OnboardingPillar,
-  OnboardingTheme,
   OnboardingPrinciple
 };

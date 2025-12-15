@@ -37,6 +37,8 @@ const adminChatRoutes = require('./routes/admin-chat');
 const agentRoutes = require('./routes/agents');
 const adminConversationRoutes = require('./routes/admin-conversations');
 const adminStreamingRoutes = require('./routes/admin-streaming');
+const roomRoutes = require('./routes/rooms');
+const agentDraftRoutes = require('./routes/agent-drafts');
 
 const app = express();
 const PORT = process.env.PORT || 4310;
@@ -94,6 +96,8 @@ app.use('/api/admin-chat', adminChatRoutes);
 app.use('/api/agents', agentRoutes);
 app.use('/api/admin-conversations', adminConversationRoutes);
 app.use('/api/admin-streaming', adminStreamingRoutes);
+app.use('/api/rooms', roomRoutes);
+app.use('/api/agent-drafts', agentDraftRoutes);
 
 app.use((err, req, res, next) => {
   logger.error({ err }, 'Unhandled error middleware');

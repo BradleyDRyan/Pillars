@@ -1,13 +1,13 @@
 /**
  * Onboarding Content Management Routes
  * 
- * Admin routes for managing pillars, themes (one things), and principles
+ * Admin routes for managing pillars and principles
  * that users select during onboarding.
  */
 
 const express = require('express');
 const router = express.Router();
-const { OnboardingPillar, OnboardingTheme, OnboardingPrinciple } = require('../models');
+const { OnboardingPillar, OnboardingPrinciple } = require('../models');
 const { logger } = require('../config/firebase');
 const Anthropic = require('@anthropic-ai/sdk');
 
@@ -44,7 +44,7 @@ router.get('/pillars', async (req, res) => {
 
 /**
  * GET /api/onboarding-content/pillars/:id
- * Get single pillar with its themes
+ * Get single pillar with its principles
  */
 router.get('/pillars/:id', async (req, res) => {
   try {
@@ -54,11 +54,12 @@ router.get('/pillars/:id', async (req, res) => {
     }
     
     const includeInactive = req.query.includeInactive === 'true';
-    const themes = await OnboardingTheme.findByPillarId(pillar.id, includeInactive);
+    const includeDrafts = req.query.includeDrafts === 'true';
+    const principles = await OnboardingPrinciple.findByPillarId(pillar.id, includeInactive, includeDrafts);
     
     res.json({ 
       pillar: pillar.toJSON(),
-      themes: themes.map(t => t.toJSON())
+      principles: principles.map(p => p.toJSON())
     });
   } catch (error) {
     logger.error({ error: error.message }, 'Failed to get pillar');
@@ -125,7 +126,7 @@ router.put('/pillars/:id', async (req, res) => {
 
 /**
  * DELETE /api/onboarding-content/pillars/:id
- * Delete a pillar and all its themes/principles
+ * Delete a pillar and all its principles
  */
 router.delete('/pillars/:id', async (req, res) => {
   try {
@@ -143,163 +144,21 @@ router.delete('/pillars/:id', async (req, res) => {
 });
 
 // ============================================
-// THEMES (The "one thing" under each pillar)
-// ============================================
-
-/**
- * GET /api/onboarding-content/themes
- * Get all themes (optionally filtered by pillarId)
- */
-router.get('/themes', async (req, res) => {
-  try {
-    const { pillarId, includeInactive } = req.query;
-    let themes;
-    
-    if (pillarId) {
-      themes = await OnboardingTheme.findByPillarId(pillarId, includeInactive === 'true');
-    } else {
-      themes = await OnboardingTheme.findAll(includeInactive === 'true');
-    }
-    
-    res.json({ themes: themes.map(t => t.toJSON()) });
-  } catch (error) {
-    logger.error({ error: error.message }, 'Failed to get themes');
-    res.status(500).json({ error: error.message });
-  }
-});
-
-/**
- * GET /api/onboarding-content/themes/:id
- * Get single theme with its principles
- */
-router.get('/themes/:id', async (req, res) => {
-  try {
-    const theme = await OnboardingTheme.findById(req.params.id);
-    if (!theme) {
-      return res.status(404).json({ error: 'Theme not found' });
-    }
-    
-    const includeInactive = req.query.includeInactive === 'true';
-    const includeDrafts = req.query.includeDrafts === 'true';
-    const principles = await OnboardingPrinciple.findByThemeId(theme.id, includeInactive, includeDrafts);
-    
-    res.json({ 
-      theme: theme.toJSON(),
-      principles: principles.map(p => p.toJSON())
-    });
-  } catch (error) {
-    logger.error({ error: error.message }, 'Failed to get theme');
-    res.status(500).json({ error: error.message });
-  }
-});
-
-/**
- * POST /api/onboarding-content/themes
- * Create a new theme
- */
-router.post('/themes', async (req, res) => {
-  try {
-    const { pillarId, title, description, order, isActive } = req.body;
-    
-    if (!pillarId) {
-      return res.status(400).json({ error: 'Pillar ID is required' });
-    }
-    
-    if (!title || !title.trim()) {
-      return res.status(400).json({ error: 'Title is required' });
-    }
-    
-    // Verify pillar exists
-    const pillar = await OnboardingPillar.findById(pillarId);
-    if (!pillar) {
-      return res.status(400).json({ error: 'Invalid pillar' });
-    }
-    
-    const theme = await OnboardingTheme.create({
-      pillarId,
-      title: title.trim(),
-      description: description?.trim() || '',
-      order: order || 0,
-      isActive: isActive !== false
-    });
-    
-    res.status(201).json({ theme: theme.toJSON() });
-  } catch (error) {
-    logger.error({ error: error.message }, 'Failed to create theme');
-    res.status(500).json({ error: error.message });
-  }
-});
-
-/**
- * PUT /api/onboarding-content/themes/:id
- * Update a theme
- */
-router.put('/themes/:id', async (req, res) => {
-  try {
-    const theme = await OnboardingTheme.findById(req.params.id);
-    if (!theme) {
-      return res.status(404).json({ error: 'Theme not found' });
-    }
-    
-    const { pillarId, title, description, order, isActive } = req.body;
-    
-    if (pillarId !== undefined) {
-      const pillar = await OnboardingPillar.findById(pillarId);
-      if (!pillar) {
-        return res.status(400).json({ error: 'Invalid pillar' });
-      }
-      theme.pillarId = pillarId;
-    }
-    
-    if (title !== undefined) theme.title = title.trim();
-    if (description !== undefined) theme.description = description?.trim() || '';
-    if (order !== undefined) theme.order = order;
-    if (isActive !== undefined) theme.isActive = isActive;
-    
-    await theme.save();
-    
-    res.json({ theme: theme.toJSON() });
-  } catch (error) {
-    logger.error({ error: error.message }, 'Failed to update theme');
-    res.status(500).json({ error: error.message });
-  }
-});
-
-/**
- * DELETE /api/onboarding-content/themes/:id
- * Delete a theme and all its principles
- */
-router.delete('/themes/:id', async (req, res) => {
-  try {
-    const theme = await OnboardingTheme.findById(req.params.id);
-    if (!theme) {
-      return res.status(404).json({ error: 'Theme not found' });
-    }
-    
-    await theme.delete();
-    res.status(204).send();
-  } catch (error) {
-    logger.error({ error: error.message }, 'Failed to delete theme');
-    res.status(500).json({ error: error.message });
-  }
-});
-
-// ============================================
 // PRINCIPLES (The specific statements)
 // ============================================
 
 /**
  * GET /api/onboarding-content/principles
- * Get all principles (optionally filtered by themeId)
+ * Get all principles (optionally filtered by pillarId)
  */
 router.get('/principles', async (req, res) => {
   try {
-    const { themeId, includeInactive, includeDrafts } = req.query;
+    const { pillarId, includeInactive, includeDrafts } = req.query;
     let principles;
     
-    if (themeId) {
-      principles = await OnboardingPrinciple.findByThemeId(
-        themeId, 
+    if (pillarId) {
+      principles = await OnboardingPrinciple.findByPillarId(
+        pillarId, 
         includeInactive === 'true',
         includeDrafts === 'true'
       );
@@ -341,24 +200,24 @@ router.get('/principles/:id', async (req, res) => {
  */
 router.post('/principles', async (req, res) => {
   try {
-    const { themeId, text, order, isActive, isDraft } = req.body;
+    const { pillarId, text, order, isActive, isDraft } = req.body;
     
-    if (!themeId) {
-      return res.status(400).json({ error: 'Theme ID is required' });
+    if (!pillarId) {
+      return res.status(400).json({ error: 'Pillar ID is required' });
     }
     
     if (!text || !text.trim()) {
       return res.status(400).json({ error: 'Text is required' });
     }
     
-    // Verify theme exists
-    const theme = await OnboardingTheme.findById(themeId);
-    if (!theme) {
-      return res.status(400).json({ error: 'Invalid theme' });
+    // Verify pillar exists
+    const pillar = await OnboardingPillar.findById(pillarId);
+    if (!pillar) {
+      return res.status(400).json({ error: 'Invalid pillar' });
     }
     
     const principle = await OnboardingPrinciple.create({
-      themeId,
+      pillarId,
       text: text.trim(),
       order: order || 0,
       isActive: isActive !== false,
@@ -378,24 +237,24 @@ router.post('/principles', async (req, res) => {
  */
 router.post('/principles/bulk', async (req, res) => {
   try {
-    const { themeId, principles, isDraft } = req.body;
+    const { pillarId, principles, isDraft } = req.body;
     
-    if (!themeId) {
-      return res.status(400).json({ error: 'Theme ID is required' });
+    if (!pillarId) {
+      return res.status(400).json({ error: 'Pillar ID is required' });
     }
     
     if (!Array.isArray(principles) || principles.length === 0) {
       return res.status(400).json({ error: 'Principles array is required' });
     }
     
-    // Verify theme exists
-    const theme = await OnboardingTheme.findById(themeId);
-    if (!theme) {
-      return res.status(400).json({ error: 'Invalid theme' });
+    // Verify pillar exists
+    const pillar = await OnboardingPillar.findById(pillarId);
+    if (!pillar) {
+      return res.status(400).json({ error: 'Invalid pillar' });
     }
     
     // Get existing principles to determine order
-    const existing = await OnboardingPrinciple.findByThemeId(themeId, true, true);
+    const existing = await OnboardingPrinciple.findByPillarId(pillarId, true, true);
     let maxOrder = existing.length > 0 ? Math.max(...existing.map(p => p.order)) : -1;
     
     const created = [];
@@ -403,7 +262,7 @@ router.post('/principles/bulk', async (req, res) => {
       if (text && text.trim()) {
         maxOrder++;
         const principle = await OnboardingPrinciple.create({
-          themeId,
+          pillarId,
           text: text.trim(),
           order: maxOrder,
           isActive: true,
@@ -431,14 +290,14 @@ router.put('/principles/:id', async (req, res) => {
       return res.status(404).json({ error: 'Principle not found' });
     }
     
-    const { themeId, text, order, isActive, isDraft } = req.body;
+    const { pillarId, text, order, isActive, isDraft } = req.body;
     
-    if (themeId !== undefined) {
-      const theme = await OnboardingTheme.findById(themeId);
-      if (!theme) {
-        return res.status(400).json({ error: 'Invalid theme' });
+    if (pillarId !== undefined) {
+      const pillar = await OnboardingPillar.findById(pillarId);
+      if (!pillar) {
+        return res.status(400).json({ error: 'Invalid pillar' });
       }
-      principle.themeId = themeId;
+      principle.pillarId = pillarId;
     }
     
     if (text !== undefined) principle.text = text.trim();
@@ -499,10 +358,10 @@ router.delete('/principles/:id', async (req, res) => {
 // ============================================
 
 /**
- * POST /api/onboarding-content/generate/themes
- * Generate theme suggestions for a pillar using LLM
+ * POST /api/onboarding-content/generate/principles
+ * Generate principle suggestions for a pillar using LLM
  */
-router.post('/generate/themes', async (req, res) => {
+router.post('/generate/principles', async (req, res) => {
   try {
     const { pillarId, count = 5 } = req.body;
     
@@ -515,85 +374,17 @@ router.post('/generate/themes', async (req, res) => {
       return res.status(400).json({ error: 'Invalid pillar' });
     }
     
-    // Get existing themes to avoid duplicates
-    const existingThemes = await OnboardingTheme.findByPillarId(pillarId, true);
-    const existingTitles = existingThemes.map(t => t.title);
-    
-    const prompt = `You are helping create content for a life coaching app called "Pillars". Users go through an onboarding flow where they:
-1. Pick a pillar (area of life) - in this case: "${pillar.title}"
-2. Pick the "one thing" they most want to get right (these are called "themes")
-3. Pick a principle that describes how they'll live that out
-
-Generate ${count} theme suggestions for the "${pillar.title}" pillar. These should be short 1-2 word labels that represent different areas of focus within this pillar.
-
-${existingTitles.length > 0 ? `Existing themes to avoid duplicating: ${existingTitles.join(', ')}` : ''}
-
-Examples of good themes:
-- For "Finances": Awareness, Debt Freedom, Security, Investing, Generosity, Contentment
-- For "Marriage": Communication, Forgiveness, Teamwork, Intimacy, Faith, Boundaries
-
-Return ONLY a JSON array of strings with the theme titles. No explanation, just the JSON array.`;
-
-    const message = await anthropic.messages.create({
-      model: 'claude-sonnet-4-20250514',
-      max_tokens: 1024,
-      messages: [{ role: 'user', content: prompt }]
-    });
-
-    const responseText = message.content[0].text;
-    
-    // Parse the JSON array from the response
-    let suggestions;
-    try {
-      // Try to extract JSON array from the response
-      const jsonMatch = responseText.match(/\[[\s\S]*\]/);
-      if (jsonMatch) {
-        suggestions = JSON.parse(jsonMatch[0]);
-      } else {
-        throw new Error('No JSON array found in response');
-      }
-    } catch (parseError) {
-      logger.error({ error: parseError.message, response: responseText }, 'Failed to parse LLM response');
-      return res.status(500).json({ error: 'Failed to parse LLM response' });
-    }
-    
-    res.json({ suggestions, pillarTitle: pillar.title });
-  } catch (error) {
-    logger.error({ error: error.message }, 'Failed to generate themes');
-    res.status(500).json({ error: error.message });
-  }
-});
-
-/**
- * POST /api/onboarding-content/generate/principles
- * Generate principle suggestions for a theme using LLM
- */
-router.post('/generate/principles', async (req, res) => {
-  try {
-    const { themeId, count = 4 } = req.body;
-    
-    if (!themeId) {
-      return res.status(400).json({ error: 'Theme ID is required' });
-    }
-    
-    const theme = await OnboardingTheme.findById(themeId);
-    if (!theme) {
-      return res.status(400).json({ error: 'Invalid theme' });
-    }
-    
-    const pillar = await OnboardingPillar.findById(theme.pillarId);
-    
     // Get existing principles to avoid duplicates
-    const existingPrinciples = await OnboardingPrinciple.findByThemeId(themeId, true, true);
+    const existingPrinciples = await OnboardingPrinciple.findByPillarId(pillarId, true, true);
     const existingTexts = existingPrinciples.map(p => p.text);
     
     const prompt = `You are helping create content for a life coaching app called "Pillars". Users go through an onboarding flow where they select principles that describe how they want to live.
 
 Context:
-- Pillar (area of life): "${pillar?.title || 'Unknown'}"
-- Theme (the one thing they want to get right): "${theme.title}"
+- Pillar (area of life): "${pillar.title}"
+${pillar.description ? `- Description: "${pillar.description}"` : ''}
 
-Generate ${count} principle statements for the "${theme.title}" theme. These should be:
+Generate ${count} principle statements for the "${pillar.title}" pillar. These should be:
 - First-person statements ("I..." format)
 - Actionable and specific
 - 1-2 sentences max
@@ -633,8 +424,7 @@ Return ONLY a JSON array of strings with the principle texts. No explanation, ju
     
     res.json({ 
       suggestions, 
-      themeTitle: theme.title,
-      pillarTitle: pillar?.title 
+      pillarTitle: pillar.title
     });
   } catch (error) {
     logger.error({ error: error.message }, 'Failed to generate principles');
@@ -704,7 +494,7 @@ No explanation, just the JSON array.`;
 
 /**
  * POST /api/onboarding-content/extract
- * Extract pillars, themes, and principles from a blob of text using LLM with tools
+ * Extract pillars and principles from a blob of text using LLM with tools
  */
 router.post('/extract', async (req, res) => {
   try {
@@ -721,7 +511,6 @@ router.post('/extract', async (req, res) => {
     // Track created items for response
     const createdItems = {
       pillars: [],
-      themes: [],
       principles: []
     };
 
@@ -750,43 +539,21 @@ router.post('/extract', async (req, res) => {
         }
       },
       {
-        name: 'create_theme',
-        description: 'Create a new theme (the "one thing" to get right) under a pillar. A theme represents a specific focus area within a pillar.',
-        input_schema: {
-          type: 'object',
-          properties: {
-            pillar_id: {
-              type: 'string',
-              description: 'ID of the pillar this theme belongs to'
-            },
-            title: {
-              type: 'string',
-              description: 'Short title for the theme (1-2 words), e.g. "Commitment", "Generosity", "Communication"'
-            },
-            description: {
-              type: 'string',
-              description: 'Brief description of this theme'
-            }
-          },
-          required: ['pillar_id', 'title']
-        }
-      },
-      {
         name: 'create_principle',
         description: 'Create a new principle (an actionable statement users can adopt). Principles should be first-person "I" statements that are actionable and inspiring.',
         input_schema: {
           type: 'object',
           properties: {
-            theme_id: {
+            pillar_id: {
               type: 'string',
-              description: 'ID of the theme this principle belongs to'
+              description: 'ID of the pillar this principle belongs to'
             },
             text: {
               type: 'string',
               description: 'The principle text. Should be a first-person "I" statement that is actionable, specific, and inspiring. 1-2 sentences max.'
             }
           },
-          required: ['theme_id', 'text']
+          required: ['pillar_id', 'text']
         }
       }
     ];
@@ -795,12 +562,10 @@ router.post('/extract', async (req, res) => {
     const systemPrompt = `You are a content extraction assistant for a life coaching app called "Pillars". Your job is to read text and extract meaningful content into a structured hierarchy:
 
 1. **Pillars** - Major life domains (e.g., Marriage, Finances, Family, Faith, Health)
-2. **Themes** - The "one thing" to focus on within a pillar (e.g., Communication, Generosity, Commitment)
-3. **Principles** - Actionable first-person "I" statements that users can adopt
+2. **Principles** - Actionable first-person "I" statements that users can adopt
 
 When reading text:
 - Identify overarching life domains → create pillars
-- Identify specific focus areas or key insights → create themes
 - Convert advice, wisdom, or insights into first-person principle statements
 
 Existing pillars in the system:
@@ -813,11 +578,11 @@ Guidelines for principles:
 - Make them inspiring but practical
 - Example: "I aim to give more than I get. Both of us trying to give 60% creates a surplus of generosity."
 
-When you find relevant content, use the tools to create the appropriate items. Create pillars first if needed, then themes, then principles.`;
+When you find relevant content, use the tools to create the appropriate items. Create pillars first if needed, then principles.`;
 
     // Call Claude with tools
     let messages = [
-      { role: 'user', content: `Please analyze this text and extract relevant pillars, themes, and principles:\n\n${text}` }
+      { role: 'user', content: `Please analyze this text and extract relevant pillars and principles:\n\n${text}` }
     ];
 
     let continueLoop = true;
@@ -873,46 +638,15 @@ When you find relevant content, use the tools to create the appropriate items. C
                   break;
                 }
                 
-                case 'create_theme': {
-                  const { pillar_id, title, description } = block.input;
+                case 'create_principle': {
+                  const { pillar_id, text: principleText } = block.input;
                   
                   // Verify pillar exists
                   const pillar = existingPillars.find(p => p.id === pillar_id);
                   if (!pillar) {
                     result = { success: false, error: `Pillar with id "${pillar_id}" not found` };
                   } else {
-                    // Check if theme already exists
-                    const existingThemes = await OnboardingTheme.findByPillarId(pillar_id, true);
-                    const existingTheme = existingThemes.find(t => 
-                      t.title.toLowerCase() === title.toLowerCase()
-                    );
-                    
-                    if (existingTheme) {
-                      result = { success: true, theme_id: existingTheme.id, message: `Theme "${title}" already exists` };
-                    } else {
-                      const theme = await OnboardingTheme.create({
-                        pillarId: pillar_id,
-                        title: title.trim(),
-                        description: description?.trim() || '',
-                        order: existingThemes.length,
-                        isActive: true
-                      });
-                      createdItems.themes.push(theme.toJSON());
-                      result = { success: true, theme_id: theme.id, message: `Created theme "${title}"` };
-                    }
-                  }
-                  break;
-                }
-                
-                case 'create_principle': {
-                  const { theme_id, text: principleText } = block.input;
-                  
-                  // Verify theme exists
-                  const theme = await OnboardingTheme.findById(theme_id);
-                  if (!theme) {
-                    result = { success: false, error: `Theme with id "${theme_id}" not found` };
-                  } else {
-                    const existingPrinciples = await OnboardingPrinciple.findByThemeId(theme_id, true, true);
+                    const existingPrinciples = await OnboardingPrinciple.findByPillarId(pillar_id, true, true);
                     
                     // Check for duplicate
                     const isDuplicate = existingPrinciples.some(p => 
@@ -923,7 +657,7 @@ When you find relevant content, use the tools to create the appropriate items. C
                       result = { success: true, message: `Principle already exists` };
                     } else {
                       const principle = await OnboardingPrinciple.create({
-                        themeId: theme_id,
+                        pillarId: pillar_id,
                         text: principleText.trim(),
                         order: existingPrinciples.length,
                         isActive: true,
@@ -962,7 +696,6 @@ When you find relevant content, use the tools to create the appropriate items. C
       success: true,
       created: {
         pillars: createdItems.pillars.length,
-        themes: createdItems.themes.length,
         principles: createdItems.principles.length
       },
       items: createdItems
@@ -986,19 +719,10 @@ router.get('/full', async (req, res) => {
     const pillars = await OnboardingPillar.findAll(false);
     
     const fullContent = await Promise.all(pillars.map(async (pillar) => {
-      const themes = await OnboardingTheme.findByPillarId(pillar.id, false);
-      
-      const themesWithPrinciples = await Promise.all(themes.map(async (theme) => {
-        const principles = await OnboardingPrinciple.findByThemeId(theme.id, false, false);
-        return {
-          ...theme.toJSON(),
-          principles: principles.map(p => p.text)
-        };
-      }));
-      
+      const principles = await OnboardingPrinciple.findByPillarId(pillar.id, false, false);
       return {
         ...pillar.toJSON(),
-        themes: themesWithPrinciples
+        principles: principles.map(p => p.text)
       };
     }));
     

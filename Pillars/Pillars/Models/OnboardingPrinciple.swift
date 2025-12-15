@@ -14,6 +14,7 @@ struct OnboardingContent: Codable {
     let content: [OnboardingPillarContent]
 }
 
+/// Pillar content from API - principles are directly on the pillar (no themes layer)
 struct OnboardingPillarContent: Codable, Identifiable {
     let id: String
     let title: String
@@ -22,20 +23,10 @@ struct OnboardingPillarContent: Codable, Identifiable {
     let color: String
     let order: Int
     let isActive: Bool
-    let themes: [OnboardingThemeContent]
+    let principles: [String]  // Principles directly on pillar (themes removed)
 }
 
-struct OnboardingThemeContent: Codable, Identifiable {
-    let id: String
-    let pillarId: String
-    let title: String
-    let description: String
-    let order: Int
-    let isActive: Bool
-    let principles: [String]
-}
-
-// MARK: - Theme (Short 1-2 word category)
+// MARK: - Legacy Theme Support (for hardcoded fallback data)
 
 struct OnboardingTheme: Identifiable, Equatable {
     let id: String
@@ -46,13 +37,6 @@ struct OnboardingTheme: Identifiable, Equatable {
         self.id = id
         self.title = title
         self.principles = principles
-    }
-    
-    /// Initialize from API content
-    init(from content: OnboardingThemeContent) {
-        self.id = content.id
-        self.title = content.title
-        self.principles = content.principles
     }
 }
 

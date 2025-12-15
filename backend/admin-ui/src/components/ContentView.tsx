@@ -44,20 +44,9 @@ type OnboardingPillar = {
   updatedAt: string;
 };
 
-type OnboardingTheme = {
-  id: string;
-  pillarId: string;
-  title: string;
-  description: string;
-  order: number;
-  isActive: boolean;
-  createdAt: string;
-  updatedAt: string;
-};
-
 type OnboardingPrinciple = {
   id: string;
-  themeId: string;
+  pillarId: string;
   text: string;
   order: number;
   isActive: boolean;
@@ -76,21 +65,17 @@ const API_BASE = "/api/onboarding-content";
 export function ContentView() {
   // Navigation state
   const [selectedPillar, setSelectedPillar] = useState<OnboardingPillar | null>(null);
-  const [selectedTheme, setSelectedTheme] = useState<OnboardingTheme | null>(null);
 
   // Data state
   const [pillars, setPillars] = useState<OnboardingPillar[]>([]);
-  const [themes, setThemes] = useState<OnboardingTheme[]>([]);
   const [principles, setPrinciples] = useState<OnboardingPrinciple[]>([]);
 
   // Loading state
   const [loadingPillars, setLoadingPillars] = useState(true);
-  const [loadingThemes, setLoadingThemes] = useState(false);
   const [loadingPrinciples, setLoadingPrinciples] = useState(false);
 
   // Dialog state
   const [pillarDialogOpen, setPillarDialogOpen] = useState(false);
-  const [themeDialogOpen, setThemeDialogOpen] = useState(false);
   const [principleDialogOpen, setPrincipleDialogOpen] = useState(false);
   const [generateDialogOpen, setGenerateDialogOpen] = useState(false);
   const [extractDialogOpen, setExtractDialogOpen] = useState(false);
@@ -100,26 +85,22 @@ export function ContentView() {
   const [extracting, setExtracting] = useState(false);
   const [extractResult, setExtractResult] = useState<{
     pillars: number;
-    themes: number;
     principles: number;
     items: {
       pillars: OnboardingPillar[];
-      themes: OnboardingTheme[];
       principles: OnboardingPrinciple[];
     };
   } | null>(null);
 
   // Form state
   const [editingPillar, setEditingPillar] = useState<OnboardingPillar | null>(null);
-  const [editingTheme, setEditingTheme] = useState<OnboardingTheme | null>(null);
   const [editingPrinciple, setEditingPrinciple] = useState<OnboardingPrinciple | null>(null);
 
   const [pillarForm, setPillarForm] = useState({ title: "", description: "", color: "#6366f1" });
-  const [themeForm, setThemeForm] = useState({ title: "", description: "" });
   const [principleForm, setPrincipleForm] = useState({ text: "" });
 
   // Generation state
-  const [generationType, setGenerationType] = useState<"pillars" | "themes" | "principles">("pillars");
+  const [generationType, setGenerationType] = useState<"pillars" | "principles">("pillars");
   const [generating, setGenerating] = useState(false);
   const [suggestions, setSuggestions] = useState<string[]>([]);
   const [selectedSuggestions, setSelectedSuggestions] = useState<Set<number>>(new Set());
@@ -146,29 +127,11 @@ export function ContentView() {
     }
   }, []);
 
-  // Load themes for a pillar
-  const loadThemes = useCallback(async (pillarId: string) => {
-    setLoadingThemes(true);
-    try {
-      const response = await fetch(`${API_BASE}/themes?pillarId=${pillarId}&includeInactive=true`);
-      if (!response.ok) throw new Error("Failed to load themes");
-      const data = await response.json();
-      setThemes(data.themes || []);
-    } catch (error) {
-      setStatus({
-        tone: "error",
-        message: error instanceof Error ? error.message : "Failed to load themes"
-      });
-    } finally {
-      setLoadingThemes(false);
-    }
-  }, []);
-
-  // Load principles for a theme
-  const loadPrinciples = useCallback(async (themeId: string) => {
+  // Load principles for a pillar
+  const loadPrinciples = useCallback(async (pillarId: string) => {
     setLoadingPrinciples(true);
     try {
-      const response = await fetch(`${API_BASE}/principles?themeId=${themeId}&includeInactive=true&includeDrafts=true`);
+      const response = await fetch(`${API_BASE}/principles?pillarId=${pillarId}&includeInactive=true&includeDrafts=true`);
       if (!response.ok) throw new Error("Failed to load principles");
       const data = await response.json();
       setPrinciples(data.principles || []);
@@ -188,15 +151,9 @@ export function ContentView() {
 
   useEffect(() => {
     if (selectedPillar) {
-      loadThemes(selectedPillar.id);
+      loadPrinciples(selectedPillar.id);
     }
-  }, [selectedPillar, loadThemes]);
-
-  useEffect(() => {
-    if (selectedTheme) {
-      loadPrinciples(selectedTheme.id);
-    }
-  }, [selectedTheme, loadPrinciples]);
+  }, [selectedPillar, loadPrinciples]);
 
   // Pillar CRUD
   const handleSavePillar = async () => {
@@ -237,7 +194,7 @@ export function ContentView() {
   };
 
   const handleDeletePillar = async (pillar: OnboardingPillar) => {
-    if (!confirm(`Delete "${pillar.title}" and all its themes/principles?`)) return;
+    if (!confirm(`Delete "${pillar.title}" and all its principles?`)) return;
 
     try {
       const response = await fetch(`${API_BASE}/pillars/${pillar.id}`, { method: "DELETE" });
@@ -246,74 +203,12 @@ export function ContentView() {
       setStatus({ tone: "success", message: "Pillar deleted" });
       if (selectedPillar?.id === pillar.id) {
         setSelectedPillar(null);
-        setSelectedTheme(null);
       }
       loadPillars();
     } catch (error) {
       setStatus({
         tone: "error",
         message: error instanceof Error ? error.message : "Failed to delete pillar"
-      });
-    }
-  };
-
-  // Theme CRUD
-  const handleSaveTheme = async () => {
-    if (!themeForm.title.trim()) {
-      setStatus({ tone: "error", message: "Title is required" });
-      return;
-    }
-
-    setSaving(true);
-    try {
-      const url = editingTheme ? `${API_BASE}/themes/${editingTheme.id}` : `${API_BASE}/themes`;
-      const method = editingTheme ? "PUT" : "POST";
-
-      const response = await fetch(url, {
-        method,
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          ...themeForm,
-          pillarId: selectedPillar?.id
-        })
-      });
-
-      if (!response.ok) {
-        const data = await response.json();
-        throw new Error(data.error || "Failed to save theme");
-      }
-
-      setStatus({ tone: "success", message: `Theme ${editingTheme ? "updated" : "created"}` });
-      setThemeDialogOpen(false);
-      setThemeForm({ title: "", description: "" });
-      setEditingTheme(null);
-      if (selectedPillar) loadThemes(selectedPillar.id);
-    } catch (error) {
-      setStatus({
-        tone: "error",
-        message: error instanceof Error ? error.message : "Failed to save theme"
-      });
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const handleDeleteTheme = async (theme: OnboardingTheme) => {
-    if (!confirm(`Delete "${theme.title}" and all its principles?`)) return;
-
-    try {
-      const response = await fetch(`${API_BASE}/themes/${theme.id}`, { method: "DELETE" });
-      if (!response.ok) throw new Error("Failed to delete theme");
-
-      setStatus({ tone: "success", message: "Theme deleted" });
-      if (selectedTheme?.id === theme.id) {
-        setSelectedTheme(null);
-      }
-      if (selectedPillar) loadThemes(selectedPillar.id);
-    } catch (error) {
-      setStatus({
-        tone: "error",
-        message: error instanceof Error ? error.message : "Failed to delete theme"
       });
     }
   };
@@ -335,7 +230,7 @@ export function ContentView() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           ...principleForm,
-          themeId: selectedTheme?.id
+          pillarId: selectedPillar?.id
         })
       });
 
@@ -348,7 +243,7 @@ export function ContentView() {
       setPrincipleDialogOpen(false);
       setPrincipleForm({ text: "" });
       setEditingPrinciple(null);
-      if (selectedTheme) loadPrinciples(selectedTheme.id);
+      if (selectedPillar) loadPrinciples(selectedPillar.id);
     } catch (error) {
       setStatus({
         tone: "error",
@@ -367,7 +262,7 @@ export function ContentView() {
       if (!response.ok) throw new Error("Failed to delete principle");
 
       setStatus({ tone: "success", message: "Principle deleted" });
-      if (selectedTheme) loadPrinciples(selectedTheme.id);
+      if (selectedPillar) loadPrinciples(selectedPillar.id);
     } catch (error) {
       setStatus({
         tone: "error",
@@ -382,7 +277,7 @@ export function ContentView() {
       if (!response.ok) throw new Error("Failed to approve principle");
 
       setStatus({ tone: "success", message: "Principle approved" });
-      if (selectedTheme) loadPrinciples(selectedTheme.id);
+      if (selectedPillar) loadPrinciples(selectedPillar.id);
     } catch (error) {
       setStatus({
         tone: "error",
@@ -404,12 +299,9 @@ export function ContentView() {
       if (generationType === "pillars") {
         url = `${API_BASE}/generate/pillars`;
         body = { count: 5 };
-      } else if (generationType === "themes") {
-        url = `${API_BASE}/generate/themes`;
-        body = { pillarId: selectedPillar?.id, count: 5 };
       } else if (generationType === "principles") {
         url = `${API_BASE}/generate/principles`;
-        body = { themeId: selectedTheme?.id, count: 4 };
+        body = { pillarId: selectedPillar?.id, count: 5 };
       }
 
       const response = await fetch(url, {
@@ -426,7 +318,6 @@ export function ContentView() {
       const data = await response.json();
       
       if (generationType === "pillars") {
-        // Pillars return objects with title and description
         setSuggestions(data.suggestions.map((s: { title: string }) => s.title));
       } else {
         setSuggestions(data.suggestions || []);
@@ -457,26 +348,17 @@ export function ContentView() {
           });
         }
         loadPillars();
-      } else if (generationType === "themes" && selectedPillar) {
-        for (const title of selected) {
-          await fetch(`${API_BASE}/themes`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ pillarId: selectedPillar.id, title, description: "" })
-          });
-        }
-        loadThemes(selectedPillar.id);
-      } else if (generationType === "principles" && selectedTheme) {
+      } else if (generationType === "principles" && selectedPillar) {
         await fetch(`${API_BASE}/principles/bulk`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ 
-            themeId: selectedTheme.id, 
+            pillarId: selectedPillar.id, 
             principles: selected,
             isDraft: true 
           })
         });
-        loadPrinciples(selectedTheme.id);
+        loadPrinciples(selectedPillar.id);
       }
 
       setStatus({ tone: "success", message: `Added ${selectedSuggestions.size} item(s) as drafts` });
@@ -528,7 +410,6 @@ export function ContentView() {
       const data = await response.json();
       setExtractResult({
         pillars: data.created.pillars,
-        themes: data.created.themes,
         principles: data.created.principles,
         items: data.items
       });
@@ -538,7 +419,7 @@ export function ContentView() {
 
       setStatus({ 
         tone: "success", 
-        message: `Extracted ${data.created.pillars} pillars, ${data.created.themes} themes, ${data.created.principles} principles` 
+        message: `Extracted ${data.created.pillars} pillars, ${data.created.principles} principles` 
       });
     } catch (error) {
       setStatus({
@@ -552,12 +433,9 @@ export function ContentView() {
 
   // Breadcrumb navigation
   const breadcrumbs = [];
-  breadcrumbs.push({ label: "Pillars", onClick: () => { setSelectedPillar(null); setSelectedTheme(null); } });
+  breadcrumbs.push({ label: "Pillars", onClick: () => { setSelectedPillar(null); } });
   if (selectedPillar) {
-    breadcrumbs.push({ label: selectedPillar.title, onClick: () => { setSelectedTheme(null); } });
-  }
-  if (selectedTheme) {
-    breadcrumbs.push({ label: selectedTheme.title, onClick: () => {} });
+    breadcrumbs.push({ label: selectedPillar.title, onClick: () => {} });
   }
 
   return (
@@ -584,7 +462,7 @@ export function ContentView() {
             Onboarding Content
           </h1>
           <p className="text-sm text-muted-foreground">
-            Manage pillars, themes (one things), and principles for the onboarding flow
+            Manage pillars and principles for the onboarding flow
           </p>
         </div>
         <div className="flex gap-2">
@@ -604,10 +482,8 @@ export function ContentView() {
             size="sm"
             variant="outline"
             onClick={() => {
-              if (selectedTheme) {
+              if (selectedPillar) {
                 setGenerationType("principles");
-              } else if (selectedPillar) {
-                setGenerationType("themes");
               } else {
                 setGenerationType("pillars");
               }
@@ -625,13 +501,7 @@ export function ContentView() {
               Add Pillar
             </Button>
           )}
-          {selectedPillar && !selectedTheme && (
-            <Button size="sm" onClick={() => setThemeDialogOpen(true)}>
-              <Plus className="h-4 w-4 mr-2" />
-              Add Theme
-            </Button>
-          )}
-          {selectedTheme && (
+          {selectedPillar && (
             <Button size="sm" onClick={() => setPrincipleDialogOpen(true)}>
               <Plus className="h-4 w-4 mr-2" />
               Add Principle
@@ -653,22 +523,16 @@ export function ContentView() {
         </div>
       )}
 
-      {/* Back button when in sub-level */}
-      {(selectedPillar || selectedTheme) && (
+      {/* Back button when viewing principles */}
+      {selectedPillar && (
         <Button
           variant="ghost"
           size="sm"
           className="w-fit"
-          onClick={() => {
-            if (selectedTheme) {
-              setSelectedTheme(null);
-            } else {
-              setSelectedPillar(null);
-            }
-          }}
+          onClick={() => setSelectedPillar(null)}
         >
           <ArrowLeft className="h-4 w-4 mr-2" />
-          Back
+          Back to Pillars
         </Button>
       )}
 
@@ -750,82 +614,11 @@ export function ContentView() {
         </Card>
       )}
 
-      {/* Themes List */}
-      {selectedPillar && !selectedTheme && (
-        <Card>
-          <CardHeader>
-            <CardTitle>Themes for "{selectedPillar.title}"</CardTitle>
-            <CardDescription>
-              The "one thing" users want to get right within this pillar
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            {loadingThemes ? (
-              <div className="py-6 text-sm text-muted-foreground">Loading themes...</div>
-            ) : themes.length === 0 ? (
-              <div className="py-6 text-sm text-muted-foreground">
-                No themes yet. Click "Add Theme" or "Generate with AI" to get started.
-              </div>
-            ) : (
-              <div className="space-y-2">
-                {themes.map(theme => (
-                  <div
-                    key={theme.id}
-                    className={cn(
-                      "flex items-center justify-between p-4 rounded-lg border cursor-pointer transition-colors",
-                      "hover:bg-muted/50",
-                      !theme.isActive && "opacity-50"
-                    )}
-                    onClick={() => setSelectedTheme(theme)}
-                  >
-                    <div>
-                      <div className="font-medium">{theme.title}</div>
-                      {theme.description && (
-                        <div className="text-sm text-muted-foreground">{theme.description}</div>
-                      )}
-                      {!theme.isActive && <Badge variant="secondary">Inactive</Badge>}
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <Button
-                        size="icon"
-                        variant="ghost"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setEditingTheme(theme);
-                          setThemeForm({
-                            title: theme.title,
-                            description: theme.description
-                          });
-                          setThemeDialogOpen(true);
-                        }}
-                      >
-                        <Pencil className="h-4 w-4" />
-                      </Button>
-                      <Button
-                        size="icon"
-                        variant="ghost"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleDeleteTheme(theme);
-                        }}
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                      <ChevronRight className="h-4 w-4 text-muted-foreground" />
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </CardContent>
-        </Card>
-      )}
-
       {/* Principles List */}
-      {selectedTheme && (
+      {selectedPillar && (
         <Card>
           <CardHeader>
-            <CardTitle>Principles for "{selectedTheme.title}"</CardTitle>
+            <CardTitle>Principles for "{selectedPillar.title}"</CardTitle>
             <CardDescription>
               Specific statements users can select to describe how they'll live this out
             </CardDescription>
@@ -955,50 +748,6 @@ export function ContentView() {
         </DialogContent>
       </Dialog>
 
-      {/* Theme Dialog */}
-      <Dialog open={themeDialogOpen} onOpenChange={(open) => {
-        setThemeDialogOpen(open);
-        if (!open) {
-          setEditingTheme(null);
-          setThemeForm({ title: "", description: "" });
-        }
-      }}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>{editingTheme ? "Edit Theme" : "Add Theme"}</DialogTitle>
-            <DialogDescription>
-              {editingTheme ? "Update this theme's details" : "Add a 'one thing' for this pillar"}
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="theme-title">Title</Label>
-              <Input
-                id="theme-title"
-                placeholder="e.g., Awareness"
-                value={themeForm.title}
-                onChange={(e) => setThemeForm({ ...themeForm, title: e.target.value })}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="theme-description">Description (optional)</Label>
-              <Input
-                id="theme-description"
-                placeholder="Brief description"
-                value={themeForm.description}
-                onChange={(e) => setThemeForm({ ...themeForm, description: e.target.value })}
-              />
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setThemeDialogOpen(false)}>Cancel</Button>
-            <Button onClick={handleSaveTheme} disabled={saving}>
-              {saving ? "Saving..." : (editingTheme ? "Update" : "Create")}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
       {/* Principle Dialog */}
       <Dialog open={principleDialogOpen} onOpenChange={(open) => {
         setPrincipleDialogOpen(open);
@@ -1050,7 +799,7 @@ export function ContentView() {
               Extract Content from Text
             </DialogTitle>
             <DialogDescription>
-              Paste text (articles, notes, quotes) and AI will extract pillars, themes, and principles.
+              Paste text (articles, notes, quotes) and AI will extract pillars and principles.
             </DialogDescription>
           </DialogHeader>
           
@@ -1066,7 +815,7 @@ export function ContentView() {
                 className="font-mono text-sm"
               />
               <p className="text-xs text-muted-foreground">
-                The AI will analyze the text and create pillars (life domains), themes (focus areas), 
+                The AI will analyze the text and create pillars (life domains) 
                 and principles (actionable "I" statements) as drafts for your review.
               </p>
             </div>
@@ -1082,14 +831,10 @@ export function ContentView() {
             {extractResult && (
               <div className="border rounded-lg p-4 bg-green-50/50">
                 <h4 className="font-medium text-green-800 mb-3">✓ Extraction Complete</h4>
-                <div className="grid grid-cols-3 gap-4 text-center">
+                <div className="grid grid-cols-2 gap-4 text-center">
                   <div className="p-3 bg-white rounded border">
                     <div className="text-2xl font-bold text-primary">{extractResult.pillars}</div>
                     <div className="text-xs text-muted-foreground">Pillars Created</div>
-                  </div>
-                  <div className="p-3 bg-white rounded border">
-                    <div className="text-2xl font-bold text-primary">{extractResult.themes}</div>
-                    <div className="text-xs text-muted-foreground">Themes Created</div>
                   </div>
                   <div className="p-3 bg-white rounded border">
                     <div className="text-2xl font-bold text-primary">{extractResult.principles}</div>
@@ -1103,17 +848,6 @@ export function ContentView() {
                     <div className="flex flex-wrap gap-2">
                       {extractResult.items.pillars.map(p => (
                         <Badge key={p.id} variant="secondary">{p.title}</Badge>
-                      ))}
-                    </div>
-                  </div>
-                )}
-                
-                {extractResult.items.themes.length > 0 && (
-                  <div className="mt-4">
-                    <h5 className="text-sm font-medium mb-2">New Themes:</h5>
-                    <div className="flex flex-wrap gap-2">
-                      {extractResult.items.themes.map(t => (
-                        <Badge key={t.id} variant="outline">{t.title}</Badge>
                       ))}
                     </div>
                   </div>
@@ -1162,7 +896,7 @@ export function ContentView() {
           <DialogHeader>
             <DialogTitle>
               <Sparkles className="h-5 w-5 inline mr-2" />
-              Generate {generationType === "pillars" ? "Pillars" : generationType === "themes" ? "Themes" : "Principles"}
+              Generate {generationType === "pillars" ? "Pillars" : "Principles"}
             </DialogTitle>
             <DialogDescription>
               Use AI to generate draft content. Review and select which ones to add.
@@ -1174,8 +908,7 @@ export function ContentView() {
               <div className="text-center py-8">
                 <p className="text-muted-foreground mb-4">
                   Click "Generate" to create AI-suggested {generationType}
-                  {generationType === "themes" && selectedPillar && ` for "${selectedPillar.title}"`}
-                  {generationType === "principles" && selectedTheme && ` for "${selectedTheme.title}"`}
+                  {generationType === "principles" && selectedPillar && ` for "${selectedPillar.title}"`}
                 </p>
                 <Button onClick={handleGenerate}>
                   <Sparkles className="h-4 w-4 mr-2" />
