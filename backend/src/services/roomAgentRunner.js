@@ -11,7 +11,7 @@
  */
 
 const { logger } = require('../config/firebase');
-const { RoomMessage, AgentDraft, Agent } = require('../models');
+const { RoomMessage, Agent } = require('../models');
 const { chatCompletion, chatCompletionStream } = require('./anthropic');
 const { getToolDefinitions, executeTool } = require('./toolRegistry');
 const Anthropic = require('@anthropic-ai/sdk');
@@ -102,114 +102,21 @@ async function buildRoomMessages(room, triggerMessageId, agent) {
 }
 
 /**
- * Get tools for this agent, plus draft creation tools
+ * Get tools for this agent from the registry
  */
 function getAgentTools(agent) {
-  // Get agent's configured tools
-  const agentTools = agent.tools?.length > 0 
-    ? getToolDefinitions(agent.tools)
-    : [];
-  
-  // Add draft creation tools (always available to agents in rooms)
-  const draftTools = [
-    {
-      name: 'create_draft',
-      description: 'Create a draft in your workspace. The draft will be reviewed by the editor before publishing.',
-      input_schema: {
-        type: 'object',
-        properties: {
-          contentType: {
-            type: 'string',
-            enum: ['onboarding_pillar', 'onboarding_principle', 'text'],
-            description: 'Type of content being drafted'
-          },
-          title: {
-            type: 'string',
-            description: 'Title or short summary of the draft'
-          },
-          content: {
-            type: 'object',
-            description: 'The content of the draft. Shape depends on contentType.',
-            properties: {
-              text: { type: 'string', description: 'For principles: the principle text. For pillars: the pillar name.' },
-              description: { type: 'string', description: 'Optional description' },
-              pillarId: { type: 'string', description: 'For principles: the pillar this belongs to' }
-            }
-          }
-        },
-        required: ['contentType', 'title', 'content']
-      }
-    },
-    {
-      name: 'list_my_drafts',
-      description: 'List drafts in your workspace',
-      input_schema: {
-        type: 'object',
-        properties: {
-          status: {
-            type: 'string',
-            enum: ['draft', 'pending_review', 'approved', 'rejected'],
-            description: 'Filter by status'
-          },
-          limit: {
-            type: 'number',
-            description: 'Max number of drafts to return'
-          }
-        }
-      }
-    }
-  ];
-  
-  return [...agentTools, ...draftTools];
+  if (!agent.tools || agent.tools.length === 0) {
+    return [];
+  }
+  return getToolDefinitions(agent.tools);
 }
 
 /**
  * Execute a tool for an agent in room context
  */
 async function executeAgentTool(toolName, toolInput, context) {
-  const { agent, room, triggerMessageId } = context;
-  
-  // Handle draft-specific tools
-  if (toolName === 'create_draft') {
-    const draft = await AgentDraft.create({
-      agentId: agent.id,
-      contentType: toolInput.contentType,
-      title: toolInput.title,
-      content: toolInput.content,
-      status: 'draft',
-      sourceRoomId: room.id,
-      sourceMessageId: triggerMessageId
-    });
-    
-    return {
-      success: true,
-      draftId: draft.id,
-      title: draft.title,
-      contentType: draft.contentType,
-      message: `Draft created: "${draft.title}". It will appear in your workspace for review.`
-    };
-  }
-  
-  if (toolName === 'list_my_drafts') {
-    const drafts = await AgentDraft.findByAgentId(agent.id, {
-      status: toolInput.status,
-      limit: toolInput.limit || 10
-    });
-    
-    return {
-      drafts: drafts.map(d => ({
-        id: d.id,
-        title: d.title,
-        contentType: d.contentType,
-        status: d.status,
-        createdAt: d.createdAt
-      })),
-      count: drafts.length
-    };
-  }
-  
-  // Fall back to standard tool execution
-  return executeTool(toolName, toolInput);
+  // Pass context to the tool registry - it handles context-aware tools
+  return executeTool(toolName, toolInput, context);
 }
 
 /**

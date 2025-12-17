@@ -233,7 +233,7 @@ class FirebaseManager: ObservableObject {
     
     /// Complete onboarding and save selected pillar and principles
     @MainActor
-    func completeOnboarding(selectedPillar: String, principles: [String] = []) async {
+    func completeOnboarding(selectedPillar: String, pillarColor: String = "#007AFF", principles: [String] = []) async {
         guard let firestore = firestore,
               let userId = currentUser?.uid else {
             print("❌ Cannot complete onboarding: missing firestore or user")
@@ -241,17 +241,61 @@ class FirebaseManager: ObservableObject {
         }
         
         do {
-            // Update user document with onboarding completion
+            // 1. Create the Pillar document
+            let pillarId = UUID().uuidString
+            let now = Timestamp(date: Date())
+            
+            let pillarData: [String: Any] = [
+                "userId": userId,
+                "name": selectedPillar,
+                "description": "",
+                "color": pillarColor,
+                "isDefault": true,
+                "isArchived": false,
+                "stats": [
+                    "conversationCount": 0,
+                    "principleCount": principles.count,
+                    "wisdomCount": 0,
+                    "resourceCount": 0
+                ],
+                "createdAt": now,
+                "updatedAt": now
+            ]
+            
+            try await firestore.collection("pillars").document(pillarId).setData(pillarData)
+            print("✅ Created pillar '\(selectedPillar)' with id: \(pillarId)")
+            
+            // 2. Create Principle documents for each selected principle
+            for (index, principleTitle) in principles.enumerated() {
+                let principleId = UUID().uuidString
+                let principleData: [String: Any] = [
+                    "userId": userId,
+                    "pillarId": pillarId,
+                    "title": principleTitle,
+                    "description": "",
+                    "isActive": true,
+                    "priority": max(5 - index, 1), // First principles get higher priority
+                    "tags": [],
+                    "createdAt": now,
+                    "updatedAt": now
+                ]
+                
+                try await firestore.collection("principles").document(principleId).setData(principleData)
+                print("✅ Created principle '\(principleTitle)'")
+            }
+            
+            // 3. Update user document with onboarding completion
             try await firestore.collection("users").document(userId).setData([
                 "hasCompletedOnboarding": true,
                 "onboardingCompletedAt": FieldValue.serverTimestamp(),
                 "initialPillar": selectedPillar,
+                "initialPillarId": pillarId,
                 "initialPrinciples": principles,
                 "updatedAt": FieldValue.serverTimestamp()
             ], merge: true)
             
             self.hasCompletedOnboarding = true
-            print("✅ Onboarding completed with pillar: \(selectedPillar), principles: \(principles)")
+            print("✅ Onboarding completed with pillar: \(selectedPillar), \(principles.count) principles")
         } catch {
             print("❌ Failed to complete onboarding: \(error)")
         }

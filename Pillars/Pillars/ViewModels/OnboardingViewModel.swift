@@ -20,7 +20,7 @@ class OnboardingViewModel: ObservableObject {
     var pillars: [PillarOption] {
         if !apiContent.isEmpty {
             return apiContent.map { pillar in
-                PillarOption(id: pillar.id, title: pillar.title)
+                PillarOption(id: pillar.id, title: pillar.title, color: pillar.color)
             }
         }
         // Fallback to hardcoded

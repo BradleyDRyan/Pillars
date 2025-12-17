@@ -91,16 +91,26 @@ class Room {
    * Find all rooms for an owner
    */
   static async findByOwnerId(ownerId, includeArchived = false) {
-    let query = this.collection().where('ownerId', '==', ownerId);
+    // Simple query without composite index requirement
+    const snapshot = await this.collection()
+      .where('ownerId', '==', ownerId)
+      .get();
 
+    let rooms = snapshot.docs.map(doc => new Room({ id: doc.id, ...doc.data() }));
+
+    // Filter by status in memory
     if (!includeArchived) {
-      query = query.where('status', '==', 'active');
+      rooms = rooms.filter(r => r.status === 'active');
     }
 
-    query = query.orderBy('updatedAt', 'desc');
+    // Sort by updatedAt in memory
+    rooms.sort((a, b) => {
+      const aTime = a.updatedAt?.toDate?.() || new Date(a.updatedAt || 0);
+      const bTime = b.updatedAt?.toDate?.() || new Date(b.updatedAt || 0);
+      return bTime - aTime;
+    });
 
-    const snapshot = await query.get();
-    return snapshot.docs.map(doc => new Room({ id: doc.id, ...doc.data() }));
+    return rooms;
   }
 
   /**

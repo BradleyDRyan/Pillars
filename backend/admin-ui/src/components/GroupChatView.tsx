@@ -564,6 +564,22 @@ export function GroupChatView() {
     setIsStreaming(true);
     setStreamingText(new Map());
     
+    // Immediately add user message to UI (optimistic update)
+    const tempUserMessage: RoomMessage = {
+      id: `temp-${Date.now()}`,
+      roomId: selectedRoom.id,
+      senderType: "user",
+      senderId: "admin",
+      content: messageText,
+      mentions: [],
+      draftRefs: [],
+      createdAt: new Date().toISOString()
+    };
+    setMessages(prev => [...prev, tempUserMessage]);
+    
+    // Scroll to show user message
+    setTimeout(scrollToBottom, 50);
+    
     try {
       const response = await fetch(`/api/rooms/${selectedRoom.id}/chat/stream`, {
         method: "POST",
@@ -622,7 +638,7 @@ export function GroupChatView() {
         await loadMessages(selectedRoom.id);
       }
     }
-  }, [input, isStreaming, selectedRoom, loadMessages]);
+  }, [input, isStreaming, selectedRoom, loadMessages, scrollToBottom]);
 
   // Handle key press
   const handleKeyDown = useCallback((e: React.KeyboardEvent) => {

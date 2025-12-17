@@ -118,32 +118,37 @@ class AgentDraft {
       throw new Error('agentId is required');
     }
 
-    let query = this.collection(agentId);
-
-    // Filter by status
-    if (options.status) {
-      query = query.where('status', '==', options.status);
-    }
-
-    // Filter by content type
-    if (options.contentType) {
-      query = query.where('contentType', '==', options.contentType);
-    }
-
-    // Order by creation (newest first)
-    query = query.orderBy('createdAt', 'desc');
-
-    // Limit
-    if (options.limit) {
-      query = query.limit(options.limit);
-    }
-
-    const snapshot = await query.get();
-    return snapshot.docs.map(doc => new AgentDraft({ 
+    // Simple query, filter/sort in memory to avoid index requirements
+    const snapshot = await this.collection(agentId).get();
+    let drafts = snapshot.docs.map(doc => new AgentDraft({ 
       id: doc.id, 
       agentId, 
       ...doc.data() 
     }));
+
+    // Filter by status in memory
+    if (options.status) {
+      drafts = drafts.filter(d => d.status === options.status);
+    }
+
+    // Filter by content type in memory
+    if (options.contentType) {
+      drafts = drafts.filter(d => d.contentType === options.contentType);
+    }
+
+    // Sort by creation (newest first) in memory
+    drafts.sort((a, b) => {
+      const aTime = a.createdAt?.toDate?.() || new Date(a.createdAt || 0);
+      const bTime = b.createdAt?.toDate?.() || new Date(b.createdAt || 0);
+      return bTime - aTime;
+    });
+
+    // Limit
+    if (options.limit) {
+      drafts = drafts.slice(0, options.limit);
+    }
+
+    return drafts;
   }
 
   /**

@@ -10,20 +10,27 @@ import SwiftUI
 struct PillarOption: Identifiable, Equatable {
     let id: String
     let title: String
+    let color: String
+    
+    init(id: String, title: String, color: String = "#007AFF") {
+        self.id = id
+        self.title = title
+        self.color = color
+    }
     
     /// Fallback hardcoded pillars - used when API content is unavailable
     static let allPillars: [PillarOption] = [
-        PillarOption(id: "family", title: "Family"),
-        PillarOption(id: "marriage", title: "Marriage / Partner"),
-        PillarOption(id: "parenting", title: "Parenting"),
-        PillarOption(id: "faith", title: "Faith / Spirituality"),
-        PillarOption(id: "fitness", title: "Fitness / Health"),
-        PillarOption(id: "finances", title: "Finances"),
-        PillarOption(id: "work", title: "Work"),
-        PillarOption(id: "friendships", title: "Friendships"),
-        PillarOption(id: "home", title: "Home"),
-        PillarOption(id: "self", title: "Self"),
-        PillarOption(id: "custom", title: "Custom")
+        PillarOption(id: "family", title: "Family", color: "#FF6B6B"),
+        PillarOption(id: "marriage", title: "Marriage / Partner", color: "#E91E63"),
+        PillarOption(id: "parenting", title: "Parenting", color: "#FF9800"),
+        PillarOption(id: "faith", title: "Faith / Spirituality", color: "#9C27B0"),
+        PillarOption(id: "fitness", title: "Fitness / Health", color: "#4CAF50"),
+        PillarOption(id: "finances", title: "Finances", color: "#2196F3"),
+        PillarOption(id: "work", title: "Work", color: "#607D8B"),
+        PillarOption(id: "friendships", title: "Friendships", color: "#00BCD4"),
+        PillarOption(id: "home", title: "Home", color: "#795548"),
+        PillarOption(id: "self", title: "Self", color: "#673AB7"),
+        PillarOption(id: "custom", title: "Custom", color: "#007AFF")
     ]
 }
 

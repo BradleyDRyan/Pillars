@@ -7,9 +7,10 @@
  * - description: what the tool does (for LLM)
  * - input_schema: JSON schema for inputs
  * - handler: async function that executes the tool
+ * - contextRequired: optional array of context keys needed (e.g., ['agent', 'room'])
  */
 
-const { OnboardingPillar, OnboardingTheme, OnboardingPrinciple } = require('../models');
+const { OnboardingPillar, OnboardingTheme, OnboardingPrinciple, AgentDraft } = require('../models');
 
 /**
  * Tool definitions with handlers
@@ -221,6 +222,103 @@ const TOOLS = {
       
       return { drafts, count: drafts.length };
     }
+  },
+
+  // ============================================
+  // DRAFT TOOLS - For agents working in rooms
+  // ============================================
+
+  create_draft: {
+    name: 'create_draft',
+    description: 'Create a draft in your workspace. The draft will be reviewed by the editor before publishing.',
+    contextRequired: ['agent', 'room'],
+    input_schema: {
+      type: 'object',
+      properties: {
+        contentType: {
+          type: 'string',
+          enum: ['onboarding_pillar', 'onboarding_principle', 'text'],
+          description: 'Type of content being drafted'
+        },
+        title: {
+          type: 'string',
+          description: 'Title or short summary of the draft'
+        },
+        content: {
+          type: 'object',
+          description: 'The content of the draft. For principles: { text, description?, pillarId? }. For pillars: { text, description }.',
+          properties: {
+            text: { type: 'string', description: 'For principles: the principle text. For pillars: the pillar name.' },
+            description: { type: 'string', description: 'Optional description' },
+            pillarId: { type: 'string', description: 'For principles: the pillar this belongs to (optional)' }
+          },
+          required: ['text']
+        }
+      },
+      required: ['contentType', 'title', 'content']
+    },
+    handler: async (input, context) => {
+      if (!context?.agent?.id) {
+        throw new Error('create_draft requires agent context');
+      }
+      
+      const draft = await AgentDraft.create({
+        agentId: context.agent.id,
+        contentType: input.contentType,
+        title: input.title,
+        content: input.content,
+        status: 'draft',
+        sourceRoomId: context.room?.id || null,
+        sourceMessageId: context.triggerMessageId || null
+      });
+      
+      return {
+        success: true,
+        draftId: draft.id,
+        message: `Draft "${input.title}" created. It will be reviewed by the editor.`
+      };
+    }
+  },
+
+  list_my_drafts: {
+    name: 'list_my_drafts',
+    description: 'List drafts in your workspace.',
+    contextRequired: ['agent'],
+    input_schema: {
+      type: 'object',
+      properties: {
+        status: {
+          type: 'string',
+          enum: ['draft', 'pending_review', 'approved', 'rejected', 'published'],
+          description: 'Filter by status'
+        },
+        limit: {
+          type: 'number',
+          description: 'Max number of drafts to return (default 10)'
+        }
+      }
+    },
+    handler: async (input, context) => {
+      if (!context?.agent?.id) {
+        throw new Error('list_my_drafts requires agent context');
+      }
+      
+      const drafts = await AgentDraft.findByAgentId(context.agent.id, {
+        status: input.status,
+        limit: input.limit || 10
+      });
+      
+      return {
+        drafts: drafts.map(d => ({
+          id: d.id,
+          title: d.title,
+          contentType: d.contentType,
+          status: d.status,
+          createdAt: d.createdAt
+        })),
+        count: drafts.length
+      };
+    }
   }
 };
 
@@ -254,13 +352,26 @@ function getTool(name) {
 
 /**
  * Execute a tool by name
+ * @param {string} name - Tool name
+ * @param {object} input - Tool input
+ * @param {object} context - Optional context (agent, room, etc.)
  */
-async function executeTool(name, input) {
+async function executeTool(name, input, context = {}) {
   const tool = TOOLS[name];
   if (!tool) {
     throw new Error(`Unknown tool: ${name}`);
   }
-  return await tool.handler(input);
+  
+  // Check if tool requires context
+  if (tool.contextRequired) {
+    for (const key of tool.contextRequired) {
+      if (!context[key]) {
+        throw new Error(`Tool ${name} requires ${key} in context`);
+      }
+    }
+  }
+  
+  return await tool.handler(input, context);
 }
 
 /**
@@ -283,6 +394,7 @@ module.exports = {
   executeTool,
   getToolsForAdmin
 };
+
 
 
 

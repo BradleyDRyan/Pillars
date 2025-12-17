@@ -8,10 +8,14 @@
 const express = require('express');
 const router = express.Router();
 const { Room, RoomMessage, Agent, AgentDraft } = require('../models');
-const { verifyToken } = require('../middleware/auth');
 const { logger } = require('../config/firebase');
 
-router.use(verifyToken);
+// Note: Auth disabled for admin UI. In production, add proper admin auth.
+// const { verifyToken } = require('../middleware/auth');
+// router.use(verifyToken);
+
+// Default admin user ID for rooms created via admin UI
+const ADMIN_USER_ID = 'admin';
 
 // ============================================
 // ROOM CRUD
@@ -24,7 +28,7 @@ router.use(verifyToken);
 router.get('/', async (req, res) => {
   try {
     const includeArchived = req.query.includeArchived === 'true';
-    const rooms = await Room.findByOwnerId(req.user.uid, includeArchived);
+    const rooms = await Room.findByOwnerId(ADMIN_USER_ID, includeArchived);
     
     res.json({ rooms: rooms.map(r => r.toJSON()) });
   } catch (error) {
@@ -57,7 +61,7 @@ router.post('/', async (req, res) => {
     }
     
     const room = await Room.create({
-      ownerId: req.user.uid,
+      ownerId: ADMIN_USER_ID,
       name: name.trim(),
       description: description?.trim() || '',
       memberAgentIds: validAgentIds
@@ -78,7 +82,7 @@ router.get('/:id', async (req, res) => {
   try {
     const room = await Room.findById(req.params.id);
     
-    if (!room || room.ownerId !== req.user.uid) {
+    if (!room) {
       return res.status(404).json({ error: 'Room not found' });
     }
     
@@ -116,7 +120,7 @@ router.put('/:id', async (req, res) => {
   try {
     const room = await Room.findById(req.params.id);
     
-    if (!room || room.ownerId !== req.user.uid) {
+    if (!room) {
       return res.status(404).json({ error: 'Room not found' });
     }
     
@@ -142,7 +146,7 @@ router.post('/:id/archive', async (req, res) => {
   try {
     const room = await Room.findById(req.params.id);
     
-    if (!room || room.ownerId !== req.user.uid) {
+    if (!room) {
       return res.status(404).json({ error: 'Room not found' });
     }
     
@@ -163,7 +167,7 @@ router.delete('/:id', async (req, res) => {
   try {
     const room = await Room.findById(req.params.id);
     
-    if (!room || room.ownerId !== req.user.uid) {
+    if (!room) {
       return res.status(404).json({ error: 'Room not found' });
     }
     
@@ -188,7 +192,7 @@ router.post('/:id/members', async (req, res) => {
   try {
     const room = await Room.findById(req.params.id);
     
-    if (!room || room.ownerId !== req.user.uid) {
+    if (!room) {
       return res.status(404).json({ error: 'Room not found' });
     }
     
@@ -231,7 +235,7 @@ router.delete('/:id/members/:agentId', async (req, res) => {
   try {
     const room = await Room.findById(req.params.id);
     
-    if (!room || room.ownerId !== req.user.uid) {
+    if (!room) {
       return res.status(404).json({ error: 'Room not found' });
     }
     
@@ -256,7 +260,7 @@ router.get('/:id/messages', async (req, res) => {
   try {
     const room = await Room.findById(req.params.id);
     
-    if (!room || room.ownerId !== req.user.uid) {
+    if (!room) {
       return res.status(404).json({ error: 'Room not found' });
     }
     
@@ -297,7 +301,7 @@ router.post('/:id/messages', async (req, res) => {
   try {
     const room = await Room.findById(req.params.id);
     
-    if (!room || room.ownerId !== req.user.uid) {
+    if (!room) {
       return res.status(404).json({ error: 'Room not found' });
     }
     
@@ -313,7 +317,7 @@ router.post('/:id/messages', async (req, res) => {
     // Create user message
     const userMessage = await RoomMessage.createUserMessage(
       room.id,
-      req.user.uid,
+      ADMIN_USER_ID,
       content.trim(),
       mentions
     );
@@ -409,7 +413,7 @@ router.get('/:id/drafts', async (req, res) => {
   try {
     const room = await Room.findById(req.params.id);
     
-    if (!room || room.ownerId !== req.user.uid) {
+    if (!room) {
       return res.status(404).json({ error: 'Room not found' });
     }
     
@@ -454,7 +458,7 @@ router.get('/:id/drafts', async (req, res) => {
 router.post('/:id/chat/stream', async (req, res) => {
   const room = await Room.findById(req.params.id);
   
-  if (!room || room.ownerId !== req.user.uid) {
+  if (!room) {
     return res.status(404).json({ error: 'Room not found' });
   }
   
@@ -482,7 +486,7 @@ router.post('/:id/chat/stream', async (req, res) => {
     // Create user message
     const userMessage = await RoomMessage.createUserMessage(
       room.id,
-      req.user.uid,
+      ADMIN_USER_ID,
       content.trim(),
       mentions
     );

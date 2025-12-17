@@ -50,6 +50,8 @@ struct OnboardingContainerView: View {
             return false
         case .principleSelect:
             return true
+        case .reviewSaves:
+            return true
         }
     }
     
@@ -179,14 +181,18 @@ struct OnboardingContainerView: View {
                 break
                 
             case .principleSelect:
-                // If we have locked principles, unlock the last one
+                // If we have saved principles, unlock the last one
                 if !lockedPrinciples.isEmpty {
                     lockedPrinciples.removeLast()
                 } else {
-                    // No locked principles - go back to pillar select
+                    // No saved principles - go back to pillar select
                     selectedPrinciple = nil
                     currentStep = .pillarSelect
                 }
+                
+            case .reviewSaves:
+                // Go back to principle selection
+                currentStep = .principleSelect
             }
         }
     }
@@ -217,6 +223,7 @@ struct OnboardingContainerView: View {
         Task {
             await firebaseManager.completeOnboarding(
                 selectedPillar: pillar.title,
+                pillarColor: pillar.color,
                 principles: lockedPrinciples
             )
         }

@@ -2,7 +2,7 @@
 //  OnboardingPrincipleSelectView.swift
 //  Pillars
 //
-//  TikTok-style principle selection - swipe through and like principles
+//  TikTok-style principle selection - swipe through and save principles
 //
 
 import SwiftUI
@@ -10,13 +10,13 @@ import SwiftUI
 struct OnboardingPrincipleSelectView: View {
     let pillar: PillarOption
     let availablePrinciples: [String]
-    let lockedPrinciples: [String]
+    let savedPrinciples: [String]
     @Binding var selectedPrinciple: String?
-    let onLockPrinciple: () -> Void
-    let onFinish: () -> Void
+    let onSavePrinciple: () -> Void
+    let onReviewSaves: () -> Void
     
     @State private var currentIndex: Int = 0
-    @State private var likeAnimations: [String: Bool] = [:]
+    @State private var saveAnimations: [String: Bool] = [:]
     
     private var allPrinciples: [String] {
         availablePrinciples
@@ -35,10 +35,10 @@ struct OnboardingPrincipleSelectView: View {
                             PrincipleCard(
                                 principle: principle,
                                 pillarTitle: pillar.title,
-                                isLiked: lockedPrinciples.contains(principle),
-                                showLikeAnimation: likeAnimations[principle] ?? false,
-                                onLike: {
-                                    likePrinciple(principle, at: index)
+                                isSaved: savedPrinciples.contains(principle),
+                                showSaveAnimation: saveAnimations[principle] ?? false,
+                                onSave: {
+                                    savePrinciple(principle, at: index)
                                 }
                             )
                             .frame(width: geometry.size.width, height: geometry.size.height)
@@ -56,14 +56,14 @@ struct OnboardingPrincipleSelectView: View {
                 
                 // Overlay UI
                 VStack {
-                    // Top bar with locked count and done button
+                    // Top bar with saved count and review button
                     HStack {
-                        // Locked count
-                        if !lockedPrinciples.isEmpty {
+                        // Saved count
+                        if !savedPrinciples.isEmpty {
                             HStack(spacing: 6) {
-                                Image(systemName: "heart.fill")
+                                Image(systemName: "bookmark.fill")
                                     .font(.system(size: 14))
-                                Text("\(lockedPrinciples.count)")
+                                Text("\(savedPrinciples.count)")
                                     .font(.system(size: 15, weight: .semibold))
                             }
                             .foregroundColor(.white)
@@ -77,12 +77,12 @@ struct OnboardingPrincipleSelectView: View {
                         
                         Spacer()
                         
-                        // Done button
-                        if !lockedPrinciples.isEmpty {
+                        // Review saves button
+                        if !savedPrinciples.isEmpty {
                             Button {
-                                onFinish()
+                                onReviewSaves()
                             } label: {
-                                Text("Done")
+                                Text("Review")
                                     .font(.system(size: 16, weight: .semibold))
                                     .foregroundColor(.black)
                                     .padding(.horizontal, 20)
@@ -121,21 +121,21 @@ struct OnboardingPrincipleSelectView: View {
         }
     }
     
-    private func likePrinciple(_ principle: String, at index: Int) {
-        // Don't allow liking already locked principles
-        guard !lockedPrinciples.contains(principle) else { return }
+    private func savePrinciple(_ principle: String, at index: Int) {
+        // Don't allow saving already saved principles
+        guard !savedPrinciples.contains(principle) else { return }
         
         // Trigger animation
         withAnimation(.spring(response: 0.3, dampingFraction: 0.6)) {
-            likeAnimations[principle] = true
+            saveAnimations[principle] = true
         }
         
-        // Set selected and trigger lock
+        // Set selected and trigger save
         selectedPrinciple = principle
         
-        // Delay to show animation, then lock
+        // Delay to show animation, then save
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) {
-            onLockPrinciple()
+            onSavePrinciple()
             
             // Move to next principle if available
             if index < allPrinciples.count - 1 {
@@ -152,12 +152,12 @@ struct OnboardingPrincipleSelectView: View {
 struct PrincipleCard: View {
     let principle: String
     let pillarTitle: String
-    let isLiked: Bool
-    let showLikeAnimation: Bool
-    let onLike: () -> Void
+    let isSaved: Bool
+    let showSaveAnimation: Bool
+    let onSave: () -> Void
     
-    @State private var heartScale: CGFloat = 1.0
-    @State private var showBigHeart: Bool = false
+    @State private var bookmarkScale: CGFloat = 1.0
+    @State private var showBigBookmark: Bool = false
     
     var body: some View {
         GeometryReader { geometry in
@@ -176,7 +176,7 @@ struct PrincipleCard: View {
                 
                 // Content
                 HStack(alignment: .center, spacing: 0) {
-                    // Main text area (tappable for like)
+                    // Main text area (tappable for save)
                     VStack(alignment: .leading, spacing: 16) {
                         // Pillar label
                         Text(pillarTitle.uppercased())
@@ -193,8 +193,8 @@ struct PrincipleCard: View {
                             .fixedSize(horizontal: false, vertical: true)
                         
                         // Hint text
-                        if !isLiked {
-                            Text("Double tap or press ♡ to add")
+                        if !isSaved {
+                            Text("Double tap to save")
                                 .font(.system(size: 13))
                                 .foregroundColor(.white.opacity(0.4))
                                 .padding(.top, 8)
@@ -202,10 +202,10 @@ struct PrincipleCard: View {
                             HStack(spacing: 6) {
                                 Image(systemName: "checkmark.circle.fill")
                                     .font(.system(size: 14))
-                                Text("Added to your principles")
+                                Text("Saved")
                                     .font(.system(size: 13))
                             }
-                            .foregroundColor(Color(hex: "FF6B6B"))
+                            .foregroundColor(Color(hex: "4ECDC4"))
                             .padding(.top, 8)
                         }
                     }
@@ -214,8 +214,8 @@ struct PrincipleCard: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .contentShape(Rectangle())
                     .onTapGesture(count: 2) {
-                        if !isLiked {
-                            triggerLike()
+                        if !isSaved {
+                            triggerSave()
                         }
                     }
                     
@@ -228,24 +228,24 @@ struct PrincipleCard: View {
                 VStack(spacing: 24) {
                     Spacer()
                     
-                    // Like button
+                    // Save button
                     Button {
-                        if !isLiked {
-                            triggerLike()
+                        if !isSaved {
+                            triggerSave()
                         }
                     } label: {
                         VStack(spacing: 4) {
-                            Image(systemName: isLiked ? "heart.fill" : "heart")
+                            Image(systemName: isSaved ? "bookmark.fill" : "bookmark")
                                 .font(.system(size: 32))
-                                .foregroundColor(isLiked ? Color(hex: "FF6B6B") : .white)
-                                .scaleEffect(heartScale)
+                                .foregroundColor(isSaved ? Color(hex: "4ECDC4") : .white)
+                                .scaleEffect(bookmarkScale)
                             
-                            Text(isLiked ? "Liked" : "Like")
+                            Text(isSaved ? "Saved" : "Save")
                                 .font(.system(size: 12))
                                 .foregroundColor(.white.opacity(0.8))
                         }
                     }
-                    .disabled(isLiked)
+                    .disabled(isSaved)
                     
                     Spacer()
                         .frame(height: 120)
@@ -253,48 +253,48 @@ struct PrincipleCard: View {
                 .padding(.trailing, 16)
                 .frame(maxWidth: .infinity, alignment: .trailing)
                 
-                // Big heart animation overlay
-                if showBigHeart {
-                    Image(systemName: "heart.fill")
+                // Big bookmark animation overlay
+                if showBigBookmark {
+                    Image(systemName: "bookmark.fill")
                         .font(.system(size: 100))
-                        .foregroundColor(Color(hex: "FF6B6B"))
+                        .foregroundColor(Color(hex: "4ECDC4"))
                         .transition(.scale.combined(with: .opacity))
                 }
             }
         }
     }
     
-    private func triggerLike() {
-        // Heart button animation
+    private func triggerSave() {
+        // Bookmark button animation
         withAnimation(.spring(response: 0.3, dampingFraction: 0.5)) {
-            heartScale = 1.3
+            bookmarkScale = 1.3
         }
         
-        // Show big heart
+        // Show big bookmark
         withAnimation(.spring(response: 0.3, dampingFraction: 0.6)) {
-            showBigHeart = true
+            showBigBookmark = true
         }
         
-        // Reset heart scale
+        // Reset bookmark scale
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
             withAnimation(.spring(response: 0.3, dampingFraction: 0.5)) {
-                heartScale = 1.0
+                bookmarkScale = 1.0
             }
         }
         
-        // Hide big heart
+        // Hide big bookmark
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) {
             withAnimation(.easeOut(duration: 0.2)) {
-                showBigHeart = false
+                showBigBookmark = false
             }
         }
         
-        // Trigger actual like
-        onLike()
+        // Trigger actual save
+        onSave()
     }
 }
 
-// MARK: - Flow Layout for pills (kept for potential future use)
+// MARK: - Flow Layout for pills
 
 struct FlowLayout: Layout {
     var spacing: CGFloat = 8
@@ -352,9 +352,9 @@ struct FlowLayout: Layout {
             "I aim to give more than I get. Both of us trying to give 60% creates a surplus of generosity.",
             "I wake up each morning thinking: What can I do to make my partner's day just a little happier?"
         ],
-        lockedPrinciples: [],
+        savedPrinciples: [],
         selectedPrinciple: .constant(nil),
-        onLockPrinciple: { print("Lock principle") },
-        onFinish: { print("Finish") }
+        onSavePrinciple: { print("Save principle") },
+        onReviewSaves: { print("Review saves") }
     )
 }
