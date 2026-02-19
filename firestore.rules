@@ -115,6 +115,22 @@ service cloud.firestore {
       allow write: if false; // Backend only via admin SDK
     }
     
+    // Days — user's own daily logs
+    match /days/{dayId} {
+      allow read, update, delete: if request.auth != null
+        && resource.data.userId == request.auth.uid;
+      allow create: if request.auth != null
+        && request.resource.data.userId == request.auth.uid;
+    }
+
+    // Day templates — user's own logging templates
+    match /dayTemplates/{templateId} {
+      allow read, update, delete: if request.auth != null
+        && resource.data.userId == request.auth.uid;
+      allow create: if request.auth != null
+        && request.resource.data.userId == request.auth.uid;
+    }
+
     // Onboarding content - read by authenticated users, write by backend only
     match /onboardingPillars/{pillarId} {
       allow read: if request.auth != null;

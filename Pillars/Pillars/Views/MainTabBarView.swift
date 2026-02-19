@@ -10,23 +10,20 @@ import SwiftUI
 enum AppTab: Int, CaseIterable {
     case today = 0
     case pillars = 1
-    case coach = 2
-    case profile = 3
-    
+    case profile = 2
+
     var title: String {
         switch self {
         case .today: return "Today"
         case .pillars: return "Pillars"
-        case .coach: return "Coach"
         case .profile: return "Profile"
         }
     }
-    
+
     var icon: String {
         switch self {
         case .today: return "sun.max.fill"
         case .pillars: return "building.columns.fill"
-        case .coach: return "sparkles"
         case .profile: return "person.fill"
         }
     }
@@ -51,13 +48,6 @@ struct MainTabBarView: View {
                     Label(AppTab.pillars.title, systemImage: AppTab.pillars.icon)
                 }
                 .tag(AppTab.pillars)
-            
-            CoachView()
-                .environmentObject(firebaseManager)
-                .tabItem {
-                    Label(AppTab.coach.title, systemImage: AppTab.coach.icon)
-                }
-                .tag(AppTab.coach)
             
             ProfileView()
                 .environmentObject(firebaseManager)

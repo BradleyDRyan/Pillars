@@ -68,55 +68,6 @@ class APIService: ObservableObject {
         }
     }
     
-    // MARK: - Conversations
-    
-    func fetchConversations(pillarId: String? = nil) async throws -> [Conversation] {
-        var urlString = "\(baseURL)/conversations"
-        if let pillarId = pillarId {
-            urlString += "?pillarId=\(pillarId)"
-        }
-        guard let url = URL(string: urlString) else {
-            throw APIError.invalidURL(urlString)
-        }
-        let request = createRequest(url: url)
-        let (data, response) = try await session.data(for: request)
-        return try await handleResponse(data, response, nil, type: [Conversation].self)
-    }
-    
-    func createConversation(_ conversation: Conversation) async throws -> Conversation {
-        guard let url = URL(string: "\(baseURL)/conversations") else {
-            throw APIError.invalidURL("\(baseURL)/conversations")
-        }
-        let encoder = JSONEncoder()
-        encoder.dateEncodingStrategy = .iso8601WithFractionalSeconds
-        let body = try encoder.encode(conversation)
-        let request = createRequest(url: url, method: "POST", body: body)
-        let (data, response) = try await session.data(for: request)
-        return try await handleResponse(data, response, nil, type: Conversation.self)
-    }
-    
-    // MARK: - Messages
-    
-    func fetchMessages(conversationId: String) async throws -> [Message] {
-        guard let url = URL(string: "\(baseURL)/conversations/\(conversationId)/messages") else {
-            throw APIError.invalidURL("\(baseURL)/conversations/\(conversationId)/messages")
-        }
-        let request = createRequest(url: url)
-        let (data, response) = try await session.data(for: request)
-        return try await handleResponse(data, response, nil, type: [Message].self)
-    }
-    
-    func sendMessage(_ message: Message) async throws -> Message {
-        guard let url = URL(string: "\(baseURL)/messages") else {
-            throw APIError.invalidURL("\(baseURL)/messages")
-        }
-        let encoder = JSONEncoder()
-        encoder.dateEncodingStrategy = .iso8601WithFractionalSeconds
-        let body = try encoder.encode(message)
-        let request = createRequest(url: url, method: "POST", body: body)
-        let (data, response) = try await session.data(for: request)
-        return try await handleResponse(data, response, nil, type: Message.self)
-    }
     
     // MARK: - Pillars
     

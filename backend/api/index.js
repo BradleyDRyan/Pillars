@@ -30,6 +30,8 @@ const adminChatRoutes = require('../src/routes/admin-chat');
 const agentRoutes = require('../src/routes/agents');
 const adminConversationRoutes = require('../src/routes/admin-conversations');
 const adminStreamingRoutes = require('../src/routes/admin-streaming');
+const dayRoutes = require('../src/routes/days');
+const dayTemplateRoutes = require('../src/routes/day-templates');
 
 // Disabled routes - models don't exist (cleanup needed)
 // const taskRoutes = require('../src/routes/tasks');        // UserTask model missing
@@ -116,6 +118,8 @@ app.use('/api/admin-chat', adminChatRoutes);
 app.use('/api/agents', agentRoutes);
 app.use('/api/admin-conversations', adminConversationRoutes);
 app.use('/api/admin-streaming', adminStreamingRoutes);
+app.use('/api/days', dayRoutes);
+app.use('/api/day-templates', dayTemplateRoutes);
 
 app.use((err, req, res, next) => {
   logger.error({ err }, 'Unhandled error');

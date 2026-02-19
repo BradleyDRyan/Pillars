@@ -54,7 +54,7 @@ struct PillarTabBar: View {
         var body: some View {
             VStack {
                 PillarTabBar(
-                    tabs: ["Principles", "Saves", "Chats"],
+                    tabs: ["Principles", "Saves"],
                     selectedIndex: $selectedIndex
                 )
                 

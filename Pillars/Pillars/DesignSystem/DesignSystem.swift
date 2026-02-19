@@ -325,31 +325,3 @@ extension View {
     }
 }
 
-// MARK: - Text Style Modifiers (for MessageRole compatibility)
-struct MessageTextStyle: ViewModifier {
-    let role: MessageRole
-
-    func body(content: Content) -> some View {
-        content
-            .font(.squirrelChatMessage)
-            .foregroundColor(role == .user ? .white : .black)
-    }
-}
-
-struct TimestampTextStyle: ViewModifier {
-    func body(content: Content) -> some View {
-        content
-            .font(.squirrelChatTimestamp)
-            .foregroundColor(S2.Colors.squirrelTextSecondary.opacity(0.6))
-    }
-}
-
-extension View {
-    func messageStyle(role: MessageRole) -> some View {
-        modifier(MessageTextStyle(role: role))
-    }
-
-    func timestampStyle() -> some View {
-        modifier(TimestampTextStyle())
-    }
-}
