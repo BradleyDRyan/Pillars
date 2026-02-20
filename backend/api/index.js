@@ -23,15 +23,19 @@ const testRoutes = require('../src/routes/test');
 const attachmentRoutes = require('../src/routes/attachments');
 const smsRoutes = require('../src/routes/sms');
 const coachPreferencesRoutes = require('../src/routes/coach-preferences');
-const adminApiRoutes = require('../src/routes/admin-api');
 const cronRoutes = require('../src/routes/cron');
 const onboardingContentRoutes = require('../src/routes/onboarding-content');
-const adminChatRoutes = require('../src/routes/admin-chat');
-const agentRoutes = require('../src/routes/agents');
-const adminConversationRoutes = require('../src/routes/admin-conversations');
-const adminStreamingRoutes = require('../src/routes/admin-streaming');
+const skillRoutes = require('../src/routes/skills');
 const dayRoutes = require('../src/routes/days');
+const dayBlockRoutes = require('../src/routes/day-blocks');
 const dayTemplateRoutes = require('../src/routes/day-templates');
+const blockTypeRoutes = require('../src/routes/block-types');
+const todoRoutes = require('../src/routes/todos');
+const habitRoutes = require('../src/routes/habits');
+const planRoutes = require('../src/routes/plan');
+const eventRoutes = require('../src/routes/events');
+const contextRoutes = require('../src/routes/context');
+const schemaRoutes = require('../src/routes/schemas');
 
 // Disabled routes - models don't exist (cleanup needed)
 // const taskRoutes = require('../src/routes/tasks');        // UserTask model missing
@@ -40,7 +44,6 @@ const dayTemplateRoutes = require('../src/routes/day-templates');
 // const resourceRoutes = require('../src/routes/resources'); // Resource model missing
 // const thoughtRoutes = require('../src/routes/thoughts');  // Thought model missing
 // const adminUiRoutes = require('../src/routes/admin');     // Trigger model missing
-// const agentRoutes = require('../src/routes/agents');      // Agent, Trigger models missing
 
 // Initialize background tasks
 const { initializeTasks } = require('../src/services/tasks');
@@ -90,8 +93,15 @@ app.get('/', (req, res) => {
       attachments: '/api/attachments',
       sms: '/api/sms',
       coachPreferences: '/api/coach-preferences',
-      admin: '/api/admin',
-      cron: '/api/cron'
+      cron: '/api/cron',
+      blockTypes: '/api/block-types',
+      dayBlocks: '/api/days/:date/blocks',
+      plan: '/api/plan/by-date/:date',
+      todos: '/api/todos',
+      habits: '/api/habits',
+      events: '/api/events',
+      context: '/api/context',
+      schemas: '/api/schemas'
     }
   });
 });
@@ -111,15 +121,19 @@ app.use('/api/test', testRoutes);
 app.use('/api/attachments', attachmentRoutes);
 app.use('/api/sms', smsRoutes);
 app.use('/api/coach-preferences', coachPreferencesRoutes);
-app.use('/api/admin', adminApiRoutes);
 app.use('/api/cron', cronRoutes);
 app.use('/api/onboarding-content', onboardingContentRoutes);
-app.use('/api/admin-chat', adminChatRoutes);
-app.use('/api/agents', agentRoutes);
-app.use('/api/admin-conversations', adminConversationRoutes);
-app.use('/api/admin-streaming', adminStreamingRoutes);
+app.use('/api/skills', skillRoutes);
 app.use('/api/days', dayRoutes);
+app.use('/api/days/:date/blocks', dayBlockRoutes);
 app.use('/api/day-templates', dayTemplateRoutes);
+app.use('/api/block-types', blockTypeRoutes);
+app.use('/api/todos', todoRoutes);
+app.use('/api/habits', habitRoutes);
+app.use('/api/plan', planRoutes);
+app.use('/api/events', eventRoutes);
+app.use('/api/context', contextRoutes);
+app.use('/api/schemas', schemaRoutes);
 
 app.use((err, req, res, next) => {
   logger.error({ err }, 'Unhandled error');

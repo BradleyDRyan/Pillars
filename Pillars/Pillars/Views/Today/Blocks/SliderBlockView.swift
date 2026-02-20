@@ -11,28 +11,31 @@ struct SliderBlockView: View {
     @Binding var data: SliderData
 
     var body: some View {
-        VStack(spacing: 16) {
+        VStack(spacing: S2.Spacing.lg) {
             ForEach($data.sliders) { $slider in
-                VStack(spacing: 6) {
+                VStack(spacing: S2.MyDay.Spacing.fieldStack) {
                     HStack {
-                        Text(slider.label)
-                            .font(.system(size: 14, weight: .medium))
-                            .foregroundColor(.secondary)
+                        S2MyDayFieldLabel(text: slider.label)
+
                         Spacer()
+
                         Text(String(format: "%.0f", slider.value))
-                            .font(.system(size: 14, weight: .semibold))
-                            .foregroundColor(.primary)
+                            .font(S2.MyDay.Typography.valueStrong)
+                            .foregroundColor(S2.MyDay.Colors.titleText)
                             .frame(width: 24, alignment: .trailing)
                     }
-                    HStack(spacing: 8) {
+
+                    HStack(spacing: S2.Spacing.sm) {
                         Text("0")
-                            .font(.system(size: 11))
-                            .foregroundColor(.secondary)
+                            .font(S2.MyDay.Typography.fieldLabel)
+                            .foregroundColor(S2.MyDay.Colors.subtitleText)
+
                         Slider(value: $slider.value, in: 0...10, step: 0.5)
-                            .tint(.accentColor)
+                            .tint(S2.MyDay.Colors.interactiveTint)
+
                         Text("10")
-                            .font(.system(size: 11))
-                            .foregroundColor(.secondary)
+                            .font(S2.MyDay.Typography.fieldLabel)
+                            .foregroundColor(S2.MyDay.Colors.subtitleText)
                     }
                 }
             }

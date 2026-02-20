@@ -131,6 +131,54 @@ service cloud.firestore {
         && request.resource.data.userId == request.auth.uid;
     }
 
+    // Custom block types — user's own dynamic logging block definitions
+    match /customBlockTypes/{typeId} {
+      allow read, update, delete: if request.auth != null
+        && resource.data.userId == request.auth.uid;
+      allow create: if request.auth != null
+        && request.resource.data.userId == request.auth.uid;
+    }
+
+    // Block types — includes built-ins + custom docs scoped per user
+    match /blockTypes/{typeId} {
+      allow read, update, delete: if request.auth != null
+        && resource.data.userId == request.auth.uid;
+      allow create: if request.auth != null
+        && request.resource.data.userId == request.auth.uid;
+    }
+
+    // Todos — user-scoped task primitives
+    match /todos/{todoId} {
+      allow read, update, delete: if request.auth != null
+        && resource.data.userId == request.auth.uid;
+      allow create: if request.auth != null
+        && request.resource.data.userId == request.auth.uid;
+    }
+
+    // Day block instances for a specific date
+    match /dayBlocks/{blockId} {
+      allow read, update, delete: if request.auth != null
+        && resource.data.userId == request.auth.uid;
+      allow create: if request.auth != null
+        && request.resource.data.userId == request.auth.uid;
+    }
+
+    // Habit primitives
+    match /habits/{habitId} {
+      allow read, update, delete: if request.auth != null
+        && resource.data.userId == request.auth.uid;
+      allow create: if request.auth != null
+        && request.resource.data.userId == request.auth.uid;
+    }
+
+    // Daily logs for habits
+    match /habitLogs/{logId} {
+      allow read, update, delete: if request.auth != null
+        && resource.data.userId == request.auth.uid;
+      allow create: if request.auth != null
+        && request.resource.data.userId == request.auth.uid;
+    }
+
     // Onboarding content - read by authenticated users, write by backend only
     match /onboardingPillars/{pillarId} {
       allow read: if request.auth != null;

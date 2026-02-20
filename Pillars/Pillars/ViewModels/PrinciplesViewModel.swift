@@ -230,7 +230,6 @@ enum PrincipleError: LocalizedError {
     case notAuthenticated
     case invalidURL
     case invalidResponse
-    case createFailed
     case updateFailed
     case deleteFailed
     case serverError(String)
@@ -243,8 +242,6 @@ enum PrincipleError: LocalizedError {
             return "Invalid URL"
         case .invalidResponse:
             return "Invalid response from server"
-        case .createFailed:
-            return "Failed to create principle"
         case .updateFailed:
             return "Failed to update principle"
         case .deleteFailed:
@@ -254,6 +251,5 @@ enum PrincipleError: LocalizedError {
         }
     }
 }
-
 
 

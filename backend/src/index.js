@@ -30,17 +30,19 @@ const testRoutes = require('./routes/test');
 const attachmentRoutes = require('./routes/attachments');
 const smsRoutes = require('./routes/sms');
 const coachPreferencesRoutes = require('./routes/coach-preferences');
-const adminApiRoutes = require('./routes/admin-api');
 const cronRoutes = require('./routes/cron');
 const onboardingContentRoutes = require('./routes/onboarding-content');
-const adminChatRoutes = require('./routes/admin-chat');
-const agentRoutes = require('./routes/agents');
-const adminConversationRoutes = require('./routes/admin-conversations');
-const adminStreamingRoutes = require('./routes/admin-streaming');
-const roomRoutes = require('./routes/rooms');
-const agentDraftRoutes = require('./routes/agent-drafts');
+const skillRoutes = require('./routes/skills');
 const dayRoutes = require('./routes/days');
+const dayBlockRoutes = require('./routes/day-blocks');
 const dayTemplateRoutes = require('./routes/day-templates');
+const blockTypeRoutes = require('./routes/block-types');
+const todoRoutes = require('./routes/todos');
+const habitRoutes = require('./routes/habits');
+const planRoutes = require('./routes/plan');
+const eventRoutes = require('./routes/events');
+const contextRoutes = require('./routes/context');
+const schemaRoutes = require('./routes/schemas');
 
 const app = express();
 const PORT = process.env.PORT || 4310;
@@ -71,7 +73,15 @@ app.get('/', (req, res) => {
       conversations: '/api/conversations',
       messages: '/api/messages',
       attachments: '/api/attachments',
-      sms: '/api/sms'
+      sms: '/api/sms',
+      blockTypes: '/api/block-types',
+      dayBlocks: '/api/days/:date/blocks',
+      plan: '/api/plan/by-date/:date',
+      todos: '/api/todos',
+      habits: '/api/habits',
+      events: '/api/events',
+      context: '/api/context',
+      schemas: '/api/schemas'
     }
   });
 });
@@ -91,17 +101,19 @@ app.use('/api/test', testRoutes);
 app.use('/api/attachments', attachmentRoutes);
 app.use('/api/sms', smsRoutes);
 app.use('/api/coach-preferences', coachPreferencesRoutes);
-app.use('/api/admin', adminApiRoutes);
 app.use('/api/cron', cronRoutes);
 app.use('/api/onboarding-content', onboardingContentRoutes);
-app.use('/api/admin-chat', adminChatRoutes);
-app.use('/api/agents', agentRoutes);
-app.use('/api/admin-conversations', adminConversationRoutes);
-app.use('/api/admin-streaming', adminStreamingRoutes);
-app.use('/api/rooms', roomRoutes);
-app.use('/api/agent-drafts', agentDraftRoutes);
+app.use('/api/skills', skillRoutes);
 app.use('/api/days', dayRoutes);
+app.use('/api/days/:date/blocks', dayBlockRoutes);
 app.use('/api/day-templates', dayTemplateRoutes);
+app.use('/api/block-types', blockTypeRoutes);
+app.use('/api/todos', todoRoutes);
+app.use('/api/habits', habitRoutes);
+app.use('/api/plan', planRoutes);
+app.use('/api/events', eventRoutes);
+app.use('/api/context', contextRoutes);
+app.use('/api/schemas', schemaRoutes);
 
 app.use((err, req, res, next) => {
   logger.error({ err }, 'Unhandled error middleware');

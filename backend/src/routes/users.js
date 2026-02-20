@@ -1,7 +1,20 @@
 const express = require('express');
 const router = express.Router();
+const crypto = require('crypto');
 const { auth, firestore } = require('../config/firebase');
 const { verifyToken, requireRole, requireVerifiedEmail } = require('../middleware/auth');
+
+function generateApiKey() {
+  return `plr_${crypto.randomBytes(32).toString('base64url')}`;
+}
+
+function hashApiKey(apiKey) {
+  return crypto.createHash('sha256').update(apiKey).digest('hex');
+}
+
+function getApiKeyPrefix(apiKey) {
+  return apiKey.slice(0, 12);
+}
 
 router.get('/profile', verifyToken, async (req, res) => {
   try {
@@ -74,6 +87,90 @@ router.post('/verify-email', verifyToken, async (req, res) => {
   } catch (error) {
     console.error('Error generating verification link:', error);
     res.status(500).json({ error: 'Failed to generate verification link' });
+  }
+});
+
+// Create or rotate API key for the current user.
+// Returns plaintext key once so the client can copy/store it.
+router.post('/api-key', verifyToken, async (req, res) => {
+  try {
+    const userId = req.user.uid;
+    const apiKey = generateApiKey();
+    const keyHash = hashApiKey(apiKey);
+    const keyPrefix = getApiKeyPrefix(apiKey);
+    const nowIso = new Date().toISOString();
+
+    await firestore.collection('users').doc(userId).set(
+      {
+        apiKey: {
+          hash: keyHash,
+          prefix: keyPrefix,
+          createdAt: nowIso,
+          rotatedAt: nowIso,
+          lastUsedAt: null
+        },
+        updatedAt: nowIso
+      },
+      { merge: true }
+    );
+
+    res.status(201).json({
+      apiKey,
+      keyPrefix,
+      createdAt: nowIso
+    });
+  } catch (error) {
+    console.error('Error creating API key:', error);
+    res.status(500).json({ error: 'Failed to create API key' });
+  }
+});
+
+// Return API key metadata (never returns plaintext key).
+router.get('/api-key', verifyToken, async (req, res) => {
+  try {
+    const userId = req.user.uid;
+    const userDoc = await firestore.collection('users').doc(userId).get();
+    const apiKeyData = userDoc.exists ? userDoc.data()?.apiKey : null;
+    const hasKey = Boolean(apiKeyData?.hash);
+
+    res.json({
+      hasKey,
+      keyPrefix: hasKey ? apiKeyData.prefix || null : null,
+      createdAt: hasKey ? apiKeyData.createdAt || null : null,
+      rotatedAt: hasKey ? apiKeyData.rotatedAt || null : null,
+      lastUsedAt: hasKey ? apiKeyData.lastUsedAt || null : null
+    });
+  } catch (error) {
+    console.error('Error fetching API key metadata:', error);
+    res.status(500).json({ error: 'Failed to fetch API key metadata' });
+  }
+});
+
+// Revoke API key for the current user.
+router.delete('/api-key', verifyToken, async (req, res) => {
+  try {
+    const userId = req.user.uid;
+    const nowIso = new Date().toISOString();
+
+    await firestore.collection('users').doc(userId).set(
+      {
+        apiKey: {
+          hash: null,
+          prefix: null,
+          createdAt: null,
+          rotatedAt: null,
+          lastUsedAt: null,
+          revokedAt: nowIso
+        },
+        updatedAt: nowIso
+      },
+      { merge: true }
+    );
+
+    res.status(204).send();
+  } catch (error) {
+    console.error('Error revoking API key:', error);
+    res.status(500).json({ error: 'Failed to revoke API key' });
   }
 });
 

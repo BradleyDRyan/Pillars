@@ -1,0 +1,1 @@
+{"version":3,"names":["config","exports","runtime","handler","req","Response","status","headers"],"sources":["hello.js"],"mappings":";;;;;;;AAAO,MAAMA,MAAM,GAAAC,OAAA,CAAAD,MAAA,GAAG;EACpBE,OAAO,EAAE;AACX,CAAC;AAEc,eAAeC,OAAOA,CAACC,GAAG,EAAE;EACzC,OAAO,IAAIC,QAAQ,CAAC,2BAA2B,EAAE;IAC/CC,MAAM,EAAE,GAAG;IACXC,OAAO,EAAE;MACP,cAAc,EAAE;IAClB;EACF,CAAC,CAAC;AACJ","ignoreList":[]}

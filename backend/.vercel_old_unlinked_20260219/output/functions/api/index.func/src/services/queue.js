@@ -1,0 +1,71 @@
+const { Client } = require('@upstash/qstash');
+
+// Initialize QStash client for background job processing
+const qstashClient = new Client({
+  token: process.env.QSTASH_TOKEN || ''
+});
+
+// Base URL for worker endpoints
+const getWorkerUrl = (path) => {
+  const baseUrl = process.env.NODE_ENV === 'production' 
+    ? 'https://squirrel2.vercel.app'
+    : process.env.WORKER_BASE_URL || 'http://localhost:3001';
+  return `${baseUrl}/api/workers${path}`;
+};
+
+/**
+ * Enqueue AI generation job (for complex AI tasks)
+ */
+async function enqueueAIGeneration(type, data) {
+  try {
+    console.log(`[QUEUE] Enqueuing AI generation of type: ${type}`);
+    
+    const response = await qstashClient.publishJSON({
+      url: getWorkerUrl('/process-ai'),
+      body: {
+        type,
+        data,
+        timestamp: new Date().toISOString()
+      },
+      retries: 2,
+      delay: 0
+    });
+    
+    console.log(`[QUEUE] AI generation job queued with ID: ${response.messageId}`);
+    return response.messageId;
+  } catch (error) {
+    console.error('[QUEUE] Failed to enqueue AI generation:', error);
+    throw error;
+  }
+}
+
+/**
+ * Schedule a delayed job
+ */
+async function scheduleJob(type, data, delaySeconds) {
+  try {
+    console.log(`[QUEUE] Scheduling ${type} job with ${delaySeconds}s delay`);
+    
+    const response = await qstashClient.publishJSON({
+      url: getWorkerUrl(`/process-${type}`),
+      body: {
+        ...data,
+        scheduled: true,
+        timestamp: new Date().toISOString()
+      },
+      retries: 3,
+      delay: delaySeconds
+    });
+    
+    console.log(`[QUEUE] Scheduled job queued with ID: ${response.messageId}`);
+    return response.messageId;
+  } catch (error) {
+    console.error('[QUEUE] Failed to schedule job:', error);
+    throw error;
+  }
+}
+
+module.exports = {
+  enqueueAIGeneration,
+  scheduleJob
+};

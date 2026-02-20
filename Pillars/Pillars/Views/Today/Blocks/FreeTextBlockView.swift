@@ -14,20 +14,20 @@ struct FreeTextBlockView: View {
         ZStack(alignment: .topLeading) {
             if text.isEmpty {
                 Text("Start writing…")
-                    .font(.system(size: 15))
-                    .foregroundColor(.secondary.opacity(0.6))
-                    .padding(.horizontal, 4)
-                    .padding(.vertical, 8)
+                    .font(S2.MyDay.Typography.fieldValue)
+                    .foregroundColor(S2.MyDay.Colors.placeholderText)
+                    .padding(.horizontal, S2.Spacing.xs)
+                    .padding(.vertical, S2.Spacing.sm)
             }
+
             TextEditor(text: $text)
-                .font(.system(size: 15))
+                .font(S2.MyDay.Typography.fieldValue)
+                .foregroundColor(S2.MyDay.Colors.titleText)
                 .frame(minHeight: 100)
-                .padding(4)
+                .padding(S2.Spacing.xs)
                 .background(Color.clear)
                 .scrollContentBackground(.hidden)
         }
-        .padding(6)
-        .background(Color(UIColor.tertiarySystemBackground))
-        .cornerRadius(8)
+        .s2MyDayInputSurface(padding: S2.MyDay.Spacing.inputInset)
     }
 }

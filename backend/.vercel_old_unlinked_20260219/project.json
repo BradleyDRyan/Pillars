@@ -1,0 +1,16 @@
+{
+  "projectId": "prj_DByUhM9F6wRxWH45YnkOiUINvorQ",
+  "orgId": "team_0cOBO36mHi5YumeK1kmlprGt",
+  "projectName": "pillars",
+  "settings": {
+    "createdAt": 1765383821549,
+    "framework": "express",
+    "devCommand": null,
+    "installCommand": null,
+    "buildCommand": null,
+    "outputDirectory": null,
+    "rootDirectory": null,
+    "directoryListing": false,
+    "nodeVersion": "24.x"
+  }
+}

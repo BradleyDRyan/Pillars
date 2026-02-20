@@ -9,15 +9,24 @@ import Foundation
 
 struct AppConfig {
     // MARK: - API Configuration
-    
+
+    private static let productionBaseURL = "https://pillars-phi.vercel.app"
+    private static let baseURLEnvKey = "PILLARS_BASE_URL"
+
+    private static func sanitizeBaseURL(_ value: String) -> String? {
+        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return nil }
+        return trimmed.hasSuffix("/") ? String(trimmed.dropLast()) : trimmed
+    }
+
     /// The base URL for the backend API
     static var baseURL: String {
-        #if DEBUG
-        // Use local backend for development
-        return "http://localhost:4310"
-        #else
-        return "https://pillars-rho.vercel.app"
-        #endif
+        if let override = ProcessInfo.processInfo.environment[baseURLEnvKey],
+           let sanitized = sanitizeBaseURL(override) {
+            return sanitized
+        }
+
+        return productionBaseURL
     }
     
     /// Full API base URL with /api path

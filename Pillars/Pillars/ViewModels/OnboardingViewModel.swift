@@ -10,11 +10,9 @@ import Foundation
 @MainActor
 class OnboardingViewModel: ObservableObject {
     @Published var isLoading = true
-    @Published var loadError: String?
     
     // Content loaded from API or fallback
     @Published private var apiContent: [OnboardingPillarContent] = []
-    @Published var usingFallback = false
     
     // Computed pillars for selection
     var pillars: [PillarOption] {
@@ -35,12 +33,10 @@ class OnboardingViewModel: ObservableObject {
     
     func loadContent() async {
         isLoading = true
-        loadError = nil
         
         do {
             let content = try await APIService.shared.fetchOnboardingContent()
             apiContent = content.content
-            usingFallback = false
             print("[Onboarding] Loaded \(apiContent.count) pillars from API")
             for pillar in apiContent {
                 print("[Onboarding]   - \(pillar.title) (id: \(pillar.id)): \(pillar.principles.count) principles")
@@ -48,8 +44,6 @@ class OnboardingViewModel: ObservableObject {
         } catch {
             print("[Onboarding] Failed to load from API, using fallback: \(error.localizedDescription)")
             apiContent = []
-            usingFallback = true
-            // Don't set loadError - we have a fallback
         }
         
         isLoading = false

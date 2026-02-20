@@ -11,98 +11,94 @@ struct SleepBlockView: View {
     @Binding var data: SleepData
 
     var body: some View {
-        VStack(spacing: 20) {
-            // Duration
-            VStack(spacing: 8) {
+        VStack(spacing: S2.MyDay.Spacing.contentStack) {
+            VStack(spacing: S2.Spacing.sm) {
                 HStack {
-                    Text("Duration")
-                        .font(.system(size: 14, weight: .medium))
-                        .foregroundColor(.secondary)
+                    S2MyDayFieldLabel(text: "Duration")
                     Spacer()
                     Text(durationLabel)
-                        .font(.system(size: 14, weight: .semibold))
-                        .foregroundColor(.primary)
+                        .font(S2.MyDay.Typography.valueStrong)
+                        .foregroundColor(S2.MyDay.Colors.titleText)
                 }
-                HStack(spacing: 16) {
-                    Button {
-                        if data.durationHours > 0 {
-                            data.durationHours = max(0, data.durationHours - 0.5)
-                        }
-                    } label: {
-                        Image(systemName: "minus.circle.fill")
-                            .font(.system(size: 28))
-                            .foregroundColor(data.durationHours > 0 ? .accentColor : .secondary.opacity(0.4))
+
+                HStack(spacing: S2.Spacing.lg) {
+                    stepButton(systemName: "minus.circle.fill", isEnabled: data.durationHours > 0) {
+                        data.durationHours = max(0, data.durationHours - 0.5)
                     }
+
                     Slider(value: $data.durationHours, in: 0...12, step: 0.5)
-                        .tint(.accentColor)
-                    Button {
-                        if data.durationHours < 12 {
-                            data.durationHours = min(12, data.durationHours + 0.5)
-                        }
-                    } label: {
-                        Image(systemName: "plus.circle.fill")
-                            .font(.system(size: 28))
-                            .foregroundColor(data.durationHours < 12 ? .accentColor : .secondary.opacity(0.4))
+                        .tint(S2.MyDay.Colors.interactiveTint)
+
+                    stepButton(systemName: "plus.circle.fill", isEnabled: data.durationHours < 12) {
+                        data.durationHours = min(12, data.durationHours + 0.5)
                     }
                 }
             }
 
-            // Quality
-            VStack(spacing: 8) {
+            VStack(spacing: S2.Spacing.sm) {
                 HStack {
-                    Text("Quality")
-                        .font(.system(size: 14, weight: .medium))
-                        .foregroundColor(.secondary)
+                    S2MyDayFieldLabel(text: "Quality")
                     Spacer()
                     Text(qualityLabel)
-                        .font(.system(size: 14, weight: .semibold))
-                        .foregroundColor(.primary)
+                        .font(S2.MyDay.Typography.valueStrong)
+                        .foregroundColor(S2.MyDay.Colors.titleText)
                 }
-                HStack(spacing: 8) {
+
+                HStack(spacing: S2.Spacing.sm) {
                     ForEach(1...5, id: \.self) { star in
                         Button {
                             data.quality = star
                         } label: {
                             Image(systemName: star <= data.quality ? "star.fill" : "star")
                                 .font(.system(size: 24))
-                                .foregroundColor(star <= data.quality ? .yellow : .secondary.opacity(0.4))
+                                .foregroundColor(star <= data.quality ? S2.MyDay.Colors.ratingFilled : S2.MyDay.Colors.ratingEmpty)
                         }
+                        .buttonStyle(.plain)
                     }
                     Spacer()
                 }
             }
 
-            // Times
-            HStack(spacing: 16) {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("Bedtime")
-                        .font(.system(size: 12, weight: .medium))
-                        .foregroundColor(.secondary)
-                    TextField("e.g. 22:30", text: Binding(
+            HStack(spacing: S2.Spacing.lg) {
+                timeField(
+                    title: "Bedtime",
+                    placeholder: "e.g. 22:30",
+                    text: Binding(
                         get: { data.bedtime ?? "" },
                         set: { data.bedtime = $0.isEmpty ? nil : $0 }
-                    ))
-                    .font(.system(size: 15))
-                    .keyboardType(.numbersAndPunctuation)
-                    .padding(10)
-                    .background(Color(UIColor.tertiarySystemBackground))
-                    .cornerRadius(8)
-                }
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("Wake time")
-                        .font(.system(size: 12, weight: .medium))
-                        .foregroundColor(.secondary)
-                    TextField("e.g. 07:00", text: Binding(
+                    )
+                )
+
+                timeField(
+                    title: "Wake time",
+                    placeholder: "e.g. 07:00",
+                    text: Binding(
                         get: { data.wakeTime ?? "" },
                         set: { data.wakeTime = $0.isEmpty ? nil : $0 }
-                    ))
-                    .font(.system(size: 15))
-                    .keyboardType(.numbersAndPunctuation)
-                    .padding(10)
-                    .background(Color(UIColor.tertiarySystemBackground))
-                    .cornerRadius(8)
-                }
+                    )
+                )
             }
+        }
+    }
+
+    private func stepButton(systemName: String, isEnabled: Bool, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: systemName)
+                .font(.system(size: S2.MyDay.Icon.stepperSize))
+                .foregroundColor(isEnabled ? S2.MyDay.Colors.interactiveTint : S2.MyDay.Colors.disabledIcon)
+        }
+        .buttonStyle(.plain)
+    }
+
+    private func timeField(title: String, placeholder: String, text: Binding<String>) -> some View {
+        VStack(alignment: .leading, spacing: S2.Spacing.xs) {
+            S2MyDayFieldLabel(text: title)
+
+            TextField(placeholder, text: text)
+                .font(S2.MyDay.Typography.fieldValue)
+                .foregroundColor(S2.MyDay.Colors.titleText)
+                .keyboardType(.numbersAndPunctuation)
+                .s2MyDayInputSurface()
         }
     }
 

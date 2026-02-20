@@ -1,9 +1,20 @@
 const express = require('express');
 const router = express.Router();
 const { Pillar, Conversation, Principle } = require('../models');
-const { verifyToken } = require('../middleware/auth');
+const { flexibleAuth } = require('../middleware/serviceAuth');
+const { resolveEventSource, writeUserEventSafe } = require('../services/events');
 
-router.use(verifyToken);
+router.use(flexibleAuth);
+
+function buildPillarChangePaths(payload) {
+  if (!payload || typeof payload !== 'object') {
+    return [];
+  }
+
+  return Object.keys(payload)
+    .filter(key => key !== 'source')
+    .map(key => `pillar.${key}`);
+}
 
 // Get all pillars for user
 router.get('/', async (req, res) => {
@@ -153,6 +164,17 @@ router.post('/', async (req, res) => {
       ...req.body,
       userId: req.user.uid
     });
+    await writeUserEventSafe({
+      userId: req.user.uid,
+      type: 'pillar.created',
+      source: resolveEventSource({
+        explicitSource: req.body?.source,
+        authSource: req.user?.source
+      }),
+      pillarId: pillar.id,
+      name: pillar.name,
+      timestamp: Math.floor(Date.now() / 1000)
+    });
     res.status(201).json(pillar);
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -177,6 +199,18 @@ router.put('/:id', async (req, res) => {
     
     Object.assign(pillar, req.body);
     await pillar.save();
+    await writeUserEventSafe({
+      userId: req.user.uid,
+      type: 'pillar.updated',
+      source: resolveEventSource({
+        explicitSource: req.body?.source,
+        authSource: req.user?.source
+      }),
+      pillarId: pillar.id,
+      name: pillar.name,
+      timestamp: Math.floor(Date.now() / 1000),
+      changes: buildPillarChangePaths(req.body)
+    });
     res.json(pillar);
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -196,6 +230,18 @@ router.post('/:id/archive', async (req, res) => {
     }
     
     await pillar.archive();
+    await writeUserEventSafe({
+      userId: req.user.uid,
+      type: 'pillar.updated',
+      source: resolveEventSource({
+        explicitSource: req.body?.source,
+        authSource: req.user?.source
+      }),
+      pillarId: pillar.id,
+      name: pillar.name,
+      timestamp: Math.floor(Date.now() / 1000),
+      changes: ['pillar.isArchived']
+    });
     res.json(pillar);
   } catch (error) {
     res.status(500).json({ error: error.message });
@@ -211,6 +257,18 @@ router.post('/:id/unarchive', async (req, res) => {
     }
     
     await pillar.unarchive();
+    await writeUserEventSafe({
+      userId: req.user.uid,
+      type: 'pillar.updated',
+      source: resolveEventSource({
+        explicitSource: req.body?.source,
+        authSource: req.user?.source
+      }),
+      pillarId: pillar.id,
+      name: pillar.name,
+      timestamp: Math.floor(Date.now() / 1000),
+      changes: ['pillar.isArchived']
+    });
     res.json(pillar);
   } catch (error) {
     res.status(500).json({ error: error.message });

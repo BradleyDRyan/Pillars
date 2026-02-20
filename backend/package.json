@@ -6,10 +6,9 @@
   "scripts": {
     "start": "node src/index.js",
     "dev": "nodemon src/index.js",
-    "dev:admin": "concurrently -n api,admin -c blue,magenta \"npm run dev\" \"npm --prefix admin-ui run dev\"",
     "test": "jest",
-    "admin:build": "npm --prefix admin-ui install && npm --prefix admin-ui run build && rm -rf public/connection-admin && mkdir -p public/connection-admin && cp -R admin-ui/dist/* public/connection-admin/",
-    "vercel-build": "echo 'Skipping admin build'"
+    "purge:legacy-dayblocks": "node scripts/purge-legacy-dayblocks.js",
+    "vercel-build": "echo 'No build step required'"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.67.0",

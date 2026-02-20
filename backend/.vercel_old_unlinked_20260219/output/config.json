@@ -1,0 +1,51 @@
+{
+  "version": 3,
+  "routes": [
+    {
+      "handle": "filesystem"
+    },
+    {
+      "src": "^/api/title-worker$",
+      "dest": "/api/title-worker",
+      "check": true
+    },
+    {
+      "src": "^(?:/(.*))$",
+      "dest": "/api",
+      "check": true
+    },
+    {
+      "src": "^/api(/.*)?$",
+      "status": 404
+    },
+    {
+      "src": "/(.*)",
+      "dest": "/"
+    },
+    {
+      "handle": "error"
+    },
+    {
+      "status": 404,
+      "src": "^(?!/api).*$",
+      "dest": "/404.html"
+    },
+    {
+      "handle": "miss"
+    },
+    {
+      "src": "^/api/(.+)(?:\\.(?:js))$",
+      "dest": "/api/$1",
+      "check": true
+    }
+  ],
+  "framework": {
+    "version": "4.22.1"
+  },
+  "crons": [
+    {
+      "path": "/api/cron/process-triggers",
+      "schedule": "*/15 * * * *"
+    }
+  ]
+}

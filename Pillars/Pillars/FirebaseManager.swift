@@ -16,6 +16,7 @@ class FirebaseManager: ObservableObject {
     
     @Published var isAuthenticated = false
     @Published var isReady = false
+    @Published var isCheckingOnboardingStatus = false
     @Published var hasCompletedOnboarding = false
     @Published var currentUser: FirebaseAuth.User?
     
@@ -70,6 +71,8 @@ class FirebaseManager: ObservableObject {
                     self?.isAuthenticated = user != nil
                     
                     if let user = user {
+                        self?.isCheckingOnboardingStatus = true
+                        self?.hasCompletedOnboarding = false
                         print("✅ Auth state changed - User: \(user.uid), Phone: \(user.phoneNumber ?? "none")")
                         
                         // Ensure user data is saved to Firestore and check onboarding status
@@ -79,6 +82,7 @@ class FirebaseManager: ObservableObject {
                         }
                     } else {
                         print("📱 Auth state changed - No user signed in")
+                        self?.isCheckingOnboardingStatus = false
                         self?.hasCompletedOnboarding = false
                     }
                 }
@@ -210,6 +214,7 @@ class FirebaseManager: ObservableObject {
         }
         try auth.signOut()
         verificationID = nil
+        isCheckingOnboardingStatus = false
         hasCompletedOnboarding = false
     }
     
@@ -218,7 +223,11 @@ class FirebaseManager: ObservableObject {
     /// Check if user has completed onboarding
     @MainActor
     private func checkOnboardingStatus(userId: String) async {
-        guard let firestore = firestore else { return }
+        guard let firestore = firestore else {
+            self.isCheckingOnboardingStatus = false
+            return
+        }
+        defer { self.isCheckingOnboardingStatus = false }
         
         do {
             let document = try await firestore.collection("users").document(userId).getDocument()
@@ -358,4 +367,3 @@ enum FirebaseError: LocalizedError {
         }
     }
 }
-

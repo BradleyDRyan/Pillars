@@ -12,7 +12,6 @@ import FirebaseAuth
 @MainActor
 class PillarsViewModel: ObservableObject {
     @Published var pillars: [Pillar] = []
-    @Published var selectedPillar: Pillar?
     @Published var isLoading = false
     @Published var errorMessage: String?
     
@@ -211,18 +210,11 @@ class PillarsViewModel: ObservableObject {
 
 enum PillarError: LocalizedError {
     case notAuthenticated
-    case pillarNotFound
-    case updateFailed
     
     var errorDescription: String? {
         switch self {
         case .notAuthenticated:
             return "You must be logged in to perform this action"
-        case .pillarNotFound:
-            return "Pillar not found"
-        case .updateFailed:
-            return "Failed to update pillar"
         }
     }
 }
-

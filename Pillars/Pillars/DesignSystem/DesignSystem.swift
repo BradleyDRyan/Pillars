@@ -122,6 +122,22 @@ struct S2 {
         }
     }
 
+    // MARK: - Type Tokens (Apple Naming)
+    struct TextStyle {
+        // Apple-native text styles using system fonts only
+        static let largeTitle = Font.largeTitle
+        static let title = Font.title
+        static let title2 = Font.title2
+        static let title3 = Font.title3
+        static let headline = Font.headline
+        static let body = Font.body
+        static let callout = Font.callout
+        static let subheadline = Font.subheadline
+        static let footnote = Font.footnote
+        static let caption = Font.caption
+        static let caption2 = Font.caption2
+    }
+
     // MARK: - Spacing
     struct Spacing {
         static let none: CGFloat = 0
@@ -296,6 +312,18 @@ extension Font {
     static let squirrelButtonSecondaryFallback = Font.system(size: 14, weight: .medium, design: .rounded)
 }
 
+/// Standard top-of-screen text header for primary tab screens.
+struct S2ScreenHeaderView: View {
+    let title: String
+
+    var body: some View {
+        Text(title)
+            .font(S2.TextStyle.title2)
+            .foregroundColor(S2.Colors.primaryText)
+            .frame(maxWidth: .infinity, alignment: .leading)
+    }
+}
+
 // MARK: - View Extensions
 extension View {
     func s2Card() -> some View {
@@ -324,4 +352,3 @@ extension View {
         S2.Elevation.level3(self)
     }
 }
-

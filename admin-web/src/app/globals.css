@@ -1,0 +1,79 @@
+@import "tailwindcss";
+
+:root {
+  --bg: #f3f4e7;
+  --bg-elevated: #f8f8f1;
+  --ink: #1f2621;
+  --ink-subtle: #5e655f;
+  --line: #d8d9c8;
+  --line-strong: #b3b7a6;
+  --accent: #1a8f61;
+  --accent-soft: #d5f0e5;
+  --warning: #f59e0b;
+  --radius-lg: 18px;
+  --radius-md: 12px;
+}
+
+@theme inline {
+  --font-sans: var(--font-space-grotesk);
+  --font-mono: var(--font-ibm-plex-mono);
+}
+
+body {
+  min-height: 100vh;
+  color: var(--ink);
+  background:
+    radial-gradient(1200px 540px at 90% -20%, #e6f6dc 0%, transparent 70%),
+    radial-gradient(900px 420px at -5% 110%, #d9edf4 0%, transparent 65%),
+    var(--bg);
+  font-family: var(--font-space-grotesk), sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+a {
+  color: inherit;
+}
+
+.surface {
+  background: color-mix(in oklab, var(--bg-elevated) 94%, white);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-lg);
+  box-shadow:
+    0 1px 0 rgba(0, 0, 0, 0.02),
+    0 20px 45px rgba(64, 73, 62, 0.07);
+}
+
+.mono {
+  font-family: var(--font-ibm-plex-mono), monospace;
+}
+
+.fade-in {
+  animation: fade-in 240ms ease-out;
+}
+
+.slide-up {
+  animation: slide-up 240ms ease-out;
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes slide-up {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}

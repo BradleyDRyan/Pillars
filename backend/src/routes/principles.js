@@ -1,9 +1,9 @@
 const express = require('express');
 const router = express.Router();
 const { Principle, Pillar } = require('../models');
-const { verifyToken } = require('../middleware/auth');
+const { flexibleAuth } = require('../middleware/serviceAuth');
 
-router.use(verifyToken);
+router.use(flexibleAuth);
 
 // Get all principles for user
 router.get('/', async (req, res) => {
@@ -138,7 +138,6 @@ router.delete('/:id', async (req, res) => {
 });
 
 module.exports = router;
-
 
 
 
