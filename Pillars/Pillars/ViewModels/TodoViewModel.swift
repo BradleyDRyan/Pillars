@@ -2,10 +2,11 @@
 //  TodoViewModel.swift
 //  Pillars
 //
-//  Todo tab view model with direct Firestore reads and API-backed mutations.
+//  Todo tab view model with direct Firestore reads and writes.
 //
 
 import Foundation
+import FirebaseAuth
 import FirebaseFirestore
 
 @MainActor
@@ -78,14 +79,27 @@ final class TodoViewModel: ObservableObject, BackendRequesting {
 
         Task {
             do {
+                guard let user = Auth.auth().currentUser else { throw BackendError.notAuthenticated }
+                let now = Date().timeIntervalSince1970
+                let todoRef = Firestore.firestore().collection("todos").document()
+
                 let body: [String: Any] = [
+                    "id": todoRef.documentID,
+                    "userId": user.uid,
                     "content": trimmed,
+                    "description": "",
                     "dueDate": dueDate ?? NSNull(),
                     "sectionId": section.rawValue,
+                    "order": 0,
                     "status": "active",
-                    "pillarId": NSNull()
+                    "pillarId": NSNull(),
+                    "parentId": NSNull(),
+                    "createdAt": now,
+                    "updatedAt": now,
+                    "completedAt": NSNull(),
+                    "archivedAt": NSNull()
                 ]
-                _ = try await performAPIRequest(path: "/todos", method: "POST", body: body)
+                try await todoRef.setData(body)
             } catch {
                 self.errorMessage = "Failed to add todo: \(friendlyErrorMessage(error))"
             }
@@ -95,11 +109,10 @@ final class TodoViewModel: ObservableObject, BackendRequesting {
     func setTodoPillar(todoId: String, pillarId: String?) {
         Task {
             do {
-                _ = try await performAPIRequest(
-                    path: "/todos/\(encodedPathComponent(todoId))",
-                    method: "PUT",
-                    body: ["pillarId": normalizedPillarIdentifier(pillarId) ?? NSNull()]
-                )
+                try await Firestore.firestore().collection("todos").document(todoId).setData([
+                    "pillarId": normalizedPillarIdentifier(pillarId) ?? NSNull(),
+                    "updatedAt": Date().timeIntervalSince1970
+                ], merge: true)
             } catch {
                 self.errorMessage = "Failed to retag todo: \(friendlyErrorMessage(error))"
             }
@@ -109,11 +122,22 @@ final class TodoViewModel: ObservableObject, BackendRequesting {
     func setTodoCompletion(todoId: String, isCompleted: Bool) {
         Task {
             do {
-                let path = isCompleted
-                    ? "/todos/\(encodedPathComponent(todoId))/close"
-                    : "/todos/\(encodedPathComponent(todoId))/reopen"
-                _ = try await performAPIRequest(path: path, method: "POST", body: [:])
+                let now = Date().timeIntervalSince1970
+                let statusPayload: [String: Any] = [
+                    "status": isCompleted ? "completed" : "active",
+                    "completedAt": isCompleted ? now : NSNull(),
+                    "updatedAt": now
+                ]
+
+                print("🧪 [Todo Bounty] Request completion update todoId=\(todoId) isCompleted=\(isCompleted)")
+                try await Firestore.firestore().collection("todos").document(todoId).setData(statusPayload, merge: true)
+                print("✅ [Todo Bounty] Firestore completion write succeeded todoId=\(todoId) isCompleted=\(isCompleted)")
+
+                Task { @MainActor [weak self] in
+                    await self?.verifyBountyTrigger(todoId: todoId, expectPaid: isCompleted)
+                }
             } catch {
+                print("❌ [Todo Bounty] Completion write failed todoId=\(todoId): \(friendlyErrorMessage(error))")
                 self.errorMessage = "Failed to update todo: \(friendlyErrorMessage(error))"
             }
         }
@@ -122,11 +146,10 @@ final class TodoViewModel: ObservableObject, BackendRequesting {
     func setTodoDueDate(todoId: String, dueDate: String?) {
         Task {
             do {
-                _ = try await performAPIRequest(
-                    path: "/todos/\(encodedPathComponent(todoId))",
-                    method: "PUT",
-                    body: ["dueDate": dueDate ?? NSNull()]
-                )
+                try await Firestore.firestore().collection("todos").document(todoId).setData([
+                    "dueDate": dueDate ?? NSNull(),
+                    "updatedAt": Date().timeIntervalSince1970
+                ], merge: true)
             } catch {
                 self.errorMessage = "Failed to schedule todo: \(friendlyErrorMessage(error))"
             }
@@ -136,10 +159,11 @@ final class TodoViewModel: ObservableObject, BackendRequesting {
     func deleteTodo(todoId: String) {
         Task {
             do {
-                _ = try await performAPIRequest(
-                    path: "/todos/\(encodedPathComponent(todoId))",
-                    method: "DELETE"
-                )
+                let now = Date().timeIntervalSince1970
+                try await Firestore.firestore().collection("todos").document(todoId).setData([
+                    "archivedAt": now,
+                    "updatedAt": now
+                ], merge: true)
             } catch {
                 self.errorMessage = "Failed to delete todo: \(friendlyErrorMessage(error))"
             }
@@ -159,6 +183,10 @@ final class TodoViewModel: ObservableObject, BackendRequesting {
             status: data["status"] as? String,
             pillarId: data["pillarId"] as? String,
             parentId: data["parentId"] as? String,
+            bountyPoints: data["bountyPoints"] as? Int,
+            bountyPillarId: data["bountyPillarId"] as? String,
+            bountyReason: data["bountyReason"] as? String,
+            bountyPaidAt: timestampValue(data["bountyPaidAt"]),
             createdAt: timestampValue(data["createdAt"]),
             updatedAt: timestampValue(data["updatedAt"]),
             completedAt: timestampValue(data["completedAt"]),
@@ -181,6 +209,87 @@ final class TodoViewModel: ObservableObject, BackendRequesting {
         default:
             return nil
         }
+    }
+
+    private func intValue(_ raw: Any?) -> Int? {
+        switch raw {
+        case let value as NSNumber:
+            return value.intValue
+        case let value as Int:
+            return value
+        case let value as Int64:
+            return Int(value)
+        case let value as Double:
+            return Int(value)
+        default:
+            return nil
+        }
+    }
+
+    private func allocationsSummary(_ raw: Any?) -> String {
+        guard let allocations = raw as? [[String: Any]], !allocations.isEmpty else {
+            return "none"
+        }
+
+        let entries = allocations.compactMap { allocation -> String? in
+            guard let pillarId = allocation["pillarId"] as? String else { return nil }
+            guard let points = intValue(allocation["points"]) else { return nil }
+            return "\(pillarId):\(points)"
+        }
+
+        return entries.isEmpty ? "none" : entries.joined(separator: ",")
+    }
+
+    private func verifyBountyTrigger(todoId: String, expectPaid: Bool) async {
+        let db = Firestore.firestore()
+        let pointEventId = "pe_todo_\(todoId)"
+
+        for attempt in 1...8 {
+            do {
+                let todoSnapshot = try await db.collection("todos").document(todoId).getDocument()
+                let todoData = todoSnapshot.data() ?? [:]
+                let bountyPaidAt = timestampValue(todoData["bountyPaidAt"])
+
+                let pointEventSnapshot = try await db.collection("pointEvents").document(pointEventId).getDocument()
+                let pointEventData = pointEventSnapshot.data() ?? [:]
+                let eventExists = pointEventSnapshot.exists
+                let voidedAt = timestampValue(pointEventData["voidedAt"])
+                let totalPoints = intValue(pointEventData["totalPoints"])
+                let allocations = allocationsSummary(pointEventData["allocations"])
+
+                if expectPaid {
+                    let isPaid = bountyPaidAt != nil && eventExists && voidedAt == nil
+                    if isPaid {
+                        print(
+                            "✅ [Todo Bounty] Verified payout todoId=\(todoId) attempt=\(attempt) bountyPaidAt=\(String(describing: bountyPaidAt)) pointEventId=\(pointEventId) totalPoints=\(String(describing: totalPoints)) allocations=\(allocations)"
+                        )
+                        return
+                    }
+
+                    print(
+                        "⏳ [Todo Bounty] Waiting for payout todoId=\(todoId) attempt=\(attempt) bountyPaidAt=\(String(describing: bountyPaidAt)) pointEventExists=\(eventExists) voidedAt=\(String(describing: voidedAt))"
+                    )
+                } else {
+                    let isReversed = bountyPaidAt == nil && (!eventExists || voidedAt != nil)
+                    if isReversed {
+                        print(
+                            "✅ [Todo Bounty] Verified reversal todoId=\(todoId) attempt=\(attempt) bountyPaidAt=nil pointEventExists=\(eventExists) voidedAt=\(String(describing: voidedAt))"
+                        )
+                        return
+                    }
+
+                    print(
+                        "⏳ [Todo Bounty] Waiting for reversal todoId=\(todoId) attempt=\(attempt) bountyPaidAt=\(String(describing: bountyPaidAt)) pointEventExists=\(eventExists) voidedAt=\(String(describing: voidedAt))"
+                    )
+                }
+            } catch {
+                print("❌ [Todo Bounty] Verification read failed todoId=\(todoId) attempt=\(attempt): \(friendlyErrorMessage(error))")
+            }
+
+            try? await Task.sleep(nanoseconds: 1_000_000_000)
+        }
+
+        print("⚠️ [Todo Bounty] Verification timed out todoId=\(todoId) expectedPaid=\(expectPaid)")
     }
 
     private func normalizedPillarIdentifier(_ rawPillarId: String?) -> String? {

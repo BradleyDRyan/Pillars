@@ -12,54 +12,6 @@ struct S2 {
 
     // MARK: - Colors
     struct Colors {
-        // Surface Colors
-        static let primarySurface = Color(lightMode: Color.white, darkMode: Color(hex: "111112"))
-        static let secondarySurface = Color(lightMode: Color(hex: "F3F4F5"), darkMode: Color(hex: "28292B"))
-        static let tertiarySurface = Color(lightMode: Color.white, darkMode: Color(hex: "383B3D"))
-        static let elevated = Color(lightMode: Color.white, darkMode: Color(hex: "28292B"))
-        static let tinted = Color(lightMode: Color(hex: "F3F4F5"), darkMode: Color(hex: "383B3D"))
-
-        // Text Colors
-        static let primaryText = Color(lightMode: Color.black.opacity(0.93), darkMode: Color(hex: "F3F4F5"))
-        static let secondaryText = Color(lightMode: Color(hex: "686A6E"), darkMode: Color(hex: "A1A4A8"))
-        static let tertiaryText = Color(lightMode: Color(hex: "A1A4A8"), darkMode: Color(hex: "686A6E"))
-
-        // Icon Colors
-        static let primaryIcon = Color(lightMode: Color(hex: "111112"), darkMode: Color(hex: "F3F4F5"))
-        static let secondaryIcon = Color(lightMode: Color(hex: "686A6E"), darkMode: Color(hex: "A1A4A8"))
-        static let tertiaryIcon = Color(lightMode: Color(hex: "A1A4A8"), darkMode: Color(hex: "686A6E"))
-
-        // Brand Colors
-        static let primaryBrand = Color.black // Black primary
-        static let secondaryBrand = Color(hex: "EE7733") // Warm orange
-        static let accentGreen = Color(hex: "25B159") // Success green
-        static let error = Color(lightMode: Color(hex: "D31130"), darkMode: Color(hex: "FF5668"))
-
-        // Additional Brown Colors
-        static let squirrelAccent = Color(red: 0.800, green: 0.600, blue: 0.400) // Warm beige
-        static let squirrelWarmGray = Color(red: 0.733, green: 0.700, blue: 0.667) // Warm gray
-
-        // Background Colors
-        static let primaryBackground = Color.white
-        static let groupedBackground = Color(hex: "F9F9F8")
-        static let squirrelBackground = Color(hex: "FFFBF5") // Warm white
-        static let squirrelWarmBackground = Color(hex: "FFFBF5") // Warm white
-        static let squirrelSurfaceBackground = Color(hex: "F2EBDB") // Warm gray surface
-        static let squirrelWarmGrayBackground = Color(hex: "F2EBDB") // Warm gray
-
-        // Message Bubble Colors
-        static let userMessageBackground = Color(hex: "007AFF") // iOS blue
-        static let assistantMessageBackground = Color(hex: "E5E5EA") // iOS gray
-
-        // UI Element Colors
-        static let squirrelDivider = Color.secondary.opacity(0.3)
-        static let squirrelShadow = Color.black.opacity(0.08)
-
-        // Legacy support aliases
-        static let squirrelPrimary = primaryBrand
-        static let squirrelSecondary = secondaryBrand
-        static let squirrelTextPrimary = primaryText
-        static let squirrelTextSecondary = secondaryText
     }
 
     // MARK: - Typography
@@ -266,50 +218,6 @@ extension Color {
             opacity: Double(a) / 255
         )
     }
-}
-
-// MARK: - Font Extensions
-extension Font {
-    // Headings - Using Optimistic AI VF
-    static let squirrelLargeTitle = Font.optimistic(size: 34, weight: .bold)
-    static let squirrelTitle = Font.optimistic(size: 28, weight: .bold)
-    static let squirrelTitle2 = Font.optimistic(size: 22, weight: .semibold)
-    static let squirrelTitle3 = Font.optimistic(size: 20, weight: .semibold)
-
-    // Body text - Using Optimistic AI VF
-    static let squirrelHeadline = Font.optimistic(size: 17, weight: .semibold)
-    static let squirrelBody = Font.optimistic(size: 17, weight: .regular)
-    static let squirrelCallout = Font.optimistic(size: 16, weight: .regular)
-    static let squirrelSubheadline = Font.optimistic(size: 15, weight: .regular)
-    // Medium-leaning subheadline without the overly bold medium weight
-    static let squirrelSubheadlineMedium = Font.optimistic(size: 15, weight: .regular)
-    static let squirrelFootnote = Font.optimistic(size: 13, weight: .regular)
-    static let squirrelCaption = Font.optimistic(size: 12, weight: .regular)
-
-    // Chat specific - Using Optimistic AI VF
-    static let squirrelChatMessage = Font.optimisticChatMessage
-    static let squirrelChatTimestamp = Font.optimisticChatTimestamp
-    static let squirrelChatInput = Font.optimistic(size: 17, weight: .regular)
-
-    // Buttons - Using Optimistic AI VF
-    static let squirrelButtonPrimary = Font.optimistic(size: 16, weight: .semibold)
-    static let squirrelButtonSecondary = Font.optimistic(size: 14, weight: .medium)
-    
-    // Fallback system fonts (if Optimistic is not available)
-    static let squirrelLargeTitleFallback = Font.system(size: 34, weight: .bold, design: .rounded)
-    static let squirrelTitleFallback = Font.system(size: 28, weight: .bold, design: .rounded)
-    static let squirrelTitle2Fallback = Font.system(size: 22, weight: .semibold, design: .rounded)
-    static let squirrelTitle3Fallback = Font.system(size: 20, weight: .semibold, design: .rounded)
-    static let squirrelHeadlineFallback = Font.system(size: 17, weight: .semibold, design: .default)
-    static let squirrelBodyFallback = Font.system(size: 17, weight: .regular, design: .default)
-    static let squirrelCalloutFallback = Font.system(size: 16, weight: .regular, design: .default)
-    static let squirrelSubheadlineFallback = Font.system(size: 15, weight: .regular, design: .default)
-    static let squirrelFootnoteFallback = Font.system(size: 13, weight: .regular, design: .default)
-    static let squirrelChatMessageFallback = Font.system(size: 16, weight: .regular, design: .default)
-    static let squirrelChatTimestampFallback = Font.system(size: 11, weight: .regular, design: .default)
-    static let squirrelChatInputFallback = Font.system(size: 17, weight: .regular, design: .default)
-    static let squirrelButtonPrimaryFallback = Font.system(size: 16, weight: .semibold, design: .rounded)
-    static let squirrelButtonSecondaryFallback = Font.system(size: 14, weight: .medium, design: .rounded)
 }
 
 /// Standard top-of-screen text header for primary tab screens.

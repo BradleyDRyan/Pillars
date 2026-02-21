@@ -16,6 +16,15 @@ enum BlockInputKind {
     case custom
 }
 
+enum BlockTypeFieldKind {
+    case text
+    case multiline
+    case number
+    case slider
+    case toggle
+    case rating
+}
+
 struct BlockTypeFieldSchema: Codable, Identifiable {
     let id: String
     let label: String
@@ -24,6 +33,23 @@ struct BlockTypeFieldSchema: Codable, Identifiable {
     let max: Double?
     let options: [String]?
     let required: Bool?
+
+    var fieldKind: BlockTypeFieldKind {
+        switch type.lowercased() {
+        case "multiline", "textarea", "array", "object", "json":
+            return .multiline
+        case "number", "numeric":
+            return .number
+        case "slider":
+            return .slider
+        case "toggle", "boolean", "bool":
+            return .toggle
+        case "rating":
+            return .rating
+        default:
+            return .text
+        }
+    }
 }
 
 struct BlockTypeDataSchema: Codable {
@@ -57,9 +83,11 @@ struct BlockType: Identifiable, Codable {
         case "workout":
             return "Capture workout type, duration, and notes."
         case "reflection":
-            return "Journal a free-text reflection."
+            return "Capture a quick reflection note."
         case "todo":
             return "Task primitive projected into your day."
+        case "habit-stack":
+            return "Group habits in a compact stack."
         case "habits":
             return "Habit primitive projected into your day."
         default:
@@ -77,6 +105,8 @@ struct BlockType: Identifiable, Codable {
             return .textFields
         case "reflection":
             return .freeText
+        case "habit-stack":
+            return .custom
         case "todo", "habits":
             return .checklist
         default:
@@ -133,7 +163,7 @@ struct BlockType: Identifiable, Codable {
         id = try container.decode(String.self, forKey: .id)
         userId = try container.decodeIfPresent(String.self, forKey: .userId)
         name = try container.decode(String.self, forKey: .name)
-        icon = try container.decodeIfPresent(String.self, forKey: .icon) ?? "🧩"
+        icon = try container.decodeIfPresent(String.self, forKey: .icon) ?? BlockIcon.fallback
         color = try container.decodeIfPresent(String.self, forKey: .color) ?? "#64748b"
         category = try container.decodeIfPresent(String.self, forKey: .category) ?? "custom"
 
@@ -170,7 +200,7 @@ extension BlockType {
         BlockType(
             id: "sleep",
             name: "Sleep",
-            icon: "🛏️",
+            icon: ".sleep",
             color: "#6366f1",
             category: "built-in",
             defaultSection: .morning,
@@ -185,7 +215,7 @@ extension BlockType {
         BlockType(
             id: "feeling",
             name: "Feeling",
-            icon: "😊",
+            icon: ".feeling",
             color: "#0ea5e9",
             category: "built-in",
             defaultSection: .morning,
@@ -200,7 +230,7 @@ extension BlockType {
         BlockType(
             id: "workout",
             name: "Workout",
-            icon: "🏋️",
+            icon: ".workout",
             color: "#f97316",
             category: "built-in",
             defaultSection: .afternoon,
@@ -211,7 +241,7 @@ extension BlockType {
         BlockType(
             id: "reflection",
             name: "Reflection",
-            icon: "🌙",
+            icon: ".reflection",
             color: "#334155",
             category: "built-in",
             defaultSection: .evening,
@@ -222,7 +252,7 @@ extension BlockType {
         BlockType(
             id: "habits",
             name: "Habit",
-            icon: "✅",
+            icon: ".habits",
             color: "#22c55e",
             category: "built-in",
             defaultSection: .morning,
@@ -231,9 +261,20 @@ extension BlockType {
             isDeletable: false
         ),
         BlockType(
+            id: "habit-stack",
+            name: "Habit Stack",
+            icon: "square.stack.3d.up",
+            color: "#22c55e",
+            category: "built-in",
+            defaultSection: .morning,
+            subtitleTemplate: "{completedCount}/{habitCount}",
+            dataSchema: BlockTypeDataSchema(fields: []),
+            isDeletable: false
+        ),
+        BlockType(
             id: "todo",
             name: "Todo",
-            icon: "☑️",
+            icon: ".todo",
             color: "#0f766e",
             category: "built-in",
             defaultSection: .afternoon,

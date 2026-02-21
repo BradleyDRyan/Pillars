@@ -11,7 +11,12 @@ const SECTION_ENUM = Object.freeze(['morning', 'afternoon', 'evening']);
 const BLOCK_SOURCE_ENUM = Object.freeze(['template', 'user', 'clawdbot', 'auto-sync']);
 const DAY_BATCH_MODE_ENUM = Object.freeze(['replace', 'append', 'merge']);
 const TODO_STATUS_ENUM = Object.freeze(['active', 'completed']);
+const HABIT_STATUS_ENUM = Object.freeze(['active', 'inactive']);
+const ARCHIVE_VISIBILITY_ENUM = Object.freeze(['exclude', 'include', 'only']);
+const WEEKDAY_ENUM = Object.freeze(['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday']);
 const HABIT_TARGET_TYPE_ENUM = Object.freeze(['binary', 'count', 'duration']);
+const POINT_EVENT_SOURCE_ENUM = Object.freeze(['user', 'clawdbot', 'system']);
+const POINT_EVENT_REF_TYPE_ENUM = Object.freeze(['todo', 'habit', 'block', 'freeform']);
 const PLAN_ENDPOINT = '/api/plan/by-date/:date';
 const LEGACY_DAY_BATCH_SUNSET = '2026-03-31';
 
@@ -206,7 +211,26 @@ function buildTodoSchema() {
         order: { type: 'integer' },
         schedule: todoScheduleSchema,
         labels: { type: 'array', items: { type: 'string' } },
-        pillarId: { type: 'string', nullable: true }
+        pillarId: { type: 'string', nullable: true },
+        bountyPoints: { type: 'integer', min: 1, max: 150, nullable: true },
+        bountyPillarId: { type: 'string', nullable: true },
+        bountyReason: { type: 'string', maxLength: 500, nullable: true },
+        bountyAllocations: {
+          type: 'array',
+          nullable: true,
+          minItems: 1,
+          maxItems: 3,
+          items: {
+            type: 'object',
+            required: ['pillarId', 'points'],
+            additionalProperties: false,
+            properties: {
+              pillarId: { type: 'string' },
+              points: { type: 'integer', min: 1, max: 100 }
+            }
+          },
+          description: 'Optional bounty split; total points must be <=150'
+        }
       }
     },
     update: {
@@ -224,7 +248,26 @@ function buildTodoSchema() {
         order: { type: 'integer' },
         schedule: todoScheduleSchema,
         labels: { type: 'array', items: { type: 'string' } },
-        pillarId: { type: 'string', nullable: true }
+        pillarId: { type: 'string', nullable: true },
+        bountyPoints: { type: 'integer', min: 1, max: 150, nullable: true },
+        bountyPillarId: { type: 'string', nullable: true },
+        bountyReason: { type: 'string', maxLength: 500, nullable: true },
+        bountyAllocations: {
+          type: 'array',
+          nullable: true,
+          minItems: 1,
+          maxItems: 3,
+          items: {
+            type: 'object',
+            required: ['pillarId', 'points'],
+            additionalProperties: false,
+            properties: {
+              pillarId: { type: 'string' },
+              points: { type: 'integer', min: 1, max: 100 }
+            }
+          },
+          description: 'Optional bounty split; total points must be <=150'
+        }
       }
     },
     createResponse: todoMutationResponse,
@@ -233,7 +276,103 @@ function buildTodoSchema() {
 }
 
 function buildHabitSchema() {
+  const habitScheduleSchema = {
+    type: 'object',
+    additionalProperties: false,
+    properties: {
+      type: { type: 'string', enum: ['daily', 'weekly'] },
+      daysOfWeek: {
+        type: 'array',
+        items: { type: 'string', enum: WEEKDAY_ENUM }
+      }
+    }
+  };
+
+  const habitTargetSchema = {
+    type: 'object',
+    additionalProperties: false,
+    properties: {
+      type: { type: 'string', enum: HABIT_TARGET_TYPE_ENUM },
+      value: { type: 'number', min: 0 },
+      unit: { type: 'string', nullable: true }
+    }
+  };
+
+  const habitMutationResponse = {
+    type: 'object',
+    required: ['habit'],
+    additionalProperties: true,
+    properties: {
+      habit: {
+        type: 'object',
+        additionalProperties: true
+      }
+    }
+  };
+
+  const habitListQuery = {
+    type: 'object',
+    required: [],
+    additionalProperties: false,
+    properties: {
+      status: {
+        type: 'string',
+        enum: [...HABIT_STATUS_ENUM, 'all'],
+        default: 'active',
+        description: 'Habit status filter. Defaults to active.'
+      },
+      active: {
+        type: 'boolean',
+        description: 'Legacy alias for status (true => active, false => inactive).'
+      },
+      archived: {
+        type: 'string',
+        enum: ARCHIVE_VISIBILITY_ENUM,
+        default: 'exclude',
+        description: 'Archived visibility filter.'
+      },
+      includeArchived: {
+        type: 'boolean',
+        description: 'Legacy alias for archived (true => include, false => exclude).'
+      },
+      sectionId: {
+        type: 'string',
+        enum: SECTION_ENUM
+      },
+      dayOfWeek: {
+        type: 'string',
+        enum: WEEKDAY_ENUM,
+        description: 'Filter scheduled habits for a specific weekday.'
+      },
+      pillarId: {
+        type: 'string',
+        description: 'Use "none" to filter habits with no pillar assignment.'
+      },
+      groupId: {
+        type: 'string',
+        description: 'Use "none" to filter habits with no group assignment.'
+      },
+      q: {
+        type: 'string',
+        description: 'Case-insensitive search across habit name, description, and target unit.'
+      },
+      search: {
+        type: 'string',
+        description: 'Legacy alias for q.'
+      }
+    }
+  };
+
+  const habitReadQuery = {
+    type: 'object',
+    required: [],
+    additionalProperties: false,
+    properties: {}
+  };
+
   return {
+    listQuery: habitListQuery,
+    readQuery: habitReadQuery,
     create: {
       type: 'object',
       required: ['name'],
@@ -242,25 +381,30 @@ function buildHabitSchema() {
         name: { type: 'string', minLength: 1, maxLength: 200 },
         description: { type: 'string', maxLength: 2000, nullable: true },
         sectionId: { type: 'string', enum: SECTION_ENUM },
-        schedule: {
-          type: 'object',
-          additionalProperties: false,
-          properties: {
-            type: { type: 'string', enum: ['daily', 'weekly'] },
-            daysOfWeek: { type: 'array', items: { type: 'string', enum: ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'] } }
-          }
-        },
-        target: {
-          type: 'object',
-          additionalProperties: false,
-          properties: {
-            type: { type: 'string', enum: HABIT_TARGET_TYPE_ENUM },
-            value: { type: 'number', min: 0 },
-            unit: { type: 'string', nullable: true }
-          }
-        },
+        schedule: habitScheduleSchema,
+        target: habitTargetSchema,
         isActive: { type: 'boolean' },
-        pillarId: { type: 'string', nullable: true }
+        pillarId: { type: 'string', nullable: true },
+        groupId: { type: 'string', nullable: true },
+        bountyPoints: { type: 'integer', min: 1, max: 100, nullable: true },
+        bountyPillarId: { type: 'string', nullable: true },
+        bountyReason: { type: 'string', maxLength: 500, nullable: true },
+        bountyAllocations: {
+          type: 'array',
+          nullable: true,
+          minItems: 1,
+          maxItems: 3,
+          items: {
+            type: 'object',
+            required: ['pillarId', 'points'],
+            additionalProperties: false,
+            properties: {
+              pillarId: { type: 'string' },
+              points: { type: 'integer', min: 1, max: 100 }
+            }
+          },
+          description: 'Optional bounty split; total points must be <=150'
+        }
       }
     },
     update: {
@@ -271,25 +415,30 @@ function buildHabitSchema() {
         name: { type: 'string', minLength: 1, maxLength: 200 },
         description: { type: 'string', maxLength: 2000, nullable: true },
         sectionId: { type: 'string', enum: SECTION_ENUM },
-        schedule: {
-          type: 'object',
-          additionalProperties: false,
-          properties: {
-            type: { type: 'string', enum: ['daily', 'weekly'] },
-            daysOfWeek: { type: 'array', items: { type: 'string', enum: ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'] } }
-          }
-        },
-        target: {
-          type: 'object',
-          additionalProperties: false,
-          properties: {
-            type: { type: 'string', enum: HABIT_TARGET_TYPE_ENUM },
-            value: { type: 'number', min: 0 },
-            unit: { type: 'string', nullable: true }
-          }
-        },
+        schedule: habitScheduleSchema,
+        target: habitTargetSchema,
         isActive: { type: 'boolean' },
-        pillarId: { type: 'string', nullable: true }
+        pillarId: { type: 'string', nullable: true },
+        groupId: { type: 'string', nullable: true },
+        bountyPoints: { type: 'integer', min: 1, max: 100, nullable: true },
+        bountyPillarId: { type: 'string', nullable: true },
+        bountyReason: { type: 'string', maxLength: 500, nullable: true },
+        bountyAllocations: {
+          type: 'array',
+          nullable: true,
+          minItems: 1,
+          maxItems: 3,
+          items: {
+            type: 'object',
+            required: ['pillarId', 'points'],
+            additionalProperties: false,
+            properties: {
+              pillarId: { type: 'string' },
+              points: { type: 'integer', min: 1, max: 100 }
+            }
+          },
+          description: 'Optional bounty split; total points must be <=150'
+        }
       }
     },
     log: {
@@ -298,10 +447,16 @@ function buildHabitSchema() {
       additionalProperties: false,
       properties: {
         completed: { type: 'boolean' },
+        status: {
+          type: 'string',
+          enum: ['completed', 'skipped', 'pending']
+        },
         value: { type: 'number', min: 0, nullable: true },
         notes: { type: 'string', maxLength: 2000, nullable: true }
       }
-    }
+    },
+    createResponse: habitMutationResponse,
+    updateResponse: habitMutationResponse
   };
 }
 
@@ -527,6 +682,75 @@ function buildPlanSchema() {
   };
 }
 
+function buildPointEventSchema() {
+  const allocation = {
+    type: 'object',
+    required: ['pillarId', 'points'],
+    additionalProperties: false,
+    properties: {
+      pillarId: { type: 'string' },
+      points: { type: 'integer', min: 1, max: 100 }
+    }
+  };
+
+  const ref = {
+    type: 'object',
+    nullable: true,
+    required: ['type', 'id'],
+    additionalProperties: false,
+    properties: {
+      type: { type: 'string', enum: POINT_EVENT_REF_TYPE_ENUM },
+      id: { type: 'string', minLength: 1 }
+    }
+  };
+
+  return {
+    endpoint: '/api/point-events',
+    allocation,
+    create: {
+      type: 'object',
+      required: ['date', 'reason', 'allocations'],
+      additionalProperties: false,
+      properties: {
+        id: { type: 'string', minLength: 1 },
+        date: { type: 'string', format: 'date' },
+        reason: { type: 'string', minLength: 1, maxLength: 300 },
+        source: { type: 'string', enum: POINT_EVENT_SOURCE_ENUM, default: 'user' },
+        ref,
+        allocations: {
+          type: 'array',
+          minItems: 1,
+          maxItems: 3,
+          items: allocation,
+          description: 'Sum of allocation points must be <= 150'
+        }
+      }
+    },
+    listQuery: {
+      type: 'object',
+      required: [],
+      additionalProperties: false,
+      properties: {
+        fromDate: { type: 'string', format: 'date', nullable: true },
+        toDate: { type: 'string', format: 'date', nullable: true },
+        pillarId: { type: 'string', nullable: true },
+        refType: { type: 'string', enum: POINT_EVENT_REF_TYPE_ENUM, nullable: true },
+        refId: { type: 'string', nullable: true },
+        source: { type: 'string', enum: POINT_EVENT_SOURCE_ENUM, nullable: true }
+      }
+    },
+    rollupQuery: {
+      type: 'object',
+      required: [],
+      additionalProperties: false,
+      properties: {
+        fromDate: { type: 'string', format: 'date', nullable: true },
+        toDate: { type: 'string', format: 'date', nullable: true }
+      }
+    }
+  };
+}
+
 router.get('/', async (req, res) => {
   try {
     const userId = req.user.uid;
@@ -542,6 +766,7 @@ router.get('/', async (req, res) => {
       habitSchema: buildHabitSchema(),
       daySchema: buildDaySchema(),
       planSchema: buildPlanSchema(),
+      pointEventSchema: buildPointEventSchema(),
       eventTypes: [...VALID_EVENT_TYPES].sort()
     };
 

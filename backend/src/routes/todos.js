@@ -12,9 +12,106 @@ const VALID_STATUS = new Set(['active', 'completed']);
 const VALID_ARCHIVE_VISIBILITY = new Set(['exclude', 'include', 'only']);
 const MAX_CONTENT_LENGTH = 500;
 const MAX_DESCRIPTION_LENGTH = 2000;
+const TODO_BOUNTY_MAX_ALLOCATIONS = 3;
+const TODO_BOUNTY_MIN_POINTS = 1;
+const TODO_BOUNTY_MAX_POINTS = 100;
+const TODO_BOUNTY_TOTAL_MAX = 150;
 
 function nowTs() {
   return Date.now() / 1000;
+}
+
+async function normalizeBountyForTodoCreate({ userId, body, defaultPillarId }) {
+  if (!body) {
+    return { allocations: null };
+  }
+
+  if (Array.isArray(body.bountyAllocations)) {
+    if (body.bountyAllocations.length < 1) {
+      return { error: 'bountyAllocations must include at least one entry' };
+    }
+    if (body.bountyAllocations.length > TODO_BOUNTY_MAX_ALLOCATIONS) {
+      return { error: `bountyAllocations must include at most ${TODO_BOUNTY_MAX_ALLOCATIONS} entries` };
+    }
+
+    const dedup = new Set();
+    let total = 0;
+    const normalized = [];
+    for (const allocation of body.bountyAllocations) {
+      if (!allocation || typeof allocation !== 'object') {
+        return { error: 'each bounty allocation must be an object' };
+      }
+      const rawPillarId = typeof allocation.pillarId === 'string' ? allocation.pillarId.trim() : '';
+      if (!rawPillarId) {
+        return { error: 'bounty allocation pillarId is required' };
+      }
+      const points = Number(allocation.points);
+      if (!Number.isInteger(points) || points < TODO_BOUNTY_MIN_POINTS || points > TODO_BOUNTY_MAX_POINTS) {
+        return { error: `bounty allocation points must be an integer between ${TODO_BOUNTY_MIN_POINTS} and ${TODO_BOUNTY_MAX_POINTS}` };
+      }
+      const pillarId = await resolveValidatedPillarId({ db, userId, pillarId: rawPillarId });
+      if (dedup.has(pillarId)) {
+        return { error: 'bountyAllocations must use unique pillarId values' };
+      }
+      dedup.add(pillarId);
+      total += points;
+      if (total > TODO_BOUNTY_TOTAL_MAX) {
+        return { error: `bounty total points cannot exceed ${TODO_BOUNTY_TOTAL_MAX}` };
+      }
+      normalized.push({ pillarId, points });
+    }
+    return { allocations: normalized, pillarIds: [...dedup], totalPoints: total };
+  }
+
+  const bountyPoints = Number(body.bountyPoints);
+  if (Number.isInteger(bountyPoints)) {
+    if (bountyPoints < TODO_BOUNTY_MIN_POINTS || bountyPoints > TODO_BOUNTY_MAX_POINTS) {
+      return { error: `bountyPoints must be between ${TODO_BOUNTY_MIN_POINTS} and ${TODO_BOUNTY_MAX_POINTS}` };
+    }
+    const pillarId = defaultPillarId;
+    if (!pillarId) {
+      return { error: 'pillarId is required to set bountyPoints' };
+    }
+    return {
+      allocations: [{ pillarId, points: bountyPoints }],
+      pillarIds: [pillarId],
+      totalPoints: bountyPoints
+    };
+  }
+
+  return { allocations: null };
+}
+
+async function normalizeBountyForTodoUpdate({ userId, body, defaultPillarId }) {
+  if (!body) {
+    return { allocations: null, provided: false, pillarIds: null, totalPoints: null };
+  }
+
+  if (hasOwn(body, 'bountyAllocations')) {
+    if (body.bountyAllocations === null) {
+      return { allocations: [], pillarIds: [], totalPoints: 0, provided: true, clear: true };
+    }
+    const result = await normalizeBountyForTodoCreate({
+      userId,
+      body: { bountyAllocations: body.bountyAllocations },
+      defaultPillarId
+    });
+    return { ...result, provided: true };
+  }
+
+  if (hasOwn(body, 'bountyPoints')) {
+    if (body.bountyPoints === null) {
+      return { allocations: [], pillarIds: [], totalPoints: 0, provided: true, clear: true };
+    }
+    const result = await normalizeBountyForTodoCreate({
+      userId,
+      body: { bountyPoints: body.bountyPoints },
+      defaultPillarId
+    });
+    return { ...result, provided: true };
+  }
+
+  return { allocations: null, provided: false, pillarIds: null, totalPoints: null };
 }
 
 function isMissingIndexError(error) {
@@ -61,6 +158,10 @@ function normalizeString(raw, maxLength) {
 
 function isTodoArchived(todo) {
   return todo?.archivedAt !== null && todo?.archivedAt !== undefined;
+}
+
+function hasOwn(obj, key) {
+  return Object.prototype.hasOwnProperty.call(obj || {}, key);
 }
 
 function hasTodoDueDate(todo) {
@@ -196,6 +297,46 @@ function normalizeTodoPayload(body, options = {}) {
     }
   } else if (!partial) {
     normalized.description = '';
+  }
+
+  if (hasOwn(body, 'bountyReason')) {
+    if (body.bountyReason === null) {
+      normalized.bountyReason = null;
+    } else if (typeof body.bountyReason !== 'string') {
+      return { error: 'bountyReason must be a string or null' };
+    } else {
+      const trimmed = body.bountyReason.trim();
+      normalized.bountyReason = trimmed || null;
+    }
+  } else if (!partial) {
+    normalized.bountyReason = null;
+  }
+
+  if (hasOwn(body, 'bountyPoints')) {
+    if (body.bountyPoints === null) {
+      normalized.bountyPoints = null;
+    } else {
+      const points = Number(body.bountyPoints);
+      if (!Number.isInteger(points) || points < TODO_BOUNTY_MIN_POINTS || points > TODO_BOUNTY_MAX_POINTS) {
+        return { error: `bountyPoints must be an integer between ${TODO_BOUNTY_MIN_POINTS} and ${TODO_BOUNTY_MAX_POINTS}` };
+      }
+      normalized.bountyPoints = points;
+    }
+  } else if (!partial) {
+    normalized.bountyPoints = null;
+  }
+
+  if (hasOwn(body, 'bountyPillarId')) {
+    if (body.bountyPillarId === null) {
+      normalized.bountyPillarId = null;
+    } else if (typeof body.bountyPillarId !== 'string') {
+      return { error: 'bountyPillarId must be a string or null' };
+    } else {
+      const trimmed = body.bountyPillarId.trim();
+      normalized.bountyPillarId = trimmed || null;
+    }
+  } else if (!partial) {
+    normalized.bountyPillarId = null;
   }
 
   const hasDueDate = Object.prototype.hasOwnProperty.call(body || {}, 'dueDate');
@@ -781,6 +922,31 @@ router.post('/', async (req, res) => {
       throw error;
     }
 
+    let validatedBountyPillarId = null;
+    if (normalized.data.bountyPillarId) {
+      try {
+        validatedBountyPillarId = await resolveValidatedPillarId({
+          db,
+          userId,
+          pillarId: normalized.data.bountyPillarId
+        });
+      } catch (error) {
+        if (isInvalidPillarIdError(error)) {
+          return res.status(400).json({ error: 'Invalid bountyPillarId' });
+        }
+        throw error;
+      }
+    }
+
+    const bountyResult = await normalizeBountyForTodoCreate({
+      userId,
+      body: req.body || {},
+      defaultPillarId: validatedBountyPillarId ?? validatedPillarId ?? null
+    });
+    if (bountyResult.error) {
+      return res.status(400).json({ error: bountyResult.error });
+    }
+
     const now = nowTs();
     const payload = {
       id: todoRef.id,
@@ -798,7 +964,12 @@ router.post('/', async (req, res) => {
       createdAt: now,
       updatedAt: now,
       completedAt: normalized.data.status === 'completed' ? now : null,
-      archivedAt: null
+      archivedAt: null,
+      bountyPoints: bountyResult.allocations && bountyResult.allocations.length === 1 ? bountyResult.allocations[0].points : (normalized.data.bountyPoints ?? null),
+      bountyAllocations: bountyResult.allocations || null,
+      bountyPillarId: validatedBountyPillarId,
+      bountyReason: normalized.data.bountyReason ?? null,
+      bountyPaidAt: null
     };
 
     const batch = db.batch();
@@ -964,7 +1135,7 @@ router.post('/:id/subtasks', async (req, res) => {
   }
 });
 
-router.post('/:id/close', async (req, res) => {
+async function closeTodoHandler(req, res) {
   try {
     const userId = req.user.uid;
     const cascade = toBoolean(req.query.cascade, true);
@@ -995,13 +1166,14 @@ router.post('/:id/close', async (req, res) => {
 
     await batch.commit();
     const updated = await getTodoById(req.params.id);
+    const source = resolveEventSource({
+      explicitSource: req.body?.source,
+      authSource: req.user?.source
+    });
     await writeUserEventSafe({
       userId,
       type: 'todo.closed',
-      source: resolveEventSource({
-        explicitSource: req.body?.source,
-        authSource: req.user?.source
-      }),
+      source,
       timestamp: now,
       todoId: updated?.id || req.params.id,
       title: updated?.content || null,
@@ -1012,9 +1184,9 @@ router.post('/:id/close', async (req, res) => {
     console.error('[todos] POST /:id/close error:', error);
     return res.status(500).json({ error: error.message });
   }
-});
+}
 
-router.post('/:id/reopen', async (req, res) => {
+async function reopenTodoHandler(req, res) {
   try {
     const userId = req.user.uid;
     const cascade = toBoolean(req.query.cascade, true);
@@ -1062,7 +1234,12 @@ router.post('/:id/reopen', async (req, res) => {
     console.error('[todos] POST /:id/reopen error:', error);
     return res.status(500).json({ error: error.message });
   }
-});
+}
+
+router.post('/:id/close', closeTodoHandler);
+router.post('/:id/complete', closeTodoHandler);
+router.post('/:id/reopen', reopenTodoHandler);
+router.post('/:id/incomplete', reopenTodoHandler);
 
 router.post('/:id/archive', async (req, res) => {
   try {
@@ -1227,6 +1404,48 @@ const updateTodoHandler = async (req, res) => {
       }
     }
 
+    if (Object.prototype.hasOwnProperty.call(normalized.data, 'bountyPillarId')) {
+      if (normalized.data.bountyPillarId === null) {
+        payload.bountyPillarId = null;
+      } else {
+        try {
+          payload.bountyPillarId = await resolveValidatedPillarId({
+            db,
+            userId,
+            pillarId: normalized.data.bountyPillarId
+          });
+        } catch (error) {
+          if (isInvalidPillarIdError(error)) {
+            return res.status(400).json({ error: 'Invalid bountyPillarId' });
+          }
+          throw error;
+        }
+      }
+    }
+
+    if (Object.prototype.hasOwnProperty.call(normalized.data, 'bountyReason')) {
+      payload.bountyReason = normalized.data.bountyReason;
+    }
+
+    const bountyUpdate = await normalizeBountyForTodoUpdate({
+      userId,
+      body: req.body || {},
+      defaultPillarId: payload.pillarId ?? existing.pillarId ?? null
+    });
+    if (bountyUpdate.error) {
+      return res.status(400).json({ error: bountyUpdate.error });
+    }
+    if (bountyUpdate.provided) {
+      if (bountyUpdate.clear) {
+        payload.bountyAllocations = null;
+        payload.bountyPoints = null;
+      } else if (bountyUpdate.allocations) {
+        payload.bountyAllocations = bountyUpdate.allocations;
+        payload.bountyPoints = bountyUpdate.allocations.length === 1 ? bountyUpdate.allocations[0].points : null;
+      }
+      payload.bountyPaidAt = null;
+    }
+
     if (Object.prototype.hasOwnProperty.call(normalized.data, 'status')) {
       payload.completedAt = mergedStatus === 'completed' ? (existing.completedAt || now) : null;
     }
@@ -1236,20 +1455,21 @@ const updateTodoHandler = async (req, res) => {
     const updated = await getTodoById(req.params.id);
     const statusChanged = Object.prototype.hasOwnProperty.call(normalized.data, 'status')
       && normalized.data.status !== existing.status;
-    let eventType = 'todo.updated';
-    if (statusChanged && normalized.data.status === 'completed') {
-      eventType = 'todo.closed';
-    } else if (statusChanged && normalized.data.status === 'active') {
-      eventType = 'todo.reopened';
+    if (statusChanged) {
+      return res.status(400).json({ error: 'Use POST /api/todos/:id/close or /reopen to change status.' });
     }
+
+    let eventType = 'todo.updated';
+
+    const source = resolveEventSource({
+      explicitSource: req.body?.source,
+      authSource: req.user?.source
+    });
 
     await writeUserEventSafe({
       userId,
       type: eventType,
-      source: resolveEventSource({
-        explicitSource: req.body?.source,
-        authSource: req.user?.source
-      }),
+      source,
       timestamp: now,
       todoId: updated?.id || req.params.id,
       title: updated?.content || existing.content || null,

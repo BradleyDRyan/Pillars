@@ -31,7 +31,7 @@ struct ListItem<LeadingAccessory: View, Subtitle: View, TrailingAccessory: View>
             
             VStack(alignment: .leading, spacing: 4) {
                 Text(title)
-                    .font(.squirrelBody)
+                    .font(S2.TextStyle.body)
                     .foregroundColor(S2.Colors.primaryText)
                     .lineLimit(1)
                 
@@ -77,7 +77,7 @@ extension ListItem where TrailingAccessory == EmptyView {
             title: "Example File.pdf",
             subtitle: {
                 Text("2.5 MB")
-                    .font(.squirrelCaption)
+                    .font(S2.TextStyle.caption)
                     .foregroundColor(S2.Colors.secondaryText)
                     .lineLimit(1)
             }
@@ -102,12 +102,12 @@ extension ListItem where TrailingAccessory == EmptyView {
             subtitle: {
                 HStack(spacing: 6) {
                     Text("1.2 MB")
-                        .font(.squirrelCaption)
+                        .font(S2.TextStyle.caption)
                         .foregroundColor(S2.Colors.secondaryText)
                     Text("·")
                         .foregroundColor(S2.Colors.tertiaryText)
                     Text("Text extracted")
-                        .font(.squirrelCaption)
+                        .font(S2.TextStyle.caption)
                         .foregroundColor(S2.Colors.secondaryText)
                 }
             }
@@ -117,4 +117,3 @@ extension ListItem where TrailingAccessory == EmptyView {
     }
     .padding()
 }
-

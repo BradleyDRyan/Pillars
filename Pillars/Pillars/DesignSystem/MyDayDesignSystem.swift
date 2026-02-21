@@ -6,6 +6,7 @@
 //
 
 import SwiftUI
+import UIKit
 
 extension S2 {
     enum MyDay {
@@ -28,7 +29,9 @@ extension S2 {
             static var iconTitleGap: CGFloat { i(12) }
             static var blockStack: CGFloat { i(2) }
             static var blockHeader: CGFloat { i(8) }
+            static var dayCardGap: CGFloat { i(16) }
             static var blockBody: CGFloat { i(12) }
+            static var coreBlockPadding: CGFloat { i(16) }
             static var contentStack: CGFloat { i(14) }
             static var fieldStack: CGFloat { i(6) }
             static var compact: CGFloat { i(2) }
@@ -45,7 +48,8 @@ extension S2 {
 
         enum CornerRadius {
             static let section = S2.CornerRadius.lg
-            static let block: CGFloat = 14
+            static let card = S2.CornerRadius.md
+            static let block: CGFloat = 18
             static let icon = S2.CornerRadius.sm
             static let input = S2.CornerRadius.sm
             static let row = S2.CornerRadius.sm
@@ -59,6 +63,11 @@ extension S2 {
             static let checklistSize: CGFloat = 22
             static let ratingSize: CGFloat = 22
             static let stepperSize: CGFloat = 28
+            static let doneButtonSize: CGFloat = 40
+            static let doneButtonIconSize: CGFloat = 13
+            static let doneButtonIconSizeRegular: CGFloat = 14
+            static let habitGroupProgressSize: CGFloat = 32
+            static let habitGroupProgressIconSize: CGFloat = 12
         }
 
         enum Typography {
@@ -93,21 +102,21 @@ extension S2 {
 
         enum Colors {
             static let pageBackground = S2.Colors.groupedBackground
-            static let sectionBackground = S2.Colors.elevated
-            static let blockBackground = S2.Colors.secondarySurface
-            static let inputBackground = S2.Colors.tertiarySurface
-            static let titleText = S2.Colors.primaryText
-            static let subtitleText = S2.Colors.secondaryText
-            static let placeholderText = S2.Colors.tertiaryText
+            static let sectionBackground = S2.Colors.surface
+            static let blockBackground = S2.Colors.secondary
+            static let inputBackground = S2.Colors.surface
+            static let titleText = S2.Colors.onSurfacePrimary
+            static let subtitleText = S2.Colors.onSurfaceSecondary
+            static let placeholderText = S2.Colors.onSurfaceTertiary
             static let interactiveTint = Color.accentColor
             static let iconTint = Color.accentColor
             static let rowIconTint = S2.Colors.secondaryBrand
-            static let iconBackground = Color.accentColor.opacity(0.12)
+            static let iconBackground = S2.Colors.secondary.opacity(0.12)
             static let divider = S2.Colors.secondaryText.opacity(0.2)
             static let destructive = S2.Colors.error
             static let ratingFilled = Color(hex: "F8B941")
-            static let ratingEmpty = S2.Colors.secondaryText.opacity(0.45)
-            static let disabledIcon = S2.Colors.secondaryText.opacity(0.45)
+            static let ratingEmpty = S2.Colors.onSurfaceTertiary.opacity(0.45)
+            static let disabledIcon = S2.Colors.onSurfaceTertiary.opacity(0.45)
             static let sectionShadowColor = Color.black.opacity(0.04)
         }
     }
@@ -145,6 +154,140 @@ struct S2MyDayFieldLabel: View {
         Text(text)
             .font(S2.MyDay.Typography.fieldLabel)
             .foregroundColor(S2.MyDay.Colors.subtitleText)
+    }
+}
+
+struct S2MyDayDoneButton: View {
+        enum Size {
+            case compact
+            case regular
+
+            var buttonSize: CGFloat {
+                switch self {
+                case .compact:
+                    return S2.MyDay.Icon.doneButtonSize
+                case .regular:
+                    return S2.MyDay.Icon.doneButtonSize
+                }
+            }
+
+            var iconSize: CGFloat {
+                switch self {
+                case .compact:
+                    return S2.MyDay.Icon.doneButtonIconSize
+                case .regular:
+                    return S2.MyDay.Icon.doneButtonIconSizeRegular
+                }
+            }
+        }
+
+    let isCompleted: Bool
+    let size: Size
+    let completedIconName: String
+    let incompleteIconName: String
+    let action: () -> Void
+
+    init(
+        isCompleted: Bool,
+        size: Size = .compact,
+        completedIconName: String = "checkmark",
+        incompleteIconName: String = "checkmark",
+        action: @escaping () -> Void
+    ) {
+        self.isCompleted = isCompleted
+        self.size = size
+        self.completedIconName = completedIconName
+        self.incompleteIconName = incompleteIconName
+        self.action = action
+    }
+
+    var body: some View {
+        S2MyDayDoneIconButton(
+            isCompleted: isCompleted,
+            size: size,
+            completedIconName: completedIconName,
+            incompleteIconName: incompleteIconName,
+            action: action
+        )
+    }
+}
+
+struct S2MyDayDoneIconButton: View {
+    let isCompleted: Bool
+    let size: S2MyDayDoneButton.Size
+    let completedIconName: String
+    let incompleteIconName: String
+    let action: () -> Void
+    @State private var pressScale: CGFloat = 1.0
+    @GestureState private var isPressing: Bool = false
+
+    init(
+        isCompleted: Bool,
+        size: S2MyDayDoneButton.Size = .compact,
+        completedIconName: String = "checkmark",
+        incompleteIconName: String = "checkmark",
+        action: @escaping () -> Void
+    ) {
+        self.isCompleted = isCompleted
+        self.size = size
+        self.completedIconName = completedIconName
+        self.incompleteIconName = incompleteIconName
+        self.action = action
+    }
+
+    private var iconName: String {
+        isCompleted ? completedIconName : incompleteIconName
+    }
+
+    private var iconButtonScale: CGFloat {
+        min(size.buttonSize / 44, 1.0)
+    }
+
+    private var completedPressScale: CGFloat {
+        let pressInScale: CGFloat = isPressing ? 0.82 : 1.0
+        return pressScale * pressInScale * iconButtonScale
+    }
+
+    var body: some View {
+        ZStack {
+            Circle()
+                .fill(S2.Colors.secondarySurface)
+                .frame(width: S2.MyDay.Icon.doneButtonSize, height: S2.MyDay.Icon.doneButtonSize)
+
+            Image(systemName: iconName)
+                .font(.system(size: size == .compact ? S2.MyDay.Icon.doneButtonIconSize : S2.MyDay.Icon.doneButtonIconSizeRegular, weight: .semibold))
+                .foregroundColor(.primary)
+                .frame(width: S2.MyDay.Icon.doneButtonSize, height: S2.MyDay.Icon.doneButtonSize)
+                .contentShape(Circle())
+                .gesture(
+                    LongPressGesture(minimumDuration: 0, maximumDistance: 12)
+                        .updating($isPressing) { value, state, _ in
+                            state = value
+                        }
+                        .onEnded { _ in
+                            let impact = UIImpactFeedbackGenerator(style: .soft)
+                            impact.prepare()
+                            impact.impactOccurred()
+                            animatePress()
+                            action()
+                        }
+                )
+                .animation(.easeOut(duration: 0.08), value: isPressing)
+        }
+        .scaleEffect(completedPressScale)
+        .frame(width: S2.MyDay.Icon.doneButtonSize, height: S2.MyDay.Icon.doneButtonSize)
+    }
+
+    private func animatePress() {
+        withAnimation(.easeOut(duration: 0.08)) {
+            pressScale = 0.85
+        }
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.08) {
+            withAnimation(.spring(response: 0.42, dampingFraction: 0.98)) {
+                pressScale = 1.0
+            }
+        }
     }
 }
 

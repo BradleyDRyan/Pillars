@@ -2,7 +2,7 @@
 //  DayViewModel.swift
 //  Pillars
 //
-//  Block System v1 view model backed by /api/block-types and /api/days/:date/blocks.
+//  Block System view model backed by Firestore snapshots and direct mutations.
 //
 
 import Foundation
@@ -14,7 +14,7 @@ class DayViewModel: ObservableObject, BackendRequesting {
     @Published var day: Day?
     @Published var isLoading = true
     @Published var errorMessage: String?
-    @Published var customBlockTypes: [CustomBlockType] = []
+    @Published var customBlockTypes: [BlockType] = []
 
     private var mutationTask: Task<Void, Never>?
     private var blockTypes: [BlockType] = BlockType.all
@@ -32,7 +32,7 @@ class DayViewModel: ObservableObject, BackendRequesting {
     private var liveHabits: [HabitPrimitive] = []
     private var liveHabitLogs: [HabitLogPrimitive] = []
 
-    var allBlockTypes: (builtIns: [BlockType], custom: [CustomBlockType]) {
+    var allBlockTypes: (builtIns: [BlockType], custom: [BlockType]) {
         (
             builtIns: blockTypes.filter { $0.category == "built-in" },
             custom: customBlockTypes
@@ -43,7 +43,7 @@ class DayViewModel: ObservableObject, BackendRequesting {
         loadDay(userId: userId, dateStr: Day.todayDateString)
     }
 
-    func loadCustomBlockTypes(userId: String) {
+    func loadBlockTypes(userId: String) {
         startBlockTypeListener(userId: userId)
     }
 
@@ -107,7 +107,6 @@ class DayViewModel: ObservableObject, BackendRequesting {
         mutationTask = Task {
             do {
                 try await patchBlock(block: block, section: section, date: date)
-                try await refreshCurrentDay()
             } catch {
                 self.errorMessage = "Failed to update block: \(friendlyErrorMessage(error))"
             }
@@ -118,12 +117,10 @@ class DayViewModel: ObservableObject, BackendRequesting {
     func setTodoPillar(todoId: String, pillarId: String?) {
         Task {
             do {
-                _ = try await performAPIRequest(
-                    path: "/todos/\(encodedPathComponent(todoId))",
-                    method: "PUT",
-                    body: ["pillarId": normalizedPillarIdentifier(pillarId) ?? NSNull()]
-                )
-                try await refreshCurrentDay()
+                try await Firestore.firestore().collection("todos").document(todoId).setData([
+                    "pillarId": normalizedPillarIdentifier(pillarId) ?? NSNull(),
+                    "updatedAt": Date().timeIntervalSince1970
+                ], merge: true)
             } catch {
                 self.errorMessage = "Failed to retag todo: \(friendlyErrorMessage(error))"
             }
@@ -140,16 +137,29 @@ class DayViewModel: ObservableObject, BackendRequesting {
 
         Task {
             do {
+                guard let userId = activeDayUserId ?? Auth.auth().currentUser?.uid else {
+                    throw BackendError.notAuthenticated
+                }
+                let now = Date().timeIntervalSince1970
+                let todoRef = Firestore.firestore().collection("todos").document()
                 let body: [String: Any] = [
+                    "id": todoRef.documentID,
+                    "userId": userId,
                     "content": trimmed,
+                    "description": "",
                     "dueDate": dueDate ?? NSNull(),
                     "sectionId": section.rawValue,
+                    "order": nextOrderForSection(section),
                     "status": "active",
-                    "pillarId": NSNull()
+                    "pillarId": NSNull(),
+                    "parentId": NSNull(),
+                    "createdAt": now,
+                    "updatedAt": now,
+                    "completedAt": NSNull(),
+                    "archivedAt": NSNull()
                 ]
 
-                _ = try await performAPIRequest(path: "/todos", method: "POST", body: body)
-                try await refreshCurrentDay()
+                try await todoRef.setData(body)
             } catch {
                 self.errorMessage = "Failed to add todo: \(friendlyErrorMessage(error))"
             }
@@ -157,17 +167,12 @@ class DayViewModel: ObservableObject, BackendRequesting {
     }
 
     func setHabitPillar(habitId: String, pillarId: String?) {
-        guard let date = day?.date else { return }
-        let blockId = "proj_habit_\(habitId)"
-
         Task {
             do {
-                _ = try await performAPIRequest(
-                    path: "/days/\(date)/blocks/\(encodedPathComponent(blockId))",
-                    method: "PATCH",
-                    body: ["pillarId": normalizedPillarIdentifier(pillarId) ?? NSNull()]
-                )
-                try await refreshCurrentDay()
+                try await Firestore.firestore().collection("habits").document(habitId).setData([
+                    "pillarId": normalizedPillarIdentifier(pillarId) ?? NSNull(),
+                    "updatedAt": Date().timeIntervalSince1970
+                ], merge: true)
             } catch {
                 self.errorMessage = "Failed to retag habit: \(friendlyErrorMessage(error))"
             }
@@ -179,16 +184,33 @@ class DayViewModel: ObservableObject, BackendRequesting {
         section: DaySection.TimeSection,
         pillarId: String?
     ) {
-        guard let date = day?.date else { return }
+        _ = section
 
         Task {
             do {
-                _ = try await performAPIRequest(
-                    path: "/days/\(date)/blocks/\(encodedPathComponent(blockId))",
-                    method: "PATCH",
-                    body: ["pillarId": normalizedPillarIdentifier(pillarId) ?? NSNull()]
-                )
-                try await refreshCurrentDay()
+                let normalizedPillarId: Any = normalizedPillarIdentifier(pillarId) ?? NSNull()
+                if blockId.hasPrefix("proj_todo_") {
+                    let todoId = String(blockId.dropFirst("proj_todo_".count))
+                    try await Firestore.firestore().collection("todos").document(todoId).setData([
+                        "pillarId": normalizedPillarId,
+                        "updatedAt": Date().timeIntervalSince1970
+                    ], merge: true)
+                    return
+                }
+
+                if blockId.hasPrefix("proj_habit_") {
+                    let habitId = String(blockId.dropFirst("proj_habit_".count))
+                    try await Firestore.firestore().collection("habits").document(habitId).setData([
+                        "pillarId": normalizedPillarId,
+                        "updatedAt": Date().timeIntervalSince1970
+                    ], merge: true)
+                    return
+                }
+
+                try await Firestore.firestore().collection("dayBlocks").document(blockId).setData([
+                    "pillarId": normalizedPillarId,
+                    "updatedAt": Date().timeIntervalSince1970
+                ], merge: true)
             } catch {
                 self.errorMessage = "Failed to retag block: \(friendlyErrorMessage(error))"
             }
@@ -210,10 +232,129 @@ class DayViewModel: ObservableObject, BackendRequesting {
             return value.isEmpty ? nil : value
         }
 
+        if block.typeId == "habit-stack" {
+            return habitStackItems(for: block).first?.habitId
+        }
+
         return block.data["habitId"]?.stringValue
     }
 
-    func addBlock(typeId: String, to section: DaySection.TimeSection, customType: CustomBlockType? = nil) {
+    func habitStackItems(for block: Block) -> [HabitStackItem] {
+        guard block.typeId == "habit-stack" else { return [] }
+        if let rawItems = block.data["habitItems"]?.arrayValue {
+            let parsed = rawItems.compactMap { item -> HabitStackItem? in
+                guard let object = item.objectValue,
+                      let habitId = object["habitId"]?.stringValue else {
+                    return nil
+                }
+
+                return HabitStackItem(
+                    habitId: habitId,
+                    name: object["name"]?.stringValue ?? "Habit",
+                    isCompleted: object["completed"]?.boolValue ?? false,
+                    order: Int(object["order"]?.numberValue ?? 0)
+                )
+            }
+
+            return parsed.sorted { lhs, rhs in
+                if lhs.order != rhs.order {
+                    return lhs.order < rhs.order
+                }
+                return lhs.name.localizedCaseInsensitiveCompare(rhs.name) == .orderedAscending
+            }
+        }
+
+        let primaryId = block.data["primaryHabitId"]?.stringValue
+        let primaryName = block.data["primaryHabitName"]?.stringValue
+        guard let habitId = primaryId else { return [] }
+        return [HabitStackItem(
+            habitId: habitId,
+            name: primaryName ?? "Habit",
+            isCompleted: block.data["primaryCompleted"]?.boolValue ?? false,
+            order: Int(block.data["primaryOrder"]?.numberValue ?? 0)
+        )]
+    }
+
+    func setHabitCompletion(
+        habitId: String,
+        isCompleted: Bool,
+        status: HabitLogStatus? = nil,
+        date: String? = nil
+    ) {
+        let targetDate = date ?? activeDayDate ?? Day.todayDateString
+
+        Task {
+            do {
+                guard let userId = activeDayUserId ?? Auth.auth().currentUser?.uid else {
+                    throw BackendError.notAuthenticated
+                }
+                let logId = "\(habitId)_\(targetDate)"
+                let pointEventId = "pe_habit_\(habitId)_\(targetDate)"
+                let logRef = Firestore.firestore().collection("habitLogs").document(logId)
+                let existing = try await logRef.getDocument()
+                let existingData = existing.data() ?? [:]
+                let now = Date().timeIntervalSince1970
+                let createdAt = timestampValue(existingData["createdAt"]) ?? now
+                let resolvedStatus = resolveHabitLogStatus(for: isCompleted, requestedStatus: status)
+                let expectPaid = resolvedStatus == .completed
+
+                do {
+                    let habitSnapshot = try await Firestore.firestore().collection("habits").document(habitId).getDocument()
+                    let habitData = habitSnapshot.data() ?? [:]
+                    let bountyReasonRaw = (habitData["bountyReason"] as? String)?
+                        .trimmingCharacters(in: .whitespacesAndNewlines)
+                    let bountyReason = (bountyReasonRaw?.isEmpty == false) ? (bountyReasonRaw ?? "nil") : "nil"
+                    print(
+                        "🧪 [Habit Bounty][Day] Preflight habitId=\(habitId) date=\(targetDate) expectedPointEventId=\(pointEventId) expectPaid=\(expectPaid) "
+                        + "habitPillarId=\((habitData["pillarId"] as? String) ?? "nil") "
+                        + "bountyPillarId=\((habitData["bountyPillarId"] as? String) ?? "nil") "
+                        + "bountyPoints=\(String(describing: intValue(habitData["bountyPoints"]))) "
+                        + "bountyAllocations=\(allocationsSummary(habitData["bountyAllocations"])) "
+                        + "bountyReason=\(bountyReason)"
+                    )
+                } catch {
+                    print("⚠️ [Habit Bounty][Day] Preflight read failed habitId=\(habitId) date=\(targetDate): \(friendlyErrorMessage(error))")
+                }
+
+                let payload: [String: Any] = [
+                    "id": logId,
+                    "userId": userId,
+                    "habitId": habitId,
+                    "date": targetDate,
+                    "completed": resolvedStatus == .completed,
+                    "status": resolvedStatus.rawValue,
+                    "value": existingData["value"] ?? NSNull(),
+                    "notes": existingData["notes"] as? String ?? "",
+                    "createdAt": createdAt,
+                    "updatedAt": now
+                ]
+
+                print("🧪 [Habit Bounty][Day] Request completion update habitId=\(habitId) date=\(targetDate) status=\(resolvedStatus.rawValue) expectPaid=\(expectPaid) expectedPointEventId=\(pointEventId)")
+                try await logRef.setData(payload, merge: true)
+                print("✅ [Habit Bounty][Day] Firestore log write succeeded habitId=\(habitId) date=\(targetDate) status=\(resolvedStatus.rawValue)")
+
+                Task { @MainActor [weak self] in
+                    await self?.verifyHabitBountyTrigger(
+                        habitId: habitId,
+                        date: targetDate,
+                        expectPaid: expectPaid
+                    )
+                }
+            } catch {
+                self.errorMessage = "Failed to update habit completion: \(self.friendlyErrorMessage(error))"
+            }
+        }
+    }
+
+    func skipHabit(habitId: String, date: String? = nil) {
+        setHabitCompletion(habitId: habitId, isCompleted: false, status: .skipped, date: date)
+    }
+
+    func markHabitPending(habitId: String, date: String? = nil) {
+        setHabitCompletion(habitId: habitId, isCompleted: false, status: .pending, date: date)
+    }
+
+    func addBlock(typeId: String, to section: DaySection.TimeSection, customType: BlockType? = nil) {
         if typeId == "todo" {
             addTodoBlock(title: "New Task", to: section)
             return
@@ -224,13 +365,25 @@ class DayViewModel: ObservableObject, BackendRequesting {
             return
         }
 
+        if typeId == "habit-stack" {
+            return
+        }
+
         guard let date = day?.date else { return }
         let nextOrder = nextOrderForSection(section)
         let block = Block.make(typeId: typeId, sectionId: section, order: nextOrder, customType: customType)
 
         Task {
             do {
+                guard let userId = activeDayUserId ?? Auth.auth().currentUser?.uid else {
+                    throw BackendError.notAuthenticated
+                }
+                let now = Date().timeIntervalSince1970
+                let blockRef = Firestore.firestore().collection("dayBlocks").document()
                 let payload: [String: Any] = [
+                    "id": blockRef.documentID,
+                    "userId": userId,
+                    "date": date,
                     "typeId": block.typeId,
                     "sectionId": section.rawValue,
                     "order": block.order,
@@ -240,16 +393,12 @@ class DayViewModel: ObservableObject, BackendRequesting {
                     "icon": block.icon ?? NSNull(),
                     "pillarId": block.pillarId ?? NSNull(),
                     "source": block.source ?? "user",
-                    "data": block.dataDictionary()
+                    "data": block.dataDictionary(),
+                    "createdAt": now,
+                    "updatedAt": now
                 ]
 
-                _ = try await performAPIRequest(
-                    path: "/days/\(date)/blocks?resolve=true",
-                    method: "POST",
-                    body: payload
-                )
-
-                try await refreshCurrentDay()
+                try await blockRef.setData(payload)
             } catch {
                 self.errorMessage = "Failed to add block: \(friendlyErrorMessage(error))"
             }
@@ -266,9 +415,17 @@ class DayViewModel: ObservableObject, BackendRequesting {
 
         Task {
             do {
+                guard let userId = activeDayUserId ?? Auth.auth().currentUser?.uid else {
+                    throw BackendError.notAuthenticated
+                }
+                let now = Date().timeIntervalSince1970
+                let habitRef = Firestore.firestore().collection("habits").document()
                 let body: [String: Any] = [
+                    "id": habitRef.documentID,
+                    "userId": userId,
                     "name": trimmed,
                     "sectionId": section.rawValue,
+                    "order": nextOrderForSection(section),
                     "schedule": [
                         "type": "daily",
                         "daysOfWeek": []
@@ -278,11 +435,15 @@ class DayViewModel: ObservableObject, BackendRequesting {
                         "value": 1
                     ],
                     "isActive": true,
-                    "pillarId": NSNull()
+                    "pillarId": NSNull(),
+                    "groupId": NSNull(),
+                    "groupName": NSNull(),
+                    "createdAt": now,
+                    "updatedAt": now,
+                    "archivedAt": NSNull()
                 ]
 
-                _ = try await performAPIRequest(path: "/habits", method: "POST", body: body)
-                try await refreshCurrentDay()
+                try await habitRef.setData(body)
             } catch {
                 self.errorMessage = "Failed to add habit: \(friendlyErrorMessage(error))"
             }
@@ -290,15 +451,31 @@ class DayViewModel: ObservableObject, BackendRequesting {
     }
 
     func deleteBlock(_ blockId: String, from section: DaySection.TimeSection) {
-        guard let date = day?.date else { return }
+        _ = section
 
         Task {
             do {
-                _ = try await performAPIRequest(
-                    path: "/days/\(date)/blocks/\(encodedPathComponent(blockId))",
-                    method: "DELETE"
-                )
-                try await refreshCurrentDay()
+                let now = Date().timeIntervalSince1970
+                if blockId.hasPrefix("proj_todo_") {
+                    let todoId = String(blockId.dropFirst("proj_todo_".count))
+                    try await Firestore.firestore().collection("todos").document(todoId).setData([
+                        "archivedAt": now,
+                        "updatedAt": now
+                    ], merge: true)
+                    return
+                }
+
+                if blockId.hasPrefix("proj_habit_") {
+                    let habitId = String(blockId.dropFirst("proj_habit_".count))
+                    try await Firestore.firestore().collection("habits").document(habitId).setData([
+                        "isActive": false,
+                        "archivedAt": now,
+                        "updatedAt": now
+                    ], merge: true)
+                    return
+                }
+
+                try await Firestore.firestore().collection("dayBlocks").document(blockId).delete()
             } catch {
                 self.errorMessage = "Failed to delete block: \(friendlyErrorMessage(error))"
             }
@@ -322,17 +499,30 @@ class DayViewModel: ObservableObject, BackendRequesting {
         Task {
             do {
                 for block in blocks {
-                    let moveBody: [String: Any] = [
+                    if let todoId = projectedTodoId(for: block) {
+                        try await Firestore.firestore().collection("todos").document(todoId).setData([
+                            "sectionId": section.rawValue,
+                            "order": block.order,
+                            "updatedAt": Date().timeIntervalSince1970
+                        ], merge: true)
+                        continue
+                    }
+
+                    if let habitId = projectedHabitId(for: block) {
+                        try await Firestore.firestore().collection("habits").document(habitId).setData([
+                            "sectionId": section.rawValue,
+                            "order": block.order,
+                            "updatedAt": Date().timeIntervalSince1970
+                        ], merge: true)
+                        continue
+                    }
+
+                    try await Firestore.firestore().collection("dayBlocks").document(block.id).setData([
                         "sectionId": section.rawValue,
-                        "order": block.order
-                    ]
-                    _ = try await performAPIRequest(
-                        path: "/days/\(date)/blocks/\(encodedPathComponent(block.id))/move?resolve=true",
-                        method: "PATCH",
-                        body: moveBody
-                    )
+                        "order": block.order,
+                        "updatedAt": Date().timeIntervalSince1970
+                    ], merge: true)
                 }
-                try await refreshCurrentDay()
             } catch {
                 self.errorMessage = "Failed to move blocks: \(friendlyErrorMessage(error))"
             }
@@ -364,6 +554,7 @@ class DayViewModel: ObservableObject, BackendRequesting {
         let order: Int
         let status: String
         let completedAt: TimeInterval?
+        let bountyPoints: Int?
         let parentId: String?
         let pillarId: String?
         let archivedAt: TimeInterval?
@@ -375,15 +566,29 @@ class DayViewModel: ObservableObject, BackendRequesting {
         let sectionId: DaySection.TimeSection
         let order: Int
         let pillarId: String?
+        let groupId: String?
+        let groupName: String?
         let isActive: Bool
         let scheduleType: String
         let daysOfWeek: [String]
+    }
+
+    struct HabitStackItem: Identifiable {
+        let habitId: String
+        let name: String
+        let isCompleted: Bool
+        let order: Int
+
+        var id: String {
+            habitId
+        }
     }
 
     private struct HabitLogPrimitive {
         let habitId: String
         let date: String
         let completed: Bool
+        let status: String?
         let value: Double?
         let notes: String
     }
@@ -406,12 +611,12 @@ class DayViewModel: ObservableObject, BackendRequesting {
                     }
 
                     let parsed = snapshot?.documents.compactMap { self.blockType(from: $0) } ?? []
-                    self.applyBlockTypes(parsed, fallbackUserId: userId)
+                    self.applyBlockTypes(parsed)
                 }
             }
     }
 
-    private func applyBlockTypes(_ firestoreTypes: [BlockType], fallbackUserId: String) {
+    private func applyBlockTypes(_ firestoreTypes: [BlockType]) {
         var mergedById = Dictionary(uniqueKeysWithValues: BlockType.fallbackBuiltIns.map { ($0.id, $0) })
         for type in firestoreTypes {
             mergedById[type.id] = type
@@ -428,7 +633,6 @@ class DayViewModel: ObservableObject, BackendRequesting {
         BlockType.setCached(merged)
         customBlockTypes = merged
             .filter { $0.category != "built-in" }
-            .map { toCustomBlockType($0, fallbackUserId: fallbackUserId) }
     }
 
     private func blockType(from document: QueryDocumentSnapshot) -> BlockType? {
@@ -462,7 +666,7 @@ class DayViewModel: ObservableObject, BackendRequesting {
             id: (data["id"] as? String) ?? document.documentID,
             userId: data["userId"] as? String,
             name: name,
-            icon: (data["icon"] as? String) ?? "🧩",
+            icon: (data["icon"] as? String) ?? BlockIcon.fallback,
             color: (data["color"] as? String) ?? "#64748b",
             category: category,
             defaultSection: defaultSection,
@@ -566,7 +770,7 @@ class DayViewModel: ObservableObject, BackendRequesting {
         let raw = document.data()
         guard let typeId = raw["typeId"] as? String else { return nil }
 
-        let legacyProjectedTypes = Set(["todo", "todos", "habits", "morninghabits"])
+        let legacyProjectedTypes = Set(["todo", "todos", "habits", "morninghabits", "habit-stack"])
         if legacyProjectedTypes.contains(typeId.lowercased()) {
             return nil
         }
@@ -609,6 +813,7 @@ class DayViewModel: ObservableObject, BackendRequesting {
             order: intValue(raw["order"]) ?? 0,
             status: (raw["status"] as? String) ?? "active",
             completedAt: timestampValue(raw["completedAt"]),
+            bountyPoints: intValue(raw["bountyPoints"]),
             parentId: raw["parentId"] as? String,
             pillarId: raw["pillarId"] as? String,
             archivedAt: timestampValue(raw["archivedAt"])
@@ -629,6 +834,8 @@ class DayViewModel: ObservableObject, BackendRequesting {
             sectionId: DaySection.TimeSection(rawValue: (raw["sectionId"] as? String) ?? "morning") ?? .morning,
             order: intValue(raw["order"]) ?? 0,
             pillarId: raw["pillarId"] as? String,
+            groupId: raw["groupId"] as? String,
+            groupName: raw["groupName"] as? String,
             isActive: boolValue(raw["isActive"]) ?? true,
             scheduleType: scheduleType,
             daysOfWeek: daysOfWeek
@@ -646,6 +853,7 @@ class DayViewModel: ObservableObject, BackendRequesting {
             habitId: habitId,
             date: date,
             completed: boolValue(raw["completed"]) ?? false,
+            status: raw["status"] as? String,
             value: doubleValue(raw["value"]),
             notes: raw["notes"] as? String ?? ""
         )
@@ -662,11 +870,11 @@ class DayViewModel: ObservableObject, BackendRequesting {
             .filter { $0.date == date }
             .map { ($0.habitId, $0) })
 
-        let habitBlocks = liveHabits
+        let todayHabits = liveHabits
             .filter { habitAppliesToDate($0, date: date) }
-            .map { projectedHabitBlock(from: $0, log: logsByHabitId[$0.id]) }
+        let habitStacks = projectedHabitStacks(from: todayHabits, logsByHabitId: logsByHabitId)
 
-        self.day = buildDay(userId: userId, date: date, blocks: liveDayBlocks + todoBlocks + habitBlocks)
+        self.day = buildDay(userId: userId, date: date, blocks: liveDayBlocks + todoBlocks + habitStacks)
         self.isLoading = !allDaySnapshotsLoaded()
         if clearError {
             self.errorMessage = nil
@@ -693,13 +901,14 @@ class DayViewModel: ObservableObject, BackendRequesting {
             pillarId: todo.pillarId,
             source: "auto-sync",
             data: [
-                "todoId": .string(todo.id),
-                "title": .string(todo.content),
-                "description": .string(todo.description),
-                "status": .string(todo.status),
-                "completedAt": todo.completedAt.map(JSONValue.number) ?? .null,
-                "parentId": todo.parentId.map(JSONValue.string) ?? .null
-            ],
+            "todoId": .string(todo.id),
+            "title": .string(todo.content),
+            "description": .string(todo.description),
+            "status": .string(todo.status),
+            "completedAt": todo.completedAt.map(JSONValue.number) ?? .null,
+            "bountyPoints": todo.bountyPoints.map(Double.init).map(JSONValue.number) ?? .null,
+            "parentId": todo.parentId.map(JSONValue.string) ?? .null
+        ],
             resolvedTitle: nil,
             resolvedSubtitle: nil,
             resolvedIcon: nil,
@@ -712,7 +921,8 @@ class DayViewModel: ObservableObject, BackendRequesting {
         from habit: HabitPrimitive,
         log: HabitLogPrimitive?
     ) -> Block {
-        let completed = log?.completed ?? false
+        let status = habitLogStatus(log)
+        let completed = status == .completed
 
         return Block(
             id: "proj_habit_\(habit.id)",
@@ -728,10 +938,12 @@ class DayViewModel: ObservableObject, BackendRequesting {
             data: [
                 "habitId": .string(habit.id),
                 "name": .string(habit.name),
+                "groupId": habit.groupId.map(JSONValue.string) ?? .null,
+                "groupName": habit.groupName.map(JSONValue.string) ?? .null,
                 "completed": .bool(completed),
                 "value": log?.value.map(JSONValue.number) ?? .null,
                 "notes": .string(log?.notes ?? ""),
-                "status": .string(completed ? "completed" : "pending")
+                "status": .string(status.rawValue)
             ],
             resolvedTitle: nil,
             resolvedSubtitle: nil,
@@ -739,6 +951,130 @@ class DayViewModel: ObservableObject, BackendRequesting {
             pillar: nil,
             isProjected: true
         )
+    }
+
+    private func projectedHabitStacks(
+        from habits: [HabitPrimitive],
+        logsByHabitId: [String: HabitLogPrimitive]
+    ) -> [Block] {
+        guard !habits.isEmpty else { return [] }
+
+        let grouped = Dictionary(grouping: habits, by: { habitStackGroupKey(for: $0) })
+        return grouped.values.compactMap { group in
+            let sorted = group.sorted { lhs, rhs in
+                if lhs.order != rhs.order {
+                    return lhs.order < rhs.order
+                }
+                return lhs.name.localizedCaseInsensitiveCompare(rhs.name) == .orderedAscending
+            }
+            guard let section = sorted.first?.sectionId else { return nil }
+            return projectedHabitStackBlock(from: sorted, section: section, logsByHabitId: logsByHabitId)
+        }
+    }
+
+    private func projectedHabitStackBlock(
+        from habits: [HabitPrimitive],
+        section: DaySection.TimeSection,
+        logsByHabitId: [String: HabitLogPrimitive]
+    ) -> Block {
+        let items = habits.map { habit in
+            HabitStackItem(
+                habitId: habit.id,
+                name: habit.name,
+                isCompleted: logsByHabitId[habit.id]?.completed ?? false,
+                order: habit.order
+            )
+        }.sorted { lhs, rhs in
+            if lhs.order != rhs.order {
+                return lhs.order < rhs.order
+            }
+            return lhs.name.localizedCaseInsensitiveCompare(rhs.name) == .orderedAscending
+        }
+
+        let stackId = "proj_habit_stack_\(habitStackStableIdentifier(for: habits))"
+        let title = habitStackTitle(for: habits, items: items)
+        let completedCount = items.filter(\.isCompleted).count
+        let habitItems = items.map {
+            JSONValue.object([
+                "habitId": .string($0.habitId),
+                "name": .string($0.name),
+                "completed": .bool($0.isCompleted),
+                "order": .number(Double($0.order))
+            ])
+        }
+
+        return Block(
+            id: stackId,
+            typeId: "habit-stack",
+            sectionId: section,
+            order: habits.first?.order ?? 0,
+            isExpanded: false,
+            title: title,
+            subtitle: nil,
+            icon: nil,
+            pillarId: habits.first?.pillarId,
+            source: "auto-sync",
+            data: [
+                "habitStackName": .string(title),
+                "habitStackCount": .number(Double(items.count)),
+                "habitStackCompleted": .number(Double(completedCount)),
+                "primaryHabitId": .string(items.first?.habitId ?? ""),
+                "primaryCompleted": .bool(items.first?.isCompleted ?? false),
+                "primaryOrder": .number(Double(items.first?.order ?? 0)),
+                "primaryHabitName": .string(items.first?.name ?? ""),
+                "habitItems": .array(habitItems),
+                "groupName": normalizedHabitStackGroupName(for: habits).map(JSONValue.string) ?? .null,
+                "groupId": habits.first?.groupId.map(JSONValue.string) ?? .null
+            ],
+            resolvedTitle: nil,
+            resolvedSubtitle: nil,
+            resolvedIcon: nil,
+            pillar: nil,
+            isProjected: true
+        )
+    }
+
+    private func habitStackTitle(for habits: [HabitPrimitive], items: [HabitStackItem]) -> String {
+        if items.count == 1 {
+            return items.first?.name ?? "Habit"
+        }
+
+        let groupName = normalizedHabitStackGroupName(for: habits)
+        if let groupName, !groupName.isEmpty {
+            return groupName
+        }
+
+        return "Habit Stack"
+    }
+
+    private func habitStackGroupKey(for habit: HabitPrimitive) -> String {
+        let normalizedSection = habit.sectionId.rawValue
+
+        if let groupId = habit.groupId?.trimmingCharacters(in: .whitespacesAndNewlines),
+           !groupId.isEmpty {
+            return "\(normalizedSection)|id:\(groupId.lowercased())"
+        }
+
+        if let groupName = habit.groupName?.trimmingCharacters(in: .whitespacesAndNewlines),
+           !groupName.isEmpty {
+            return "\(normalizedSection)|name:\(groupName.lowercased())"
+        }
+
+        return "\(normalizedSection)|ungrouped"
+    }
+
+    private func habitStackStableIdentifier(for habits: [HabitPrimitive]) -> String {
+        guard let first = habits.first else { return UUID().uuidString }
+        return habitStackGroupKey(for: first)
+            .lowercased()
+            .replacingOccurrences(of: "[^a-z0-9_-]", with: "-", options: .regularExpression)
+            .replacingOccurrences(of: "-{2,}", with: "-", options: .regularExpression)
+    }
+
+    private func normalizedHabitStackGroupName(for habits: [HabitPrimitive]) -> String? {
+        return habits.compactMap { $0.groupName?.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .map { $0 }
+            .first { !$0.isEmpty }
     }
 
     private func habitAppliesToDate(_ habit: HabitPrimitive, date: String) -> Bool {
@@ -818,38 +1154,97 @@ class DayViewModel: ObservableObject, BackendRequesting {
         }
     }
 
-    private func patchBlock(block: Block, section: DaySection.TimeSection, date: String) async throws {
-        let path = "/days/\(date)/blocks/\(encodedPathComponent(block.id))?resolve=true"
+    private func resolveHabitLogStatus(
+        for isCompleted: Bool,
+        requestedStatus: HabitLogStatus?
+    ) -> HabitLogStatus {
+        guard let requestedStatus else {
+            return isCompleted ? .completed : .pending
+        }
 
-        if projectedTodoId(for: block) != nil {
+        if requestedStatus == .skipped {
+            return isCompleted ? .completed : .skipped
+        }
+
+        if requestedStatus == .completed {
+            return .completed
+        }
+
+        return isCompleted ? .completed : .pending
+    }
+
+    private func habitLogStatus(_ log: HabitLogPrimitive?) -> HabitLogStatus {
+        if let rawStatus = log?.status?.lowercased(),
+           let status = HabitLogStatus(rawValue: rawStatus) {
+            return status
+        }
+
+        if log?.completed == true {
+            return .completed
+        }
+
+        return .pending
+    }
+
+    private func patchBlock(block: Block, section: DaySection.TimeSection, date: String) async throws {
+        let now = Date().timeIntervalSince1970
+
+        if let todoId = projectedTodoId(for: block) {
             let rootItem = block.checklistData?.items.first
+            let isCompleted = rootItem?.isCompleted ?? false
             let body: [String: Any] = [
+                "content": (rootItem?.title ?? "").trimmingCharacters(in: .whitespacesAndNewlines),
+                "status": isCompleted ? "completed" : "active",
+                "completedAt": isCompleted ? now : NSNull(),
                 "sectionId": section.rawValue,
                 "order": block.order,
                 "pillarId": normalizedPillarIdentifier(block.pillarId) ?? NSNull(),
-                "data": [
-                    "title": (rootItem?.title ?? "").trimmingCharacters(in: .whitespacesAndNewlines),
-                    "status": (rootItem?.isCompleted ?? false) ? "completed" : "active"
-                ]
+                "updatedAt": now
             ]
 
-            _ = try await performAPIRequest(path: path, method: "PATCH", body: body)
+            print("🧪 [Todo Bounty][Day] Request completion update todoId=\(todoId) isCompleted=\(isCompleted)")
+            try await Firestore.firestore().collection("todos").document(todoId).setData(body, merge: true)
+            print("✅ [Todo Bounty][Day] Firestore completion write succeeded todoId=\(todoId) isCompleted=\(isCompleted)")
+
+            Task { @MainActor [weak self] in
+                await self?.verifyBountyTrigger(todoId: todoId, expectPaid: isCompleted)
+            }
             return
         }
 
-        if projectedHabitId(for: block) != nil {
+        if let habitId = projectedHabitId(for: block) {
+            guard let userId = activeDayUserId ?? Auth.auth().currentUser?.uid else {
+                throw BackendError.notAuthenticated
+            }
+
             let firstItem = block.checklistData?.items.first
             let body: [String: Any] = [
+                "name": (firstItem?.title ?? "").trimmingCharacters(in: .whitespacesAndNewlines),
                 "sectionId": section.rawValue,
                 "order": block.order,
                 "pillarId": normalizedPillarIdentifier(block.pillarId) ?? NSNull(),
-                "data": [
-                    "name": (firstItem?.title ?? "").trimmingCharacters(in: .whitespacesAndNewlines),
-                    "completed": firstItem?.isCompleted ?? false
-                ]
+                "updatedAt": now
             ]
+            try await Firestore.firestore().collection("habits").document(habitId).setData(body, merge: true)
 
-            _ = try await performAPIRequest(path: path, method: "PATCH", body: body)
+            let logId = "\(habitId)_\(date)"
+            let logRef = Firestore.firestore().collection("habitLogs").document(logId)
+            let existingLog = try await logRef.getDocument()
+            let existingData = existingLog.data() ?? [:]
+            let createdAt = timestampValue(existingData["createdAt"]) ?? now
+            let logBody: [String: Any] = [
+                "id": logId,
+                "userId": userId,
+                "habitId": habitId,
+                "date": date,
+                "completed": firstItem?.isCompleted ?? false,
+                "status": (firstItem?.isCompleted ?? false) ? HabitLogStatus.completed.rawValue : HabitLogStatus.pending.rawValue,
+                "value": existingData["value"] ?? NSNull(),
+                "notes": existingData["notes"] as? String ?? "",
+                "createdAt": createdAt,
+                "updatedAt": now
+            ]
+            try await logRef.setData(logBody, merge: true)
             return
         }
 
@@ -861,22 +1256,127 @@ class DayViewModel: ObservableObject, BackendRequesting {
             "subtitle": block.subtitle ?? NSNull(),
             "icon": block.icon ?? NSNull(),
             "pillarId": normalizedPillarIdentifier(block.pillarId) ?? NSNull(),
-            "data": block.dataDictionary()
+            "data": block.dataDictionary(),
+            "updatedAt": now
         ]
 
-        _ = try await performAPIRequest(path: path, method: "PATCH", body: body)
+        try await Firestore.firestore().collection("dayBlocks").document(block.id).setData(body, merge: true)
     }
 
-    private func refreshCurrentDay() async throws {
-        if dayBlocksListener != nil || dayTodosListener != nil || habitsListener != nil || habitLogsListener != nil {
-            return
+    private func allocationsSummary(_ raw: Any?) -> String {
+        guard let allocations = raw as? [[String: Any]], !allocations.isEmpty else {
+            return "none"
         }
 
-        guard let existingDay = day else { return }
-        guard let user = Auth.auth().currentUser else { throw BackendError.notAuthenticated }
+        let entries = allocations.compactMap { allocation -> String? in
+            guard let pillarId = allocation["pillarId"] as? String else { return nil }
+            guard let points = intValue(allocation["points"]) else { return nil }
+            return "\(pillarId):\(points)"
+        }
 
-        let blocks = try await fetchBlocks(for: existingDay.date, resolve: true)
-        self.day = buildDay(userId: user.uid, date: existingDay.date, blocks: blocks)
+        return entries.isEmpty ? "none" : entries.joined(separator: ",")
+    }
+
+    private func verifyBountyTrigger(todoId: String, expectPaid: Bool) async {
+        let db = Firestore.firestore()
+        let pointEventId = "pe_todo_\(todoId)"
+
+        for attempt in 1...8 {
+            do {
+                let todoSnapshot = try await db.collection("todos").document(todoId).getDocument()
+                let todoData = todoSnapshot.data() ?? [:]
+                let bountyPaidAt = timestampValue(todoData["bountyPaidAt"])
+
+                let pointEventSnapshot = try await db.collection("pointEvents").document(pointEventId).getDocument()
+                let pointEventData = pointEventSnapshot.data() ?? [:]
+                let eventExists = pointEventSnapshot.exists
+                let voidedAt = timestampValue(pointEventData["voidedAt"])
+                let totalPoints = intValue(pointEventData["totalPoints"])
+                let allocations = allocationsSummary(pointEventData["allocations"])
+
+                if expectPaid {
+                    let isPaid = bountyPaidAt != nil && eventExists && voidedAt == nil
+                    if isPaid {
+                        print(
+                            "✅ [Todo Bounty][Day] Verified payout todoId=\(todoId) attempt=\(attempt) bountyPaidAt=\(String(describing: bountyPaidAt)) pointEventId=\(pointEventId) totalPoints=\(String(describing: totalPoints)) allocations=\(allocations)"
+                        )
+                        return
+                    }
+
+                    print(
+                        "⏳ [Todo Bounty][Day] Waiting for payout todoId=\(todoId) attempt=\(attempt) bountyPaidAt=\(String(describing: bountyPaidAt)) pointEventExists=\(eventExists) voidedAt=\(String(describing: voidedAt))"
+                    )
+                } else {
+                    let isReversed = bountyPaidAt == nil && (!eventExists || voidedAt != nil)
+                    if isReversed {
+                        print(
+                            "✅ [Todo Bounty][Day] Verified reversal todoId=\(todoId) attempt=\(attempt) bountyPaidAt=nil pointEventExists=\(eventExists) voidedAt=\(String(describing: voidedAt))"
+                        )
+                        return
+                    }
+
+                    print(
+                        "⏳ [Todo Bounty][Day] Waiting for reversal todoId=\(todoId) attempt=\(attempt) bountyPaidAt=\(String(describing: bountyPaidAt)) pointEventExists=\(eventExists) voidedAt=\(String(describing: voidedAt))"
+                    )
+                }
+            } catch {
+                print("❌ [Todo Bounty][Day] Verification read failed todoId=\(todoId) attempt=\(attempt): \(friendlyErrorMessage(error))")
+            }
+
+            try? await Task.sleep(nanoseconds: 1_000_000_000)
+        }
+
+        print("⚠️ [Todo Bounty][Day] Verification timed out todoId=\(todoId) expectedPaid=\(expectPaid)")
+    }
+
+    private func verifyHabitBountyTrigger(habitId: String, date: String, expectPaid: Bool) async {
+        guard !habitId.isEmpty, !date.isEmpty else { return }
+        let db = Firestore.firestore()
+        let pointEventId = "pe_habit_\(habitId)_\(date)"
+        print("🧪 [Habit Bounty][Day] Verify start habitId=\(habitId) date=\(date) expectedPointEventId=\(pointEventId) expectPaid=\(expectPaid)")
+
+        for attempt in 1...8 {
+            do {
+                let pointEventSnapshot = try await db.collection("pointEvents").document(pointEventId).getDocument()
+                let pointEventData = pointEventSnapshot.data() ?? [:]
+                let eventExists = pointEventSnapshot.exists
+                let voidedAt = timestampValue(pointEventData["voidedAt"])
+                let totalPoints = intValue(pointEventData["totalPoints"])
+                let allocations = allocationsSummary(pointEventData["allocations"])
+
+                if expectPaid {
+                    let isPaid = eventExists && voidedAt == nil
+                    if isPaid {
+                        print(
+                            "✅ [Habit Bounty][Day] Verified payout habitId=\(habitId) date=\(date) attempt=\(attempt) pointEventId=\(pointEventId) totalPoints=\(String(describing: totalPoints)) allocations=\(allocations)"
+                        )
+                        return
+                    }
+
+                    print(
+                        "⏳ [Habit Bounty][Day] Waiting for payout habitId=\(habitId) date=\(date) attempt=\(attempt) pointEventExists=\(eventExists) voidedAt=\(String(describing: voidedAt))"
+                    )
+                } else {
+                    let isReversed = !eventExists || voidedAt != nil
+                    if isReversed {
+                        print(
+                            "✅ [Habit Bounty][Day] Verified reversal habitId=\(habitId) date=\(date) attempt=\(attempt) pointEventExists=\(eventExists) voidedAt=\(String(describing: voidedAt))"
+                        )
+                        return
+                    }
+
+                    print(
+                        "⏳ [Habit Bounty][Day] Waiting for reversal habitId=\(habitId) date=\(date) attempt=\(attempt) pointEventExists=\(eventExists) voidedAt=\(String(describing: voidedAt))"
+                    )
+                }
+            } catch {
+                print("❌ [Habit Bounty][Day] Verification read failed habitId=\(habitId) date=\(date) attempt=\(attempt): \(friendlyErrorMessage(error))")
+            }
+
+            try? await Task.sleep(nanoseconds: 1_000_000_000)
+        }
+
+        print("⚠️ [Habit Bounty][Day] Verification timed out habitId=\(habitId) date=\(date) expectedPaid=\(expectPaid)")
     }
 
     private func buildDay(userId: String, date: String, blocks: [Block]) -> Day {
@@ -911,57 +1411,4 @@ class DayViewModel: ObservableObject, BackendRequesting {
         )
     }
 
-    private func toCustomBlockType(_ type: BlockType, fallbackUserId: String) -> CustomBlockType {
-        let createdAt = Date(timeIntervalSince1970: type.createdAt ?? Date().timeIntervalSince1970)
-        let updatedAt = Date(timeIntervalSince1970: type.updatedAt ?? createdAt.timeIntervalSince1970)
-
-        let fields = type.dataSchema.fields.map { field in
-            CustomFieldDef(
-                id: field.id,
-                label: field.label,
-                type: mapFieldType(field.type),
-                placeholder: nil,
-                min: field.min,
-                max: field.max,
-                step: nil,
-                isRequired: field.required ?? false
-            )
-        }
-
-        return CustomBlockType(
-            id: type.id,
-            userId: type.userId ?? fallbackUserId,
-            name: type.name,
-            icon: type.icon,
-            description: type.subtitleTemplate,
-            defaultSection: type.defaultSection,
-            fields: fields,
-            createdAt: createdAt,
-            updatedAt: updatedAt
-        )
-    }
-
-    private func mapFieldType(_ rawType: String) -> CustomFieldType {
-        switch rawType.lowercased() {
-        case "number":
-            return .number
-        case "boolean":
-            return .toggle
-        case "array", "object":
-            return .multiline
-        default:
-            return .text
-        }
-    }
-
-    private func fetchBlocks(for date: String, resolve: Bool) async throws -> [Block] {
-        let query = resolve ? "?resolve=true" : ""
-        let (data, _, _) = try await performAPIRequest(path: "/days/\(date)/blocks\(query)")
-        let payload = try decodePayload(BlockListResponse.self, from: data, context: "day blocks")
-        return payload.items
-    }
-}
-
-private struct BlockListResponse: Decodable {
-    let items: [Block]
 }

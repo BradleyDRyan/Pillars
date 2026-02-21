@@ -48,6 +48,24 @@ struct ChecklistBlockView: View {
         }
     }
 
+    private var checklistCompletedIconName: String {
+        switch mode {
+        case .standard:
+            return "seal.fill"
+        case .todo, .habit:
+            return "checkmark"
+        }
+    }
+
+    private var checklistIncompleteIconName: String {
+        switch mode {
+        case .standard:
+            return "seal"
+        case .todo, .habit:
+            return "checkmark"
+        }
+    }
+
     private var todoChecklistBody: some View {
         VStack(alignment: .leading, spacing: S2.Spacing.sm) {
             VStack(alignment: .leading, spacing: S2.Spacing.xs) {
@@ -97,14 +115,7 @@ struct ChecklistBlockView: View {
             horizontalPadding: 0,
             verticalPadding: S2.MyDay.Spacing.emptyStateVertical
         ) {
-            Button {
-                item.wrappedValue.isCompleted.toggle()
-            } label: {
-                Image(systemName: item.wrappedValue.isCompleted ? "checkmark.circle.fill" : "circle")
-                    .font(.system(size: S2.MyDay.Icon.checklistSize))
-                    .foregroundColor(item.wrappedValue.isCompleted ? S2.MyDay.Colors.interactiveTint : S2.MyDay.Colors.disabledIcon)
-            }
-            .buttonStyle(.plain)
+            EmptyView()
         } title: {
             TextField(placeholder, text: item.title)
                 .font(S2.MyDay.Typography.fieldValue)
@@ -113,7 +124,18 @@ struct ChecklistBlockView: View {
         } subtitle: {
             EmptyView()
         } trailing: {
-            trailingDeleteButton(showDelete: showDelete, onDelete: onDelete)
+            HStack(spacing: S2.MyDay.Spacing.compact) {
+                S2MyDayDoneIconButton(
+                    isCompleted: item.wrappedValue.isCompleted,
+                    size: .compact,
+                    completedIconName: checklistCompletedIconName,
+                    incompleteIconName: checklistIncompleteIconName
+                ) {
+                    item.wrappedValue.isCompleted.toggle()
+                }
+
+                trailingDeleteButton(showDelete: showDelete, onDelete: onDelete)
+            }
         }
     }
 

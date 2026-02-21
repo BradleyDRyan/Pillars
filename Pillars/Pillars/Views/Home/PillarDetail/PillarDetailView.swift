@@ -53,7 +53,7 @@ struct PillarDetailView: View {
             
             // Tab bar (always visible)
             PillarTabBar(
-                tabs: ["Principles", "Saves"],
+                tabs: ["Principles", "Saves", "Points"],
                 selectedIndex: Binding(
                     get: { selectedTab ?? 0 },
                     set: { selectedTab = $0 }
@@ -76,6 +76,12 @@ struct PillarDetailView: View {
                     }
                     .containerRelativeFrame(.horizontal)
                     .id(1)
+
+                    TabContentScrollView(offset: selectedTab == 2 ? $scrollOffset : .constant(0)) {
+                        PointsContentView(pillar: pillar)
+                    }
+                    .containerRelativeFrame(.horizontal)
+                    .id(2)
                 }
                 .scrollTargetLayout()
             }
@@ -178,4 +184,3 @@ struct TabContentScrollView<Content: View>: View {
         .environmentObject(FirebaseManager.shared)
     }
 }
-

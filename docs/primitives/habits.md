@@ -12,6 +12,8 @@ Habits are a primitive plus per-day log entries.
 
 - `habits` collection:
   - Stores habit definitions and schedule metadata.
+- `habitGroups` collection:
+  - Stores user-defined habit grouping labels.
 - `habitLogs` collection:
   - Stores daily completion/value/notes by `habitId + date`.
 
@@ -34,6 +36,20 @@ Habits are a primitive plus per-day log entries.
   },
   "isActive": "boolean",
   "pillarId": "string|null",
+  "groupId": "string|null",
+  "groupName": "string|null",
+  "createdAt": "unix-seconds",
+  "updatedAt": "unix-seconds",
+  "archivedAt": "unix-seconds|null"
+}
+```
+
+### Habit Group Record Shape
+```json
+{
+  "id": "string",
+  "userId": "string",
+  "name": "string (1..80)",
   "createdAt": "unix-seconds",
   "updatedAt": "unix-seconds",
   "archivedAt": "unix-seconds|null"
@@ -62,7 +78,14 @@ Habits endpoints:
 - `POST /api/habits`
 - `GET /api/habits/:id`
 - `PUT /api/habits/:id`
+- `PATCH /api/habits/:id`
+- `POST /api/habits/:id/archive`
+- `POST /api/habits/:id/unarchive`
 - `DELETE /api/habits/:id` (soft archive by default, hard delete with `?hard=true`)
+- `GET /api/habits/groups`
+- `POST /api/habits/groups`
+- `PUT /api/habits/groups/:id`
+- `DELETE /api/habits/groups/:id` (soft archive by default, hard delete with `?hard=true`)
 - `GET /api/habits/scheduled/:date`
 - `GET /api/habits/:id/logs/:date`
 - `PUT /api/habits/:id/logs/:date`
@@ -70,9 +93,15 @@ Habits endpoints:
 
 Query behavior:
 
-- `GET /api/habits` defaults to active habits (`active=true` behavior).
-- Supported filters include `sectionId`, `dayOfWeek`, and `pillarId`.
-- `pillarId=none` filters to untagged habits.
+- `GET /api/habits` defaults to `status=active` and `archived=exclude`.
+- Supported filters:
+- `status=active|inactive|all` (legacy alias: `active=true|false`)
+- `archived=exclude|include|only` (legacy alias: `includeArchived=true|false`)
+- `q=<search>` (legacy alias: `search`) over name + description + target unit
+- `sectionId=morning|afternoon|evening`
+- `dayOfWeek=sunday..saturday`
+- `pillarId=<id>|none`
+- `groupId=<id>|none`
 
 ## Canonical Schema Source
 Machine-readable schema is served by:
@@ -81,9 +110,13 @@ Machine-readable schema is served by:
 
 `habitSchema` includes:
 
+- `listQuery`
+- `readQuery`
 - `create`
 - `update`
 - `log`
+- `createResponse`
+- `updateResponse`
 
 ## Day Projection Contract
 Habits project into Day block reads as virtual blocks.

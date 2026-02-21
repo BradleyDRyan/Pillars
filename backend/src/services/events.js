@@ -14,6 +14,10 @@ const VALID_EVENT_TYPES = new Set([
   'todo.deleted',
   'habit.logged',
   'habit.created',
+  'habit.updated',
+  'habit.archived',
+  'habit.unarchived',
+  'habit.deleted',
   'pillar.created',
   'pillar.updated'
 ]);

@@ -21,12 +21,12 @@ const RESOLVE_TRUTHY = new Set(['true', '1', 'yes', 'on', 'blockinheritance']);
 const RESOLVE_FALSY = new Set(['false', '0', 'no', 'off']);
 
 const BUILTIN_BLOCK_TYPES = Object.freeze([
-  { id: 'sleep', name: 'Sleep', icon: 'moon.zzz.fill', subtitleTemplate: '{score}% - {durationHours}h' },
-  { id: 'feeling', name: 'Mood', icon: 'heart.fill', subtitleTemplate: 'Energy {energy} - Mood {mood}' },
-  { id: 'workout', name: 'Workout', icon: 'figure.run', subtitleTemplate: '{type} - {duration}' },
-  { id: 'reflection', name: 'Reflection', icon: 'sparkles', subtitleTemplate: '{freeText}' },
-  { id: 'habits', name: 'Habit', icon: 'checkmark.circle', subtitleTemplate: '{status}' },
-  { id: 'todo', name: 'To-Do', icon: 'checklist', subtitleTemplate: '{status}' }
+  { id: 'sleep', name: 'Sleep', icon: '.sleep', subtitleTemplate: '{score}% - {durationHours}h' },
+  { id: 'feeling', name: 'Mood', icon: '.feeling', subtitleTemplate: 'Energy {energy} - Mood {mood}' },
+  { id: 'workout', name: 'Workout', icon: '.workout', subtitleTemplate: '{type} - {duration}' },
+  { id: 'reflection', name: 'Reflection', icon: '.reflection', subtitleTemplate: '{freeText}' },
+  { id: 'habits', name: 'Habit', icon: '.habits', subtitleTemplate: '{status}' },
+  { id: 'todo', name: 'To-Do', icon: '.todo', subtitleTemplate: '{status}' }
 ]);
 
 function isMissingIndexError(error) {

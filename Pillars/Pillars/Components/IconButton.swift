@@ -57,20 +57,30 @@ struct IconButton: View {
     let isSystemIcon: Bool
     let variant: IconButtonVariant
     let size: IconButtonSize
+    let showShadow: Bool
     let action: () -> Void
     
-    init(icon: String, isSystemIcon: Bool = false, variant: IconButtonVariant = .secondary, size: IconButtonSize = .small, action: @escaping () -> Void) {
+    init(
+        icon: String,
+        isSystemIcon: Bool = false,
+        variant: IconButtonVariant = .secondary,
+        size: IconButtonSize = .small,
+        showShadow: Bool = true,
+        action: @escaping () -> Void
+    ) {
         self.icon = icon
         self.isSystemIcon = isSystemIcon
         self.variant = variant
         self.size = size
+        self.showShadow = showShadow
         self.action = action
     }
     
     // Composer uses fixed 48px with specific padding
     private var composerPadding: CGFloat { 14 }  // 20 + 14*2 + ~4px glass border = 52px
     
-    var body: some View {
+    @ViewBuilder
+    private var baseButton: some View {
         switch variant {
         case .primary:
             Button(action: action) {
@@ -80,17 +90,24 @@ struct IconButton: View {
                     .background(Circle().fill(Color.black))
             }
             .buttonStyle(.plain)
-            .glassShadow()
             
         case .secondary:
-            Button(action: action) {
-                iconContent
-                    .foregroundStyle(.primary)
-                    .padding(size.padding)
+            if showShadow {
+                Button(action: action) {
+                    iconContent
+                        .foregroundStyle(.primary)
+                        .padding(size.padding)
+                }
+                .buttonStyle(.plain)
+                .glassEffect(.regular.interactive(), in: .circle)
+            } else {
+                Button(action: action) {
+                    iconContent
+                        .foregroundStyle(.primary)
+                        .padding(size.padding)
+                }
+                .buttonStyle(.plain)
             }
-            .buttonStyle(.plain)
-            .glassEffect(.regular.interactive(), in: .circle)
-            .glassShadow()
             
         case .composer:
             Button(action: action) {
@@ -100,7 +117,14 @@ struct IconButton: View {
             }
             .buttonStyle(.plain)
             .glassEffect(.regular.interactive(), in: .circle)
-            .glassShadow()
+        }
+    }
+
+    var body: some View {
+        if showShadow {
+            baseButton.glassShadow()
+        } else {
+            baseButton
         }
     }
     
@@ -137,4 +161,3 @@ struct IconButton: View {
     .frame(maxWidth: .infinity, maxHeight: .infinity)
     .background(Color(UIColor.systemGray6))
 }
-

@@ -29,7 +29,9 @@ class Pillar {
       taskCount: 0,
       principleCount: 0,
       wisdomCount: 0,
-      resourceCount: 0
+      resourceCount: 0,
+      pointEventCount: 0,
+      pointTotal: 0
     };
     this.createdAt = data.createdAt || new Date();
     this.updatedAt = data.updatedAt || new Date();
@@ -133,6 +135,25 @@ class Pillar {
     const resources = await firestore.collection('resources')
       .where('pillarId', '==', this.id)
       .get();
+
+    const pointEventsSnapshot = await firestore.collection('pointEvents')
+      .where('userId', '==', this.userId)
+      .where('voidedAt', '==', null)
+      .where('pillarIds', 'array-contains', this.id)
+      .get();
+
+    let pointTotal = 0;
+    for (const doc of pointEventsSnapshot.docs) {
+      const data = doc.data() || {};
+      if (!Array.isArray(data.allocations)) {
+        continue;
+      }
+      for (const allocation of data.allocations) {
+        if (allocation && allocation.pillarId === this.id && Number.isFinite(allocation.points)) {
+          pointTotal += allocation.points;
+        }
+      }
+    }
     
     this.stats = {
       conversationCount: conversations.size,
@@ -140,7 +161,9 @@ class Pillar {
       taskCount: tasks.size,
       principleCount: principles.size,
       wisdomCount: wisdoms.size,
-      resourceCount: resources.size
+      resourceCount: resources.size,
+      pointEventCount: pointEventsSnapshot.size,
+      pointTotal
     };
     
     await this.save();
@@ -192,4 +215,3 @@ class Pillar {
 }
 
 module.exports = Pillar;
-

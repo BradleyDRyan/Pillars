@@ -2,7 +2,7 @@
 //  PillarIcon.swift
 //  Pillars
 //
-//  Icons for pillars - supports both SF Symbols and emoji
+//  Icons for pillars.
 //
 
 import SwiftUI
@@ -95,7 +95,3 @@ extension PillarIcon {
             )
     }
 }
-
-
-
-

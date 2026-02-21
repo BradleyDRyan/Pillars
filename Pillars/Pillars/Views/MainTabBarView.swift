@@ -2,7 +2,7 @@
 //  MainTabBarView.swift
 //  Pillars
 //
-//  Main tab bar container with My Day, Todo, Habits, Pillars, and Profile tabs
+//  Main tab bar container with Day, Todo, Habits, Pillars, and Profile tabs
 //
 
 import SwiftUI

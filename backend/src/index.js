@@ -39,6 +39,7 @@ const dayTemplateRoutes = require('./routes/day-templates');
 const blockTypeRoutes = require('./routes/block-types');
 const todoRoutes = require('./routes/todos');
 const habitRoutes = require('./routes/habits');
+const pointEventRoutes = require('./routes/point-events');
 const planRoutes = require('./routes/plan');
 const eventRoutes = require('./routes/events');
 const contextRoutes = require('./routes/context');
@@ -79,6 +80,7 @@ app.get('/', (req, res) => {
       plan: '/api/plan/by-date/:date',
       todos: '/api/todos',
       habits: '/api/habits',
+      pointEvents: '/api/point-events',
       events: '/api/events',
       context: '/api/context',
       schemas: '/api/schemas'
@@ -110,6 +112,7 @@ app.use('/api/day-templates', dayTemplateRoutes);
 app.use('/api/block-types', blockTypeRoutes);
 app.use('/api/todos', todoRoutes);
 app.use('/api/habits', habitRoutes);
+app.use('/api/point-events', pointEventRoutes);
 app.use('/api/plan', planRoutes);
 app.use('/api/events', eventRoutes);
 app.use('/api/context', contextRoutes);

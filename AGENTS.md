@@ -22,9 +22,12 @@ Pillars is built on two core primitives:
 - Claudebot input: API-driven updates (expected majority of writes).
 - Both paths write to the same user-scoped backend source of truth.
 
-### API-First Rule
-- Treat the backend API as the primary write path for product state.
-- Design features in this order:
+### Write Path Rules (Canonical)
+- External agents: API-first. Treat backend API contracts as the primary write path for agent-driven state changes.
+- iOS app: Firebase-first. Default to direct Firebase SDK reads/writes for app-native primitive interactions.
+- Use backend API from iOS only when server-only behavior is required (for example privileged validation, server orchestration, or non-Firebase integrations).
+
+Design features in this order:
 1. User outcome
 2. Data model contract
 3. API contract

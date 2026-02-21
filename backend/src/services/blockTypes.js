@@ -42,22 +42,63 @@ async function ensureBuiltinBlockTypesForUser({ db, userId }) {
   const batch = db.batch();
   const timestamp = nowTs();
   let created = 0;
+  let normalized = 0;
 
   for (const builtin of BUILTIN_BLOCK_TYPES) {
-    if (existingByTypeId.has(builtin.id)) {
+    const existingItem = existingByTypeId.get(builtin.id);
+    if (!existingItem) {
+      const docRef = db.collection('blockTypes').doc(`${userId}__builtin__${builtin.id}`);
+      batch.set(docRef, createBuiltinBlockTypeDoc({ userId, type: builtin, nowTs: timestamp }));
+      created += 1;
       continue;
     }
 
-    const docRef = db.collection('blockTypes').doc(`${userId}__builtin__${builtin.id}`);
-    batch.set(docRef, createBuiltinBlockTypeDoc({ userId, type: builtin, nowTs: timestamp }));
-    created += 1;
+    const next = createBuiltinBlockTypeDoc({ userId, type: builtin, nowTs: timestamp });
+    const current = {
+      id: existingItem.id,
+      name: existingItem.name,
+      icon: existingItem.icon,
+      color: existingItem.color,
+      category: existingItem.category,
+      defaultSection: existingItem.defaultSection,
+      subtitleTemplate: existingItem.subtitleTemplate,
+      dataSchema: existingItem.dataSchema
+    };
+
+    const shouldNormalize = current.name !== next.name
+      || current.icon !== next.icon
+      || current.color !== next.color
+      || current.category !== 'built-in'
+      || current.defaultSection !== next.defaultSection
+      || current.subtitleTemplate !== next.subtitleTemplate
+      || !current.dataSchema
+      || !Array.isArray(current.dataSchema.fields)
+      || JSON.stringify(current.dataSchema) !== JSON.stringify(next.dataSchema);
+
+    if (!shouldNormalize) {
+      continue;
+    }
+
+    const docRef = db.collection('blockTypes').doc(existingItem.docId);
+    batch.set(docRef, {
+      name: next.name,
+      icon: next.icon,
+      color: next.color,
+      category: next.category,
+      defaultSection: next.defaultSection,
+      subtitleTemplate: next.subtitleTemplate,
+      dataSchema: next.dataSchema,
+      isDeletable: false,
+      updatedAt: timestamp
+    }, { merge: true });
+    normalized += 1;
   }
 
-  if (created > 0) {
+  if (created > 0 || normalized > 0) {
     await batch.commit();
   }
 
-  return created;
+  return { created, normalized };
 }
 
 async function listBlockTypesForUser({ db, userId, ensureBuiltins = true }) {

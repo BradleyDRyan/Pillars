@@ -30,6 +30,7 @@ const SECTION_RANK = Object.freeze({
 const MULTI_INSTANCE_TYPE_SET = new Set(['todo', 'habits']);
 const LEGACY_PROJECTED_TYPE_SET = new Set(['todo', 'todos', 'habits', 'morninghabits']);
 const DISABLED_DEFAULT_NATIVE_TYPE_SET = new Set(['sleep', 'feeling', 'workout', 'reflection']);
+const HABIT_LOG_STATUS = new Set(['completed', 'skipped', 'pending']);
 
 function isValidDateString(value) {
   return typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value);
@@ -320,7 +321,11 @@ function buildTodoProjectionBlock({ userId, date, todo }) {
 }
 
 function buildHabitProjectionBlock({ userId, date, habit, log }) {
-  const completed = Boolean(log?.completed);
+  const rawStatus = typeof log?.status === 'string' ? log.status.toLowerCase() : null;
+  const normalizedStatus = rawStatus && HABIT_LOG_STATUS.has(rawStatus)
+    ? rawStatus
+    : (log?.completed ? 'completed' : 'pending');
+  const completed = normalizedStatus === 'completed';
 
   return {
     id: `proj_habit_${habit.id}`,
@@ -341,7 +346,7 @@ function buildHabitProjectionBlock({ userId, date, habit, log }) {
       completed,
       value: typeof log?.value === 'number' ? log.value : null,
       notes: typeof log?.notes === 'string' ? log.notes : '',
-      status: completed ? 'completed' : 'pending'
+      status: normalizedStatus
     },
     createdAt: typeof habit.createdAt === 'number' ? habit.createdAt : 0,
     updatedAt: typeof habit.updatedAt === 'number' ? habit.updatedAt : 0,
@@ -490,6 +495,19 @@ function normalizeProjectedStatus(value) {
   return normalized;
 }
 
+function normalizeProjectedHabitStatus(value) {
+  if (typeof value !== 'string') {
+    throw createValidationError('status must be a string');
+  }
+
+  const normalized = value.trim().toLowerCase();
+  if (!HABIT_LOG_STATUS.has(normalized)) {
+    throw createValidationError('status must be completed, skipped, or pending');
+  }
+
+  return normalized;
+}
+
 function normalizeProjectedCompleted(value) {
   if (typeof value !== 'boolean') {
     throw createValidationError('completed must be a boolean');
@@ -624,7 +642,7 @@ async function applyProjectedHabitPatch({ userId, date, primitiveId, body }) {
     }
 
     for (const key of Object.keys(body.data)) {
-      if (!['name', 'completed', 'value', 'notes'].includes(key)) {
+      if (!['name', 'completed', 'value', 'notes', 'status'].includes(key)) {
         throw createValidationError(`Unsupported habit data field: ${key}`);
       }
     }
@@ -634,24 +652,40 @@ async function applyProjectedHabitPatch({ userId, date, primitiveId, body }) {
     }
 
     if (Object.prototype.hasOwnProperty.call(body.data, 'completed')
+      || Object.prototype.hasOwnProperty.call(body.data, 'status')
       || Object.prototype.hasOwnProperty.call(body.data, 'value')
       || Object.prototype.hasOwnProperty.call(body.data, 'notes')) {
       const currentLog = await getHabitLog({ habitId: primitiveId, date });
       const timestamp = nowTs();
+      const currentRawStatus = currentLog?.status;
+      const fallbackStatus = typeof currentRawStatus === 'string'
+        ? currentRawStatus.toLowerCase()
+        : (currentLog?.completed ? 'completed' : 'pending');
+      const normalizedFallbackStatus = HABIT_LOG_STATUS.has(fallbackStatus)
+        ? fallbackStatus
+        : 'pending';
       logPatch = {
         id: `${primitiveId}_${date}`,
         userId,
         habitId: primitiveId,
         date,
-        completed: currentLog?.completed || false,
+        completed: normalizedFallbackStatus === 'completed',
+        status: normalizedFallbackStatus,
         value: currentLog?.value ?? null,
         notes: currentLog?.notes || '',
         createdAt: currentLog?.createdAt || timestamp,
         updatedAt: timestamp
       };
 
+      if (Object.prototype.hasOwnProperty.call(body.data, 'status')) {
+        logPatch.status = normalizeProjectedHabitStatus(body.data.status);
+        logPatch.completed = logPatch.status === 'completed';
+      }
       if (Object.prototype.hasOwnProperty.call(body.data, 'completed')) {
         logPatch.completed = normalizeProjectedCompleted(body.data.completed);
+        if (!Object.prototype.hasOwnProperty.call(body.data, 'status')) {
+          logPatch.status = logPatch.completed ? 'completed' : 'pending';
+        }
       }
       if (Object.prototype.hasOwnProperty.call(body.data, 'value')) {
         logPatch.value = normalizeProjectedNumberOrNull(body.data.value, 'data.value');

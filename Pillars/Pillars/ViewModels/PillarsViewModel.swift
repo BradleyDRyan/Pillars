@@ -78,7 +78,9 @@ class PillarsViewModel: ObservableObject {
                         conversationCount: statsData["conversationCount"] as? Int ?? 0,
                         principleCount: statsData["principleCount"] as? Int ?? 0,
                         wisdomCount: statsData["wisdomCount"] as? Int ?? 0,
-                        resourceCount: statsData["resourceCount"] as? Int ?? 0
+                        resourceCount: statsData["resourceCount"] as? Int ?? 0,
+                        pointEventCount: statsData["pointEventCount"] as? Int ?? 0,
+                        pointTotal: statsData["pointTotal"] as? Int ?? 0
                     )
                     
                     return Pillar(
@@ -134,7 +136,9 @@ class PillarsViewModel: ObservableObject {
                 "conversationCount": 0,
                 "principleCount": 0,
                 "wisdomCount": 0,
-                "resourceCount": 0
+                "resourceCount": 0,
+                "pointEventCount": 0,
+                "pointTotal": 0
             ],
             "createdAt": Timestamp(date: now),
             "updatedAt": Timestamp(date: now)

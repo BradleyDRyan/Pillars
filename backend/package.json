@@ -8,6 +8,8 @@
     "dev": "nodemon src/index.js",
     "test": "jest",
     "purge:legacy-dayblocks": "node scripts/purge-legacy-dayblocks.js",
+    "migrate:built-in-block-icons": "node scripts/migrate-builtin-block-type-icons.js",
+    "backfill:todo-point-events": "node scripts/backfill-todo-point-events.js",
     "vercel-build": "echo 'No build step required'"
   },
   "dependencies": {

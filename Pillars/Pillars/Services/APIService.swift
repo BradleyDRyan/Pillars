@@ -72,6 +72,7 @@ class APIService: ObservableObject {
     // MARK: - Pillars
     
     func fetchPillars() async throws -> [Pillar] {
+        _ = try await getFirebaseToken()
         guard let url = URL(string: "\(baseURL)/pillars") else {
             throw APIError.invalidURL("\(baseURL)/pillars")
         }
@@ -79,7 +80,33 @@ class APIService: ObservableObject {
         let (data, response) = try await session.data(for: request)
         return try await handleResponse(data, response, nil, type: [Pillar].self)
     }
-    
+
+    // MARK: - Point Events
+
+    func fetchPointEvents(pillarId: String, fromDate: String? = nil, toDate: String? = nil) async throws -> [PointEvent] {
+        _ = try await getFirebaseToken()
+
+        var components = URLComponents(string: "\(baseURL)/point-events")
+        var items: [URLQueryItem] = [
+            URLQueryItem(name: "pillarId", value: pillarId)
+        ]
+        if let fromDate {
+            items.append(URLQueryItem(name: "fromDate", value: fromDate))
+        }
+        if let toDate {
+            items.append(URLQueryItem(name: "toDate", value: toDate))
+        }
+        components?.queryItems = items
+
+        guard let url = components?.url else {
+            throw APIError.invalidURL("\(baseURL)/point-events")
+        }
+
+        let request = createRequest(url: url)
+        let (data, response) = try await session.data(for: request)
+        return try await handleResponse(data, response, nil, type: PointEventsResponse.self).items
+    }
+
     // MARK: - Principles
     
     func fetchPrinciples(pillarId: String? = nil) async throws -> [Principle] {
@@ -149,4 +176,9 @@ enum APIError: LocalizedError {
             return "Invalid URL: \(url)"
         }
     }
+}
+
+struct PointEventsResponse: Codable {
+    let items: [PointEvent]
+    let count: Int
 }

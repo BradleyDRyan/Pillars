@@ -75,6 +75,7 @@ Mounted route groups from `backend/src/index.js` and `backend/api/index.js`:
 | `/api/context` | single-call aggregated context read (days + selected primitives) | token, user API key, or internal service secret + `x-user-id` |
 | `/api/todos` | per-user Todo primitive (Todoist-style task API, optional `pillarId`) | token, user API key, or internal service secret + `x-user-id` |
 | `/api/habits` | per-user Habit primitive + daily logs (optional `pillarId`) | token, user API key, or internal service secret + `x-user-id` |
+| `/api/point-events` | user-scoped point event read/write/rollup | token, user API key, or internal service secret + `x-user-id` |
 | `/api/test` | test/debug endpoints | mixed |
 
 Block System v1 routes:
@@ -95,6 +96,14 @@ Block System v1 routes:
 - `POST /api/days/by-date/:date/generate` is disabled (`410 Gone`)
 - Day-native default block types (`sleep`, `feeling`, `workout`, `reflection`) are disabled from write surfaces
 - `POST /api/todos` supports optional `schedule: { date, sectionId, order }` and returns `{ todo, scheduled }` where `scheduled` includes deterministic projection id `proj_todo_<todoId>` when scheduled
+- Todo bounty payouts are trigger-driven:
+- iOS/clients write todo completion directly in Firestore.
+- Firebase function `functions/src/todoBountyTrigger.js` reconciles `pointEvents` (`pe_todo_<todoId>`) and `todos.bountyPaidAt`.
+- `POST /api/todos/:id/close|complete|reopen|incomplete` remains available for agents and state transitions, but payout side effects are eventual via trigger.
+- Habit bounty payouts are trigger-driven:
+- iOS/clients write habit logs directly in Firestore.
+- Firebase function `functions/src/habitBountyTrigger.js` reconciles `pointEvents` (`pe_habit_<habitId>_<YYYY-MM-DD>`) from habit bounty settings.
+- `PUT|POST /api/habits/:id/logs/:date` remains available for agents and status transitions, but payout side effects are eventual via trigger.
 - `GET /api/context` (aggregates date-window Day payloads plus optional `todos`, `habits`, `pillars`, `principles`, `insights`)
 - Context query supports:
 - `days` (default `7`, max `30`) or explicit `fromDate` + `toDate` (inclusive, max span `30`)
@@ -131,7 +140,20 @@ Pillar-linked primitive contract:
 - `pillarId=<id>|none`
 - `includeSubtasks=true|false` and `flat=true|false`
 - legacy aliases: `search` for `q`, `includeArchived` for `archived`
-- `GET /api/habits?pillarId=<id>` and `GET /api/habits?pillarId=none`
+- `GET /api/habits` supports:
+- `status=active|inactive|all` (default `active`)
+- `archived=exclude|include|only` (default `exclude`)
+- `q=<search>` (name + description + target unit, case-insensitive)
+- `sectionId=morning|afternoon|evening`
+- `dayOfWeek=sunday..saturday`
+- `pillarId=<id>|none`
+- `groupId=<id>|none`
+- legacy aliases: `active` for `status`, `search` for `q`, `includeArchived` for `archived`
+- Habit groups:
+- `GET /api/habits/groups`
+- `POST /api/habits/groups`
+- `PUT /api/habits/groups/:id`
+- `DELETE /api/habits/groups/:id`
 
 ### Removed (2026-02-19)
 - `/api/admin`
@@ -159,6 +181,7 @@ Pillar-linked primitive contract:
 - `dayTemplates`
 - `todos`
 - `habits`
+- `habitGroups`
 - `habitLogs`
 - `triggerTemplates`
 - `nudgeHistory`

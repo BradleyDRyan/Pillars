@@ -2,7 +2,7 @@
 //  SavesViewModel.swift
 //  Pillars
 //
-//  ViewModel for managing saves (insights) with Firestore reads and backend writes
+//  ViewModel for managing saves (insights) with Firestore reads and writes.
 //
 
 import Foundation
@@ -87,113 +87,57 @@ class SavesViewModel: ObservableObject {
         listener = nil
     }
     
-    // MARK: - Create (Writes to Backend)
+    // MARK: - Create
     
     func createSave(pillarId: String, content: String, source: InsightSource = .manual, tags: [String] = []) async throws {
-        guard let user = Auth.auth().currentUser else {
-            throw SaveError.notAuthenticated
-        }
-        
+        guard let user = Auth.auth().currentUser else { throw SaveError.notAuthenticated }
+
         isSaving = true
         defer { isSaving = false }
-        
-        let token = try await user.getIDToken()
-        guard let url = URL(string: "\(AppConfig.apiBaseURL)/insights") else {
-            throw SaveError.invalidURL
-        }
-        
-        var request = URLRequest(url: url)
-        request.httpMethod = "POST"
-        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
-        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        
-        let body: [String: Any] = [
+
+        let now = Timestamp(date: Date())
+        let insightRef = db.collection("insights").document()
+        let payload: [String: Any] = [
+            "id": insightRef.documentID,
+            "userId": user.uid,
             "pillarId": pillarId,
             "content": content,
             "source": source.rawValue,
-            "tags": tags
+            "conversationId": NSNull(),
+            "tags": tags,
+            "createdAt": now,
+            "updatedAt": now
         ]
-        
-        request.httpBody = try JSONSerialization.data(withJSONObject: body)
-        
-        let (data, response) = try await URLSession.shared.data(for: request)
-        
-        guard let httpResponse = response as? HTTPURLResponse else {
-            throw SaveError.invalidResponse
-        }
-        
-        if httpResponse.statusCode != 201 {
-            let errorMessage = String(data: data, encoding: .utf8) ?? "Unknown error"
-            print("❌ [SavesViewModel] Create failed: \(errorMessage)")
-            throw SaveError.createFailed
-        }
-        
+
+        try await insightRef.setData(payload)
         print("✅ [SavesViewModel] Created save")
     }
     
-    // MARK: - Update (Writes to Backend)
+    // MARK: - Update
     
     func updateSave(_ save: Insight, content: String? = nil, tags: [String]? = nil) async throws {
-        guard let user = Auth.auth().currentUser,
-              let saveId = save.id else {
-            throw SaveError.notAuthenticated
-        }
-        
+        guard Auth.auth().currentUser != nil else { throw SaveError.notAuthenticated }
+        guard let saveId = save.id else { throw SaveError.updateFailed }
+
         isSaving = true
         defer { isSaving = false }
-        
-        let token = try await user.getIDToken()
-        guard let url = URL(string: "\(AppConfig.apiBaseURL)/insights/\(saveId)") else {
-            throw SaveError.invalidURL
-        }
-        
-        var request = URLRequest(url: url)
-        request.httpMethod = "PUT"
-        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
-        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        
+
         var body: [String: Any] = [:]
         if let content = content { body["content"] = content }
         if let tags = tags { body["tags"] = tags }
-        
-        request.httpBody = try JSONSerialization.data(withJSONObject: body)
-        
-        let (data, response) = try await URLSession.shared.data(for: request)
-        
-        guard let httpResponse = response as? HTTPURLResponse,
-              httpResponse.statusCode == 200 else {
-            let errorMessage = String(data: data, encoding: .utf8) ?? "Unknown error"
-            print("❌ [SavesViewModel] Update failed: \(errorMessage)")
-            throw SaveError.updateFailed
-        }
-        
+        body["updatedAt"] = Timestamp(date: Date())
+
+        try await db.collection("insights").document(saveId).setData(body, merge: true)
         print("✅ [SavesViewModel] Updated save")
     }
     
-    // MARK: - Delete (Writes to Backend)
+    // MARK: - Delete
     
     func deleteSave(_ save: Insight) async throws {
-        guard let user = Auth.auth().currentUser,
-              let saveId = save.id else {
-            throw SaveError.notAuthenticated
-        }
-        
-        let token = try await user.getIDToken()
-        guard let url = URL(string: "\(AppConfig.apiBaseURL)/insights/\(saveId)") else {
-            throw SaveError.invalidURL
-        }
-        
-        var request = URLRequest(url: url)
-        request.httpMethod = "DELETE"
-        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
-        
-        let (_, response) = try await URLSession.shared.data(for: request)
-        
-        guard let httpResponse = response as? HTTPURLResponse,
-              httpResponse.statusCode == 204 else {
-            throw SaveError.deleteFailed
-        }
-        
+        guard Auth.auth().currentUser != nil else { throw SaveError.notAuthenticated }
+        guard let saveId = save.id else { throw SaveError.deleteFailed }
+
+        try await db.collection("insights").document(saveId).delete()
         print("✅ [SavesViewModel] Deleted save")
     }
 }
@@ -225,6 +169,5 @@ enum SaveError: LocalizedError {
         }
     }
 }
-
 
 

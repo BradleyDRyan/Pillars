@@ -16,6 +16,10 @@ struct Todo: Decodable, Identifiable {
     let status: String?
     let pillarId: String?
     let parentId: String?
+    let bountyPoints: Int?
+    let bountyPillarId: String?
+    let bountyReason: String?
+    let bountyPaidAt: TimeInterval?
     let createdAt: TimeInterval?
     let updatedAt: TimeInterval?
     let completedAt: TimeInterval?

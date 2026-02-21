@@ -156,14 +156,7 @@ struct TodoView: View {
         let completed = entry.isCompleted
 
         return ListRow(swipeDelete: { viewModel.deleteTodo(todoId: entry.id) }) {
-            Button {
-                toggleTodo(entry)
-            } label: {
-                Image(systemName: completed ? "checkmark.circle.fill" : "circle")
-                    .font(.system(size: S2.MyDay.Icon.checklistSize))
-                    .foregroundColor(completed ? S2.MyDay.Colors.interactiveTint : S2.MyDay.Colors.disabledIcon)
-            }
-            .buttonStyle(.plain)
+            EmptyView()
         } title: {
             Text(entry.content)
                 .font(S2.MyDay.Typography.fieldValue)
@@ -176,6 +169,20 @@ struct TodoView: View {
                 .foregroundColor(S2.MyDay.Colors.subtitleText)
         } trailing: {
             HStack(spacing: S2.Spacing.xs) {
+                if let bounty = bountyLabel(entry) {
+                    HStack(spacing: 6) {
+                        Image(systemName: "sparkles")
+                            .font(.system(size: 12, weight: .semibold))
+                        Text(bounty)
+                            .font(.system(size: 13, weight: .semibold))
+                    }
+                    .foregroundColor(S2.MyDay.Colors.titleText)
+                    .padding(.horizontal, S2.Spacing.sm)
+                    .padding(.vertical, S2.Spacing.xs)
+                    .background(S2.MyDay.Colors.sectionBackground.opacity(0.9))
+                    .clipShape(RoundedRectangle(cornerRadius: S2.CornerRadius.md, style: .continuous))
+                }
+
                 PillarTagChip(
                     title: pillarLabel(for: entry.pillarId),
                     color: pillarColor(for: entry.pillarId)
@@ -191,7 +198,7 @@ struct TodoView: View {
                         .background(S2.MyDay.Colors.sectionBackground)
                         .clipShape(Circle())
                 }
-                .buttonStyle(.plain)
+                    .buttonStyle(.plain)
 
                 Button {
                     pillarPickerTarget = entry
@@ -204,6 +211,14 @@ struct TodoView: View {
                         .clipShape(Circle())
                 }
                 .buttonStyle(.plain)
+
+                S2MyDayDoneIconButton(
+                    isCompleted: completed,
+                    size: .compact,
+                    action: {
+                        toggleTodo(entry)
+                    }
+                )
             }
         }
     }
@@ -287,6 +302,11 @@ struct TodoView: View {
             return "Scheduled \(TodoDateCodec.displayLabel(for: dueDate))"
         }
         return "Unscheduled"
+    }
+
+    private func bountyLabel(_ todo: Todo) -> String? {
+        guard let points = todo.bountyPoints, points > 0 else { return nil }
+        return "+\(points)"
     }
 
     private func toggleTodo(_ entry: Todo) {

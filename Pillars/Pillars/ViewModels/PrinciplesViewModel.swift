@@ -2,7 +2,7 @@
 //  PrinciplesViewModel.swift
 //  Pillars
 //
-//  ViewModel for managing principles with Firestore reads and backend writes
+//  ViewModel for managing principles with Firestore reads and writes.
 //
 
 import Foundation
@@ -87,139 +87,60 @@ class PrinciplesViewModel: ObservableObject {
         listener = nil
     }
     
-    // MARK: - Create (Writes to Backend)
-    
+    // MARK: - Create
+
     func createPrinciple(pillarId: String, title: String, description: String, priority: Int = 3) async throws {
-        guard let user = Auth.auth().currentUser else {
-            print("❌ [PrinciplesViewModel] Not authenticated")
-            throw PrincipleError.notAuthenticated
-        }
-        
+        guard let user = Auth.auth().currentUser else { throw PrincipleError.notAuthenticated }
+
         isSaving = true
         defer { isSaving = false }
-        
-        print("🔐 [PrinciplesViewModel] Getting ID token for user: \(user.uid)")
-        let token = try await user.getIDToken()
-        
-        let urlString = "\(AppConfig.apiBaseURL)/principles"
-        print("🌐 [PrinciplesViewModel] URL: \(urlString)")
-        
-        guard let url = URL(string: urlString) else {
-            print("❌ [PrinciplesViewModel] Invalid URL: \(urlString)")
-            throw PrincipleError.invalidURL
-        }
-        
-        var request = URLRequest(url: url)
-        request.httpMethod = "POST"
-        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
-        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        
-        let body: [String: Any] = [
+
+        let now = Timestamp(date: Date())
+        let principleRef = db.collection("principles").document()
+        let payload: [String: Any] = [
+            "id": principleRef.documentID,
+            "userId": user.uid,
             "pillarId": pillarId,
             "title": title,
             "description": description,
             "priority": priority,
-            "isActive": true
+            "isActive": true,
+            "tags": [],
+            "createdAt": now,
+            "updatedAt": now
         ]
-        
-        request.httpBody = try JSONSerialization.data(withJSONObject: body)
-        
-        print("📤 [PrinciplesViewModel] Creating principle:")
-        print("   - pillarId: \(pillarId)")
-        print("   - title: \(title)")
-        print("   - description: \(description)")
-        print("   - priority: \(priority)")
-        
-        do {
-            let (data, response) = try await URLSession.shared.data(for: request)
-            
-            guard let httpResponse = response as? HTTPURLResponse else {
-                print("❌ [PrinciplesViewModel] Invalid response type")
-                throw PrincipleError.invalidResponse
-            }
-            
-            let responseBody = String(data: data, encoding: .utf8) ?? "Unknown error"
-            print("📥 [PrinciplesViewModel] Response status: \(httpResponse.statusCode), body: \(responseBody)")
-            
-            if httpResponse.statusCode != 201 {
-                print("❌ [PrinciplesViewModel] Create failed with status \(httpResponse.statusCode): \(responseBody)")
-                throw PrincipleError.serverError(responseBody)
-            }
-            
-            print("✅ [PrinciplesViewModel] Created principle '\(title)'")
-        } catch let error as PrincipleError {
-            throw error
-        } catch {
-            print("❌ [PrinciplesViewModel] Network error: \(error.localizedDescription)")
-            throw PrincipleError.serverError(error.localizedDescription)
-        }
+
+        try await principleRef.setData(payload)
+        print("✅ [PrinciplesViewModel] Created principle '\(title)'")
     }
-    
-    // MARK: - Update (Writes to Backend)
-    
+
+    // MARK: - Update
+
     func updatePrinciple(_ principle: Principle, title: String? = nil, description: String? = nil, priority: Int? = nil, isActive: Bool? = nil) async throws {
-        guard let user = Auth.auth().currentUser,
-              let principleId = principle.id else {
-            throw PrincipleError.notAuthenticated
-        }
-        
+        guard Auth.auth().currentUser != nil else { throw PrincipleError.notAuthenticated }
+        guard let principleId = principle.id else { throw PrincipleError.updateFailed }
+
         isSaving = true
         defer { isSaving = false }
-        
-        let token = try await user.getIDToken()
-        guard let url = URL(string: "\(AppConfig.apiBaseURL)/principles/\(principleId)") else {
-            throw PrincipleError.invalidURL
-        }
-        
-        var request = URLRequest(url: url)
-        request.httpMethod = "PUT"
-        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
-        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        
+
         var body: [String: Any] = [:]
         if let title = title { body["title"] = title }
         if let description = description { body["description"] = description }
         if let priority = priority { body["priority"] = priority }
         if let isActive = isActive { body["isActive"] = isActive }
-        
-        request.httpBody = try JSONSerialization.data(withJSONObject: body)
-        
-        let (data, response) = try await URLSession.shared.data(for: request)
-        
-        guard let httpResponse = response as? HTTPURLResponse,
-              httpResponse.statusCode == 200 else {
-            let errorMessage = String(data: data, encoding: .utf8) ?? "Unknown error"
-            print("❌ [PrinciplesViewModel] Update failed: \(errorMessage)")
-            throw PrincipleError.updateFailed
-        }
-        
+        body["updatedAt"] = Timestamp(date: Date())
+
+        try await db.collection("principles").document(principleId).setData(body, merge: true)
         print("✅ [PrinciplesViewModel] Updated principle '\(principle.title)'")
     }
-    
-    // MARK: - Delete (Writes to Backend)
-    
+
+    // MARK: - Delete
+
     func deletePrinciple(_ principle: Principle) async throws {
-        guard let user = Auth.auth().currentUser,
-              let principleId = principle.id else {
-            throw PrincipleError.notAuthenticated
-        }
-        
-        let token = try await user.getIDToken()
-        guard let url = URL(string: "\(AppConfig.apiBaseURL)/principles/\(principleId)") else {
-            throw PrincipleError.invalidURL
-        }
-        
-        var request = URLRequest(url: url)
-        request.httpMethod = "DELETE"
-        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
-        
-        let (_, response) = try await URLSession.shared.data(for: request)
-        
-        guard let httpResponse = response as? HTTPURLResponse,
-              httpResponse.statusCode == 204 else {
-            throw PrincipleError.deleteFailed
-        }
-        
+        guard Auth.auth().currentUser != nil else { throw PrincipleError.notAuthenticated }
+        guard let principleId = principle.id else { throw PrincipleError.deleteFailed }
+
+        try await db.collection("principles").document(principleId).delete()
         print("✅ [PrinciplesViewModel] Deleted principle '\(principle.title)'")
     }
 }
@@ -251,5 +172,4 @@ enum PrincipleError: LocalizedError {
         }
     }
 }
-
 

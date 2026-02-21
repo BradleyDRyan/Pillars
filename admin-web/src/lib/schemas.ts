@@ -5,6 +5,8 @@ export type JsonSchemaProperty = {
   max?: number;
   minLength?: number;
   maxLength?: number;
+  minItems?: number;
+  maxItems?: number;
   format?: string;
   nullable?: boolean;
   label?: string;
@@ -44,12 +46,23 @@ export type SchemasResponse = {
     updateResponse: JsonObjectSchema;
   };
   habitSchema: {
+    listQuery: JsonObjectSchema;
+    readQuery: JsonObjectSchema;
     create: JsonObjectSchema;
     update: JsonObjectSchema;
     log: JsonObjectSchema;
+    createResponse: JsonObjectSchema;
+    updateResponse: JsonObjectSchema;
   };
   daySchema: {
     batchPush: JsonSchemaProperty;
+  };
+  pointEventSchema: {
+    endpoint: string;
+    allocation: JsonObjectSchema;
+    create: JsonObjectSchema;
+    listQuery: JsonObjectSchema;
+    rollupQuery: JsonObjectSchema;
   };
   eventTypes: string[];
 };

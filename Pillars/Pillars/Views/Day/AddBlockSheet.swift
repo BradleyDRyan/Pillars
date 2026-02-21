@@ -10,16 +10,18 @@ import UIKit
 
 struct AddBlockSheet: View {
     let builtIns: [BlockType]
-    let customTypes: [CustomBlockType]
-    let onSelect: (_ typeId: String, _ customType: CustomBlockType?) -> Void
+    let customTypes: [BlockType]
+    let onSelect: (_ typeId: String, _ customType: BlockType?) -> Void
 
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
         NavigationStack {
             List {
+                let selectableBuiltIns = builtIns.filter { $0.id != "habit-stack" }
+
                 Section {
-                    ForEach(builtIns) { type in
+                    ForEach(selectableBuiltIns) { type in
                         row(
                             icon: type.icon,
                             title: type.name,
@@ -41,7 +43,7 @@ struct AddBlockSheet: View {
                             row(
                                 icon: type.icon,
                                 title: type.name,
-                                description: type.description
+                                description: type.subtitleTemplate.isEmpty ? "Custom block type." : type.subtitleTemplate
                             ) {
                                 onSelect(type.id, type)
                                 dismiss()
@@ -103,10 +105,12 @@ struct AddBlockSheet: View {
 
     @ViewBuilder
     private func iconBadge(for icon: String) -> some View {
-        if UIImage(systemName: icon) != nil {
-            S2MyDayIconBadge(systemName: icon)
+        let resolvedIcon = BlockIcon.resolvedSystemSymbol(from: icon)
+
+        if UIImage(systemName: resolvedIcon) != nil {
+            S2MyDayIconBadge(systemName: resolvedIcon)
         } else {
-            Text(icon)
+            Text(resolvedIcon)
                 .font(.system(size: S2.MyDay.Icon.smallSize))
                 .frame(width: S2.MyDay.Icon.badgeSize, height: S2.MyDay.Icon.badgeSize)
                 .background(

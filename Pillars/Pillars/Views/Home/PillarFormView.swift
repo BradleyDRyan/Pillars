@@ -42,7 +42,7 @@ struct PillarFormView: View {
                 // Name
                 Section {
                     TextField("Name", text: $name)
-                        .font(.squirrelBody)
+                        .font(S2.TextStyle.body)
                 } header: {
                     Text("Name")
                 }
@@ -50,7 +50,7 @@ struct PillarFormView: View {
                 // Description
                 Section {
                     TextField("Description (optional)", text: $description, axis: .vertical)
-                        .font(.squirrelBody)
+                        .font(S2.TextStyle.body)
                         .lineLimit(3...6)
                 } header: {
                     Text("Description")
@@ -100,7 +100,7 @@ struct PillarFormView: View {
                     Section {
                         Text(error)
                             .foregroundColor(.red)
-                            .font(.squirrelFootnote)
+                            .font(S2.TextStyle.footnote)
                     }
                 }
             }
@@ -191,7 +191,6 @@ extension Color {
     PillarFormView(mode: .create)
         .environmentObject(PillarsViewModel())
 }
-
 
 
 

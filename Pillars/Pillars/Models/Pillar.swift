@@ -29,12 +29,16 @@ struct Pillar: Identifiable, Codable, Hashable {
         var principleCount: Int
         var wisdomCount: Int
         var resourceCount: Int
+        var pointEventCount: Int
+        var pointTotal: Int
         
-        init(conversationCount: Int = 0, principleCount: Int = 0, wisdomCount: Int = 0, resourceCount: Int = 0) {
+        init(conversationCount: Int = 0, principleCount: Int = 0, wisdomCount: Int = 0, resourceCount: Int = 0, pointEventCount: Int = 0, pointTotal: Int = 0) {
             self.conversationCount = conversationCount
             self.principleCount = principleCount
             self.wisdomCount = wisdomCount
             self.resourceCount = resourceCount
+            self.pointEventCount = pointEventCount
+            self.pointTotal = pointTotal
         }
     }
     
@@ -100,7 +104,6 @@ struct Pillar: Identifiable, Codable, Hashable {
         hasher.combine(id)
     }
 }
-
 
 
 

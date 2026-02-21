@@ -1,6 +1,6 @@
 # Agent API Config (Production)
 
-Last updated: 2026-02-20
+Last updated: 2026-02-21
 
 Use this for external agents (not local dev).
 
@@ -81,17 +81,23 @@ Use this for external agents (not local dev).
       "get": "GET /api/todos/:id",
       "update": "PUT /api/todos/:id (optional pillarId)",
       "delete": "DELETE /api/todos/:id",
-      "close": "POST /api/todos/:id/close",
-      "reopen": "POST /api/todos/:id/reopen",
+      "close": "POST /api/todos/:id/close (todo status mutation; bounty payout side effects are trigger-driven)",
+      "reopen": "POST /api/todos/:id/reopen (todo status mutation; bounty reversal side effects are trigger-driven)",
       "subtasksList": "GET /api/todos/:id/subtasks (supports archived=exclude|include|only; includeArchived legacy alias)",
       "subtasksCreate": "POST /api/todos/:id/subtasks (optional pillarId)"
     },
     "habits": {
-      "list": "GET /api/habits (supports ?pillarId=<id> and ?pillarId=none)",
-      "create": "POST /api/habits (optional pillarId)",
+      "list": "GET /api/habits (filters: status=active|inactive|all; archived=exclude|include|only; q=<search>; sectionId=morning|afternoon|evening; dayOfWeek=sunday..saturday; pillarId=<id>|none; groupId=<id>|none; legacy aliases: active, search, includeArchived)",
+      "create": "POST /api/habits (optional pillarId, optional groupId, optional bountyPoints/bountyAllocations)",
       "get": "GET /api/habits/:id",
-      "update": "PUT /api/habits/:id (optional pillarId)",
+      "update": "PUT|PATCH /api/habits/:id (optional pillarId, optional groupId, optional bountyPoints/bountyAllocations; response includes {habit})",
+      "archive": "POST /api/habits/:id/archive",
+      "unarchive": "POST /api/habits/:id/unarchive",
       "delete": "DELETE /api/habits/:id",
+      "groupsList": "GET /api/habits/groups",
+      "groupsCreate": "POST /api/habits/groups",
+      "groupsUpdate": "PUT /api/habits/groups/:id",
+      "groupsDelete": "DELETE /api/habits/groups/:id",
       "scheduled": "GET /api/habits/scheduled/:date",
       "logGet": "GET /api/habits/:id/logs/:date",
       "logUpsert": "PUT /api/habits/:id/logs/:date",
@@ -119,6 +125,22 @@ Use this for external agents (not local dev).
   ]
 }
 ```
+
+## Todo Bounty Payout
+
+- Todo bounty payout is reconciled by Firestore trigger `functions/src/todoBountyTrigger.js`.
+- Point events use deterministic ids: `pe_todo_<todoId>`.
+- On completion, trigger upserts/unvoids payout event and sets `todos.bountyPaidAt`.
+- On incompletion or invalid/removed bounty, trigger voids payout event and clears `todos.bountyPaidAt`.
+- Agent-facing todo close/reopen endpoints remain valid, but payout is eventual-consistent via trigger.
+
+## Habit Bounty Payout
+
+- Habit bounty payout is reconciled by Firestore trigger `functions/src/habitBountyTrigger.js`.
+- Point events use deterministic ids per day: `pe_habit_<habitId>_<YYYY-MM-DD>`.
+- On habit log completion (`status=completed`), trigger upserts/unvoids payout event from habit bounty settings.
+- On habit log incompletion (`status=pending|skipped`), trigger voids that day’s payout event.
+- Agent-facing habit log endpoints remain valid, but payout side effects are eventual-consistent via trigger.
 
 ## Key Provisioning
 

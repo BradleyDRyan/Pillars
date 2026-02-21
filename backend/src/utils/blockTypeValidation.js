@@ -185,7 +185,7 @@ function normalizeBlockTypePayload(body, options = {}) {
   if (Object.prototype.hasOwnProperty.call(body, 'icon')) {
     normalized.icon = normalizeString(body.icon, { field: 'icon', maxLength: 40 });
   } else if (!partial) {
-    normalized.icon = '🧩';
+    normalized.icon = '.document';
   }
 
   if (Object.prototype.hasOwnProperty.call(body, 'color')) {

@@ -14,7 +14,7 @@ const BUILTIN_BLOCK_TYPES = Object.freeze([
   {
     id: 'sleep',
     name: 'Sleep',
-    icon: '🛏️',
+    icon: '.sleep',
     color: '#6366f1',
     category: 'built-in',
     defaultSection: 'morning',
@@ -32,7 +32,7 @@ const BUILTIN_BLOCK_TYPES = Object.freeze([
   {
     id: 'feeling',
     name: 'Feeling',
-    icon: '😊',
+    icon: '.feeling',
     color: '#0ea5e9',
     category: 'built-in',
     defaultSection: 'morning',
@@ -49,7 +49,7 @@ const BUILTIN_BLOCK_TYPES = Object.freeze([
   {
     id: 'workout',
     name: 'Workout',
-    icon: '🏋️',
+    icon: '.workout',
     color: '#f97316',
     category: 'built-in',
     defaultSection: 'afternoon',
@@ -67,7 +67,7 @@ const BUILTIN_BLOCK_TYPES = Object.freeze([
   {
     id: 'reflection',
     name: 'Reflection',
-    icon: '🌙',
+    icon: '.reflection',
     color: '#334155',
     category: 'built-in',
     defaultSection: 'evening',
@@ -84,7 +84,7 @@ const BUILTIN_BLOCK_TYPES = Object.freeze([
   {
     id: 'habits',
     name: 'Habit',
-    icon: '✅',
+    icon: '.habits',
     color: '#22c55e',
     category: 'built-in',
     defaultSection: 'morning',
@@ -104,7 +104,7 @@ const BUILTIN_BLOCK_TYPES = Object.freeze([
   {
     id: 'todo',
     name: 'Todo',
-    icon: '☑️',
+    icon: '.todo',
     color: '#0f766e',
     category: 'built-in',
     defaultSection: 'afternoon',

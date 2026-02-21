@@ -2,24 +2,33 @@
 //  HabitView.swift
 //  Pillars
 //
-//  Habits tab backed by My Day projected habit blocks.
+//  Habits tab backed by habit primitives.
 //
 
 import SwiftUI
 
 struct HabitView: View {
     @EnvironmentObject private var firebaseManager: FirebaseManager
+    @Environment(\.scenePhase) private var scenePhase
     @StateObject private var viewModel = HabitViewModel()
     @StateObject private var pillarPickerSource = PillarPickerDataSource()
     @State private var loadedUserId: String?
     @State private var newHabitTitle = ""
     @State private var selectedPillarFilter = PillarFilter.all
-    @State private var pillarPickerTarget: Habit?
+    @State private var pillarPickerTarget: ScheduledHabit?
+    @State private var showingCreateHabitSheet = false
+    @State private var habitToEdit: ScheduledHabit?
 
     private enum PillarFilter: Equatable {
         case all
         case untagged
         case pillar(String)
+    }
+
+    private struct HabitGroupBucket: Identifiable {
+        let id: String
+        let title: String
+        let items: [ScheduledHabit]
     }
 
     var body: some View {
@@ -30,7 +39,9 @@ struct HabitView: View {
                         .font(S2.MyDay.Typography.helper)
                         .tint(S2.MyDay.Colors.interactiveTint)
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
-                } else if viewModel.day != nil {
+                } else if viewModel.errorMessage != nil && habitEntries.isEmpty {
+                    errorState
+                } else {
                     ScrollView {
                         VStack(spacing: S2.Spacing.md) {
                             S2ScreenHeaderView(title: "Habits")
@@ -47,8 +58,6 @@ struct HabitView: View {
                         .padding(.vertical, S2.MyDay.Spacing.pageVertical)
                     }
                     .background(S2.MyDay.Colors.pageBackground)
-                } else {
-                    errorState
                 }
             }
             .background(S2.MyDay.Colors.pageBackground.ignoresSafeArea())
@@ -57,7 +66,6 @@ struct HabitView: View {
             guard let userId = firebaseManager.currentUser?.uid else {
                 loadedUserId = nil
                 viewModel.stopListening()
-                viewModel.day = nil
                 pillarPickerSource.stopListening()
                 return
             }
@@ -65,7 +73,14 @@ struct HabitView: View {
 
             loadedUserId = userId
             pillarPickerSource.startListening(userId: userId)
-            viewModel.loadToday(userId: userId)
+            viewModel.loadHabits(userId: userId, date: Day.todayDateString)
+        }
+        .onAppear {
+            reloadHabitsForCurrentUser()
+        }
+        .onChange(of: scenePhase) { _, newPhase in
+            guard newPhase == .active else { return }
+            reloadHabitsForCurrentUser()
         }
         .sheet(item: $pillarPickerTarget) { target in
             PillarPickerSheet(
@@ -73,7 +88,31 @@ struct HabitView: View {
                 pillars: pillarPickerSource.pillars,
                 selectedPillarId: target.pillarId
             ) { selectedPillarId in
-                viewModel.setHabitPillar(habitId: target.habitId, pillarId: selectedPillarId)
+                viewModel.setHabitPillar(habitId: target.id, pillarId: selectedPillarId)
+            }
+        }
+        .sheet(item: $habitToEdit) { target in
+            EditHabitSheet(
+                initialInput: habitEditInput(for: target),
+                habitGroups: viewModel.habitGroups,
+                pillars: pillarPickerSource.pillars
+            ) { input in
+                print("🧾 [Habits] Edit callback invoked with title='\(input.title)' habitId='\(target.id)'")
+                viewModel.updateHabit(habitId: target.id, input: input)
+            } onDelete: {
+                print("🗑️ [Habits] Delete callback invoked for habitId='\(target.id)'")
+                viewModel.deleteHabit(habitId: target.id)
+            }
+        }
+        .sheet(isPresented: $showingCreateHabitSheet) {
+            CreateHabitSheet(
+                initialTitle: newHabitTitle,
+                habitGroups: viewModel.habitGroups,
+                pillars: pillarPickerSource.pillars
+            ) { input in
+                print("🧪 [Habits] Create callback invoked with title='\(input.title)'")
+                viewModel.createHabit(input)
+                newHabitTitle = ""
             }
         }
     }
@@ -83,10 +122,13 @@ struct HabitView: View {
             TextField("Add a habit…", text: $newHabitTitle)
                 .font(S2.MyDay.Typography.fieldValue)
                 .submitLabel(.done)
-                .onSubmit { commitNewHabit() }
+                .onSubmit {
+                    print("🧾 [Habits] Enter pressed on quick add with title='\(newHabitTitle)'")
+                    openCreateHabitSheet()
+                }
                 .s2MyDayInputSurface()
 
-            Button(action: commitNewHabit) {
+            Button(action: openCreateHabitSheet) {
                 Image(systemName: "plus")
                     .font(.system(size: 16, weight: .semibold))
                     .foregroundColor(S2.MyDay.Colors.interactiveTint)
@@ -95,7 +137,6 @@ struct HabitView: View {
                     .clipShape(RoundedRectangle(cornerRadius: S2.CornerRadius.sm, style: .continuous))
             }
             .buttonStyle(.plain)
-            .disabled(newHabitTitle.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
         }
     }
 
@@ -137,32 +178,46 @@ struct HabitView: View {
 
     private var habitsList: some View {
         VStack(spacing: S2.MyDay.Spacing.blockStack) {
-            ForEach(habitEntries) { entry in
-                habitRow(entry)
+            ForEach(groupedHabitEntries) { bucket in
+                VStack(alignment: .leading, spacing: S2.Spacing.xs) {
+                    Text(bucket.title)
+                        .font(S2.MyDay.Typography.fieldLabel)
+                        .foregroundColor(S2.MyDay.Colors.subtitleText)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+
+                    VStack(spacing: S2.MyDay.Spacing.blockStack) {
+                        ForEach(bucket.items) { entry in
+                            habitRow(entry)
+                        }
+                    }
+                }
             }
         }
     }
 
-    private func habitRow(_ entry: Habit) -> some View {
-        ListRow(swipeDelete: { deleteHabit(entry) }) {
-            Button {
-                toggleHabit(entry)
-            } label: {
-                Image(systemName: entry.item.isCompleted ? "checkmark.circle.fill" : "circle")
-                    .font(.system(size: S2.MyDay.Icon.checklistSize))
-                    .foregroundColor(entry.item.isCompleted ? S2.MyDay.Colors.interactiveTint : S2.MyDay.Colors.disabledIcon)
+    private func habitRow(_ entry: ScheduledHabit) -> some View {
+        let isCompleted = entry.isCompleted
+        let isSkipped = entry.isSkipped
+        let textColor = isCompleted || isSkipped ? S2.MyDay.Colors.subtitleText : S2.MyDay.Colors.titleText
+
+        return ListRow(swipeDelete: { viewModel.deleteHabit(habitId: entry.id) }) {
+            EmptyView()
+        } title: {
+            Button(action: { openHabitEditor(entry) }) {
+                Text(entry.name)
+                    .font(S2.MyDay.Typography.fieldValue)
+                    .foregroundColor(textColor)
+                    .strikethrough(isCompleted || isSkipped, color: S2.MyDay.Colors.subtitleText)
+                    .frame(maxWidth: .infinity, alignment: .leading)
             }
             .buttonStyle(.plain)
-        } title: {
-            Text(entry.item.title)
-                .font(S2.MyDay.Typography.fieldValue)
-                .foregroundColor(entry.item.isCompleted ? S2.MyDay.Colors.subtitleText : S2.MyDay.Colors.titleText)
-                .strikethrough(entry.item.isCompleted, color: S2.MyDay.Colors.subtitleText)
-                .frame(maxWidth: .infinity, alignment: .leading)
         } subtitle: {
-            Text(entry.section.displayName)
-                .font(S2.MyDay.Typography.fieldLabel)
-                .foregroundColor(S2.MyDay.Colors.subtitleText)
+            Button(action: { openHabitEditor(entry) }) {
+                Text(scheduleLabel(for: entry))
+                    .font(S2.MyDay.Typography.fieldLabel)
+                    .foregroundColor(S2.MyDay.Colors.subtitleText)
+            }
+            .buttonStyle(.plain)
         } trailing: {
             HStack(spacing: S2.Spacing.xs) {
                 PillarTagChip(
@@ -170,10 +225,51 @@ struct HabitView: View {
                     color: pillarColor(for: entry.pillarId)
                 )
 
+                if isSkipped {
+                    Text("Skipped")
+                        .font(S2.MyDay.Typography.fieldLabel)
+                        .foregroundColor(S2.MyDay.Colors.destructive)
+                        .padding(.horizontal, S2.Spacing.xs)
+                        .padding(.vertical, 3)
+                        .background(S2.MyDay.Colors.sectionBackground)
+                        .clipShape(RoundedRectangle(cornerRadius: S2.CornerRadius.sm, style: .continuous))
+                }
+
                 Button {
                     pillarPickerTarget = entry
                 } label: {
                     Image(systemName: "tag")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundColor(S2.MyDay.Colors.subtitleText)
+                        .padding(6)
+                        .background(S2.MyDay.Colors.sectionBackground)
+                        .clipShape(Circle())
+                }
+                .buttonStyle(.plain)
+
+                S2MyDayDoneIconButton(
+                    isCompleted: isCompleted,
+                    size: .compact,
+                ) {
+                    toggleHabit(entry)
+                }
+
+                Menu {
+                    if isSkipped {
+                        Button {
+                            markHabitPending(entry)
+                        } label: {
+                            Label("Unskip", systemImage: "arrow.uturn.left")
+                        }
+                    } else {
+                        Button {
+                            skipHabit(entry)
+                        } label: {
+                            Label("Skip today", systemImage: "slash.circle")
+                        }
+                    }
+                } label: {
+                    Image(systemName: "ellipsis.circle")
                         .font(.system(size: 12, weight: .semibold))
                         .foregroundColor(S2.MyDay.Colors.subtitleText)
                         .padding(6)
@@ -191,7 +287,7 @@ struct HabitView: View {
                 .font(S2.MyDay.Typography.emptyState)
                 .foregroundColor(S2.MyDay.Colors.subtitleText)
 
-            Text("Add one above. It syncs with your Morning Habits in My Day.")
+            Text("Add one above. It syncs with your habit primitive and My Day.")
                 .font(S2.MyDay.Typography.fieldLabel)
                 .foregroundColor(S2.MyDay.Colors.subtitleText)
         }
@@ -208,7 +304,7 @@ struct HabitView: View {
 
             S2Button(title: "Retry", variant: .primary, size: .small, fullWidth: false, centerContent: true) {
                 if let userId = firebaseManager.currentUser?.uid {
-                    viewModel.loadToday(userId: userId)
+                    viewModel.loadHabits(userId: userId, date: Day.todayDateString)
                 }
             }
         }
@@ -217,45 +313,10 @@ struct HabitView: View {
         .background(S2.MyDay.Colors.pageBackground)
     }
 
-    private var habitEntries: [Habit] {
-        guard let day = viewModel.day else { return [] }
+    private var habitEntries: [ScheduledHabit] {
+        let filtered = viewModel.habits.filter { entry in
+            guard !entry.isArchived else { return false }
 
-        let sectionOrder = DaySection.TimeSection.allCases
-        let sectionRank = Dictionary(uniqueKeysWithValues: sectionOrder.enumerated().map { ($1, $0) })
-        var entries: [Habit] = []
-
-        for section in sectionOrder {
-            let blocks = day.sections.first(where: { $0.id == section })?.blocks ?? []
-            for block in blocks where block.typeId == "habits" {
-                guard let habitId = viewModel.projectedHabitId(for: block) else { continue }
-                let items = block.checklistData?.items ?? []
-                for (itemIndex, item) in items.enumerated() {
-                    let title = item.title.trimmingCharacters(in: .whitespacesAndNewlines)
-                    guard !title.isEmpty else { continue }
-                    entries.append(
-                        Habit(
-                            blockId: block.id,
-                            section: section,
-                            habitId: habitId,
-                            pillarId: block.pillarId,
-                            block: block,
-                            item: item,
-                            itemIndex: itemIndex
-                        )
-                    )
-                }
-            }
-        }
-
-        let sorted = entries.sorted { lhs, rhs in
-            let lhsSection = sectionRank[lhs.section] ?? 0
-            let rhsSection = sectionRank[rhs.section] ?? 0
-            if lhsSection != rhsSection { return lhsSection < rhsSection }
-            if lhs.block.order != rhs.block.order { return lhs.block.order < rhs.block.order }
-            return lhs.itemIndex < rhs.itemIndex
-        }
-
-        return sorted.filter { entry in
             switch selectedPillarFilter {
             case .all:
                 return true
@@ -265,38 +326,118 @@ struct HabitView: View {
                 return entry.pillarId == pillarId
             }
         }
+
+        return filtered
     }
 
-    private func toggleHabit(_ entry: Habit) {
-        var block = entry.block
-        guard var items = block.checklistData?.items else { return }
-        guard let idx = items.firstIndex(where: { $0.id == entry.item.id }) else { return }
-
-        items[idx].isCompleted.toggle()
-        block.checklistData = ChecklistData(items: items)
-        viewModel.updateBlock(block, in: entry.section)
-    }
-
-    private func deleteHabit(_ entry: Habit) {
-        var block = entry.block
-        guard var items = block.checklistData?.items else { return }
-
-        items.removeAll { $0.id == entry.item.id }
-        if items.isEmpty {
-            viewModel.deleteBlock(block.id, from: entry.section)
-            return
+    private var groupedHabitEntries: [HabitGroupBucket] {
+        let grouped = Dictionary(grouping: habitEntries) { entry in
+            groupTitle(for: entry)
         }
 
-        block.checklistData = ChecklistData(items: items)
-        viewModel.updateBlock(block, in: entry.section)
+        let sortedKeys = grouped.keys.sorted { lhs, rhs in
+            if lhs == rhs { return false }
+            if lhs == "No Group" { return true }
+            if rhs == "No Group" { return false }
+            return lhs.localizedCaseInsensitiveCompare(rhs) == .orderedAscending
+        }
+
+        return sortedKeys.map { key in
+            HabitGroupBucket(
+                id: key,
+                title: key,
+                items: grouped[key] ?? []
+            )
+        }
     }
 
-    private func commitNewHabit() {
-        let trimmed = newHabitTitle.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else { return }
+    private func toggleHabit(_ entry: ScheduledHabit) {
+        viewModel.setHabitCompletion(
+            habitId: entry.id,
+            isCompleted: !entry.isCompleted,
+            date: viewModel.currentDate()
+        )
+    }
 
-        viewModel.addHabitItem(title: trimmed)
-        newHabitTitle = ""
+    private func skipHabit(_ entry: ScheduledHabit) {
+        viewModel.skipHabit(
+            habitId: entry.id,
+            date: viewModel.currentDate()
+        )
+    }
+
+    private func markHabitPending(_ entry: ScheduledHabit) {
+        viewModel.markHabitPending(
+            habitId: entry.id,
+            date: viewModel.currentDate()
+        )
+    }
+
+    private func openHabitEditor(_ habit: ScheduledHabit) {
+        print("🧾 [Habits] Opening edit sheet for habitId='\(habit.id)' title='\(habit.name)'")
+        habitToEdit = habit
+    }
+
+    private func habitEditInput(for habit: ScheduledHabit) -> HabitCreateInput {
+        let scheduleType = HabitScheduleType(
+            rawValue: habit.schedule?.normalizedType.lowercased() ?? ""
+        ) ?? .daily
+
+        let selectedWeekdays: [HabitWeekday] = HabitWeekday.allCases.filter {
+            habit.schedule?.normalizedDaysOfWeek.contains($0.rawValue) == true
+        }
+
+        let targetType = HabitTargetType(
+            rawValue: habit.target?.type?.lowercased() ?? "binary"
+        ) ?? .binary
+
+        let targetValue = habit.target?.value ?? 1
+
+        return HabitCreateInput(
+            title: habit.name,
+            groupId: habit.groupId,
+            newGroupName: nil,
+            scheduleType: scheduleType,
+            daysOfWeek: selectedWeekdays,
+            targetType: targetType,
+            targetValue: targetType == .binary ? 1 : targetValue,
+            targetUnit: habit.target?.unit,
+            pillarId: habit.pillarId
+        )
+    }
+
+    private func openCreateHabitSheet() {
+        print("🪟 [Habits] opening create sheet (draftTitle='\(newHabitTitle)')")
+        showingCreateHabitSheet = true
+    }
+
+    private func scheduleLabel(for entry: ScheduledHabit) -> String {
+        let scheduleType = entry.schedule?.normalizedType ?? "daily"
+        if scheduleType == "weekly" {
+            let days = (entry.schedule?.normalizedDaysOfWeek ?? []).compactMap(dayShortLabel(for:))
+            if days.isEmpty {
+                return "Weekly"
+            }
+            return "Weekly · \(days.joined(separator: ", "))"
+        }
+        return "Daily"
+    }
+
+    private func dayShortLabel(for raw: String) -> String? {
+        HabitWeekday(rawValue: raw)?.shortLabel
+    }
+
+    private func groupTitle(for entry: ScheduledHabit) -> String {
+        let resolvedGroupName: String?
+        if let groupId = entry.groupId {
+            resolvedGroupName = viewModel.habitGroups.first(where: { $0.id == groupId })?.name
+        } else {
+            resolvedGroupName = nil
+        }
+
+        let trimmed = (resolvedGroupName ?? entry.groupName)?
+            .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        return trimmed.isEmpty ? "No Group" : trimmed
     }
 
     private var filterLabel: String {
@@ -319,6 +460,11 @@ struct HabitView: View {
 
     private func pillarColor(for pillarId: String?) -> Color {
         pillarPickerSource.pillar(for: pillarId)?.colorValue ?? S2.MyDay.Colors.subtitleText
+    }
+
+    private func reloadHabitsForCurrentUser() {
+        guard let userId = firebaseManager.currentUser?.uid else { return }
+        viewModel.loadHabits(userId: userId, date: Day.todayDateString)
     }
 }
 

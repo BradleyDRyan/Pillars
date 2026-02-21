@@ -547,7 +547,7 @@ extension Block {
         typeId: String,
         sectionId: DaySection.TimeSection,
         order: Int,
-        customType: CustomBlockType? = nil
+        customType: BlockType? = nil
     ) -> Block {
         let id = UUID().uuidString
         var data: [String: JSONValue] = [:]
@@ -599,7 +599,7 @@ extension Block {
         default:
             if let customType {
                 data = [
-                    "fields": .array(makeCustomData(from: customType.fields).map { value in
+                    "fields": .array(makeCustomData(from: customType.dataSchema.fields).map { value in
                         var object: [String: JSONValue] = ["id": .string(value.id)]
                         object["textValue"] = value.textValue.map(JSONValue.string) ?? .null
                         object["numberValue"] = value.numberValue.map(JSONValue.number) ?? .null
@@ -630,9 +630,9 @@ extension Block {
         )
     }
 
-    private static func makeCustomData(from fields: [CustomFieldDef]) -> [CustomFieldValue] {
+    private static func makeCustomData(from fields: [BlockTypeFieldSchema]) -> [CustomFieldValue] {
         fields.map { field in
-            switch field.type {
+            switch field.fieldKind {
             case .text, .multiline:
                 return CustomFieldValue(id: field.id, textValue: "", numberValue: nil, boolValue: nil)
             case .number, .slider, .rating:

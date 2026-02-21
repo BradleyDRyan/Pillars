@@ -60,10 +60,13 @@ Use this skill when the user asks you to read or modify their Pillars app data.
   - `POST /api/todos/:id/unarchive`
   - `DELETE /api/todos/:id`
 - Habits:
-  - `GET /api/habits` (supports `?pillarId=<id>` and `?pillarId=none`)
+  - `GET /api/habits` (supports `?status=active|inactive|all`, `?archived=exclude|include|only`, `?q=<search>`, `?sectionId=morning|afternoon|evening`, `?dayOfWeek=sunday|monday|tuesday|wednesday|thursday|friday|saturday`, `?pillarId=<id>|none`; legacy aliases `active`, `search`, and `includeArchived` still work)
   - `POST /api/habits`
   - `GET /api/habits/:id`
   - `PUT /api/habits/:id`
+  - `PATCH /api/habits/:id`
+  - `POST /api/habits/:id/archive`
+  - `POST /api/habits/:id/unarchive`
   - `DELETE /api/habits/:id`
   - `GET /api/habits/scheduled/:date`
   - `PUT /api/habits/:id/logs/:date`
