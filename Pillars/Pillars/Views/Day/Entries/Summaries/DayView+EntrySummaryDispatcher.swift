@@ -13,8 +13,8 @@ extension DayView {
                 return moodSummary(block.sliderData)
             case "habits":
                 return habitSummary(block.checklistData)
-            case "habit-stack":
-                return habitStackSummary(block)
+            case "habit-group-card":
+                return habitGroupCardSummary(block)
             case "workout":
                 return workoutSummary(block.textFieldData)
             case "todo":

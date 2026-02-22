@@ -33,6 +33,8 @@ struct DayView: View {
     // Keeps entry move animations smooth between sections.
     @Namespace var completionCardNamespace
 
+    @State private var selectedHabitGroupCard: HabitGroupCardSheetTarget?
+
     /// Main screen flow.
     var body: some View {
         return NavigationStack {
@@ -60,6 +62,7 @@ struct DayView: View {
         }
         .sheet(item: $addBlockSection, content: addBlockSheetContent)
         .sheet(item: $pillarPickerTarget, content: pillarPickerSheetContent)
+        .sheet(item: $selectedHabitGroupCard, content: habitGroupCardSheetContent)
     }
 }
 

@@ -1,6 +1,6 @@
 import SwiftUI
 
-// Summary text for habit and habit-stack entries.
+// Summary text for habit and habit-group-card entries.
 extension DayView {
     // Builds display text for habit checklist rows.
     func habitSummary(_ data: ChecklistData?) -> DayEntrySummary {
@@ -37,12 +37,12 @@ extension DayView {
         )
     }
 
-    // Builds display text for habit stack rows.
-    func habitStackSummary(_ block: Block, items: [DayViewModel.HabitStackItem]? = nil) -> DayEntrySummary {
+    // Builds display text for habit group card rows.
+    func habitGroupCardSummary(_ block: Block, items: [DayViewModel.HabitStackItem]? = nil) -> DayEntrySummary {
         let items = items ?? viewModel.habitStackItems(for: block)
         let total = items.count
         let completed = items.filter(\.isCompleted).count
-        let stackTitle = {
+        let groupTitle = {
             if let groupName = block.data["groupName"]?.stringValue?
                 .trimmingCharacters(in: .whitespacesAndNewlines),
                !groupName.isEmpty {
@@ -51,17 +51,17 @@ extension DayView {
 
             let trimmedTitle = block.title?
                 .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-            return trimmedTitle.isEmpty ? "Habit Stack" : trimmedTitle
+            return trimmedTitle.isEmpty ? "Habit Group Card" : trimmedTitle
         }()
 
         guard total > 0 else {
-            return DayEntrySummary(title: "Habit stack", trailing: nil, isLogged: false)
+            return DayEntrySummary(title: "Habit Group Card", trailing: nil, isLogged: false)
         }
 
         let firstHabitTitle = items.first?.name.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         let displayTitle = total == 1
             ? (firstHabitTitle.isEmpty ? "Habit" : firstHabitTitle)
-            : stackTitle
+            : groupTitle
 
         return DayEntrySummary(
             title: displayTitle,
@@ -70,13 +70,16 @@ extension DayView {
         )
     }
 
-    // Pulls all habit items for a habit-stack row.
-    func habitStackItems(for block: Block) -> [DayViewModel.HabitStackItem] {
+    // Pulls all habit items for a habit-group-card row.
+    func habitGroupCardItems(for block: Block) -> [DayViewModel.HabitStackItem] {
         viewModel.habitStackItems(for: block)
     }
 
     // Simple type check used by the entry builder.
-    func isHabitStackBlock(_ block: Block) -> Bool {
-        block.typeId.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() == "habit-stack"
+    func isHabitGroupCardBlock(_ block: Block) -> Bool {
+        let typeId = block.typeId
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .lowercased()
+        return typeId == "habit-group-card"
     }
 }

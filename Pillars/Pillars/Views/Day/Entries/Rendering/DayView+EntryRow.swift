@@ -27,20 +27,18 @@ extension DayView {
                         toggleTodoCompletion(blockId: entry.blockId, in: entry.section)
                     }
                 )
-            // Habit stack row.
-            } else if normalizedType == "habit-stack" {
-                let stackItems = habitStackItems(for: blockBinding.wrappedValue)
-                HabitStackCard(
+            // Habit group card row.
+            } else if isHabitGroupCardBlock(blockBinding.wrappedValue) {
+                let groupItems = habitGroupCardItems(for: blockBinding.wrappedValue)
+                HabitGroupCard(
                     title: entry.title,
                     summary: entry.trailing,
-                    items: stackItems,
-                    onToggleHabit: { habitId, isCompleted in
-                        withAnimation(dayEntryTransferAnimation) {
-                            viewModel.setHabitCompletion(
-                                habitId: habitId,
-                                isCompleted: isCompleted
-                            )
-                        }
+                    items: groupItems,
+                    onDelete: {
+                        viewModel.deleteBlock(entry.blockId, from: entry.section)
+                    },
+                    onTap: {
+                        presentHabitGroupCard(blockId: entry.blockId)
                     }
                 )
             // Habit row.

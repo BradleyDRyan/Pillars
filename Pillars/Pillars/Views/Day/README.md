@@ -20,7 +20,7 @@ flowchart TD
     D --> F[Logged vs Planned Split]
     D --> G[Week Selector]
     D --> H[Pillar Assignment]
-    D --> I[Habit Stack]
+    D --> I[Habit Group Card]
     D --> J[Row Transitions]
     A --> K[Blocks]
     K --> L[DefaultBlock]
@@ -32,7 +32,7 @@ flowchart TD
 - `Features/WeekSelector`: Date header and week switching UI.
 - `Features/LoggedPlannedSplit`: The two-section layout and entry model builder.
 - `Features/PillarAssignment`: Assigning pillars from Day rows.
-- `Features/HabitStack`: Habit stack row summary + detail sheet behavior.
+- `Features/HabitGroupCard`: Habit group card summary + row behavior.
 - `Features/RowTransitions`: Row movement/matched transition animation settings.
 
 ## Large renderer split

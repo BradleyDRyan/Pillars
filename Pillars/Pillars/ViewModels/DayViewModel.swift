@@ -31,6 +31,15 @@ class DayViewModel: ObservableObject, BackendRequesting {
     private var liveDayTodos: [DayTodoPrimitive] = []
     private var liveHabits: [HabitPrimitive] = []
     private var liveHabitLogs: [HabitLogPrimitive] = []
+    private let habitGroupCardTypeId = "habit-group-card"
+    private let legacyProjectedTypes: Set<String> = ["todo", "todos", "habits", "morninghabits"]
+
+    private func isHabitGroupCardType(_ typeId: String) -> Bool {
+        let normalizedType = typeId
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .lowercased()
+        return normalizedType == habitGroupCardTypeId
+    }
 
     var allBlockTypes: (builtIns: [BlockType], custom: [BlockType]) {
         (
@@ -232,7 +241,7 @@ class DayViewModel: ObservableObject, BackendRequesting {
             return value.isEmpty ? nil : value
         }
 
-        if block.typeId == "habit-stack" {
+        if isHabitGroupCardType(block.typeId) {
             return habitStackItems(for: block).first?.habitId
         }
 
@@ -240,7 +249,7 @@ class DayViewModel: ObservableObject, BackendRequesting {
     }
 
     func habitStackItems(for block: Block) -> [HabitStackItem] {
-        guard block.typeId == "habit-stack" else { return [] }
+        guard isHabitGroupCardType(block.typeId) else { return [] }
         if let rawItems = block.data["habitItems"]?.arrayValue {
             let parsed = rawItems.compactMap { item -> HabitStackItem? in
                 guard let object = item.objectValue,
@@ -365,7 +374,7 @@ class DayViewModel: ObservableObject, BackendRequesting {
             return
         }
 
-        if typeId == "habit-stack" {
+        if isHabitGroupCardType(typeId) {
             return
         }
 
@@ -769,9 +778,9 @@ class DayViewModel: ObservableObject, BackendRequesting {
     private func dayBlock(from document: QueryDocumentSnapshot) -> Block? {
         let raw = document.data()
         guard let typeId = raw["typeId"] as? String else { return nil }
+        let normalizedTypeId = typeId.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
 
-        let legacyProjectedTypes = Set(["todo", "todos", "habits", "morninghabits", "habit-stack"])
-        if legacyProjectedTypes.contains(typeId.lowercased()) {
+        if isHabitGroupCardType(normalizedTypeId) || legacyProjectedTypes.contains(normalizedTypeId) {
             return nil
         }
 
@@ -781,7 +790,7 @@ class DayViewModel: ObservableObject, BackendRequesting {
 
         return Block(
             id: document.documentID,
-            typeId: typeId,
+            typeId: normalizedTypeId,
             sectionId: sectionId,
             order: intValue(raw["order"]) ?? 0,
             isExpanded: boolValue(raw["isExpanded"]) ?? false,
@@ -991,7 +1000,7 @@ class DayViewModel: ObservableObject, BackendRequesting {
             return lhs.name.localizedCaseInsensitiveCompare(rhs.name) == .orderedAscending
         }
 
-        let stackId = "proj_habit_stack_\(habitStackStableIdentifier(for: habits))"
+        let stackId = "proj_habit_group_card_\(habitStackStableIdentifier(for: habits))"
         let title = habitStackTitle(for: habits, items: items)
         let completedCount = items.filter(\.isCompleted).count
         let habitItems = items.map {
@@ -1005,7 +1014,7 @@ class DayViewModel: ObservableObject, BackendRequesting {
 
         return Block(
             id: stackId,
-            typeId: "habit-stack",
+            typeId: habitGroupCardTypeId,
             sectionId: section,
             order: habits.first?.order ?? 0,
             isExpanded: false,
@@ -1044,7 +1053,7 @@ class DayViewModel: ObservableObject, BackendRequesting {
             return groupName
         }
 
-        return "Habit Stack"
+        return "Habit Group Card"
     }
 
     private func habitStackGroupKey(for habit: HabitPrimitive) -> String {

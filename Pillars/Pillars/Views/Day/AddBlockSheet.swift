@@ -18,7 +18,9 @@ struct AddBlockSheet: View {
     var body: some View {
         NavigationStack {
             List {
-                let selectableBuiltIns = builtIns.filter { $0.id != "habit-stack" }
+                let selectableBuiltIns = builtIns.filter {
+                    $0.id != "habit-stack" && $0.id != "habit-group-card"
+                }
 
                 Section {
                     ForEach(selectableBuiltIns) { type in

@@ -86,8 +86,8 @@ struct BlockType: Identifiable, Codable {
             return "Capture a quick reflection note."
         case "todo":
             return "Task primitive projected into your day."
-        case "habit-stack":
-            return "Group habits in a compact stack."
+        case "habit-group-card":
+            return "Show each habit group in one card with circular progress."
         case "habits":
             return "Habit primitive projected into your day."
         default:
@@ -105,7 +105,7 @@ struct BlockType: Identifiable, Codable {
             return .textFields
         case "reflection":
             return .freeText
-        case "habit-stack":
+        case "habit-group-card":
             return .custom
         case "todo", "habits":
             return .checklist
@@ -261,8 +261,8 @@ extension BlockType {
             isDeletable: false
         ),
         BlockType(
-            id: "habit-stack",
-            name: "Habit Stack",
+            id: "habit-group-card",
+            name: "Habit Group Card",
             icon: "square.stack.3d.up",
             color: "#22c55e",
             category: "built-in",

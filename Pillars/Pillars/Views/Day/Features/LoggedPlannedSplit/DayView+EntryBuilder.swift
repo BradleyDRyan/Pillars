@@ -16,9 +16,9 @@ extension DayView {
                 .sorted(by: { $0.order < $1.order }) ?? []
 
             for block in blocks {
-                if isHabitStackBlock(block) {
+                if isHabitGroupCardBlock(block) {
                     let allItems = viewModel.habitStackItems(for: block)
-                    let summary = habitStackSummary(block, items: allItems)
+                    let summary = habitGroupCardSummary(block, items: allItems)
                     let status: DayEntryStatus = summary.isLogged ? .logged : .planned
                     entries.append(
                         DayEntry(
