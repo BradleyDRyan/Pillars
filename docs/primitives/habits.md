@@ -1,6 +1,6 @@
 # Habits Primitive Contract
 
-Last updated: 2026-02-20
+Last updated: 2026-02-23
 
 ## Purpose
 This document defines the current Habits primitive contract used by the Pillars backend and clients.
@@ -36,6 +36,7 @@ Habits are a primitive plus per-day log entries.
   },
   "isActive": "boolean",
   "pillarId": "string|null",
+  "rubricItemId": "string|null",
   "groupId": "string|null",
   "groupName": "string|null",
   "createdAt": "unix-seconds",
@@ -153,7 +154,8 @@ When changing Habits behavior, update these together in the same change:
 
 - `backend/src/routes/habits.js`
 - `backend/src/routes/day-blocks.js`
-- `backend/src/routes/schemas.js`
+- `backend/src/routes/schemasContract.js`
+- `backend/src/routes/schemas/index.js`
 - `docs/AGENT_API_CONFIG.md`
 - `docs/BACKEND_OVERVIEW.md`
 - `firestore.indexes.json` (if query/index requirements changed)

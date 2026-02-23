@@ -4,6 +4,8 @@ const { db } = require('../config/firebase');
 const { listBlockTypesForUser } = require('../services/blockTypes');
 const { VALID_EVENT_TYPES } = require('../services/events');
 const { Pillar } = require('../models');
+const { listPillarTemplates, buildTemplateLibraryPayload } = require('../services/pillarTemplates');
+const { getPillarVisuals } = require('../services/pillarVisuals');
 
 const router = express.Router();
 router.use(flexibleAuth);
@@ -21,15 +23,21 @@ const POINT_EVENT_REF_TYPE_ENUM = Object.freeze(['todo', 'habit', 'block', 'free
 const PLAN_ENDPOINT = '/api/plan/by-date/:date';
 const LEGACY_DAY_BATCH_SUNSET = '2026-03-31';
 
-function getPillarIconValues() {
+async function getPillarIconValues() {
+  const visuals = await getPillarVisuals();
+  if (Array.isArray(visuals?.icons) && visuals.icons.length > 0) {
+    return visuals.icons
+      .filter(icon => icon?.isActive !== false && typeof icon.id === 'string' && icon.id.trim())
+      .map(icon => icon.id.trim());
+  }
   if (Array.isArray(Pillar?.VALID_ICON_VALUES) && Pillar.VALID_ICON_VALUES.length > 0) {
     return [...Pillar.VALID_ICON_VALUES];
   }
   return [];
 }
 
-function buildPillarIconSchema() {
-  const iconValues = getPillarIconValues();
+async function buildPillarIconSchema() {
+  const iconValues = await getPillarIconValues();
 
   return {
     endpoint: '/api/schemas/pillar-icons',
@@ -38,12 +46,109 @@ function buildPillarIconSchema() {
   };
 }
 
-function buildPillarIconListResponse() {
-  const values = getPillarIconValues();
+async function buildPillarIconListResponse() {
+  const values = await getPillarIconValues();
   return {
     values,
     count: values.length,
     endpoint: '/api/schemas/pillar-icons'
+  };
+}
+
+function buildRubricItemSchema() {
+  return {
+    type: 'object',
+    required: ['id', 'activityType', 'tier', 'label', 'points', 'createdAt', 'updatedAt'],
+    additionalProperties: false,
+    properties: {
+      id: { type: 'string' },
+      activityType: { type: 'string', minLength: 1, maxLength: 120 },
+      tier: { type: 'string', minLength: 1, maxLength: 80 },
+      label: { type: 'string', minLength: 1, maxLength: 180 },
+      points: { type: 'integer', min: 1, max: 100 },
+      examples: { type: 'string', maxLength: 280, nullable: true },
+      createdAt: { type: 'integer' },
+      updatedAt: { type: 'integer' }
+    }
+  };
+}
+
+async function buildPillarSchema() {
+  const rubricItemSchema = buildRubricItemSchema();
+  const templates = await listPillarTemplates({ includeInactive: true });
+  const visuals = await getPillarVisuals();
+  const {
+    pillarTypes,
+    defaultRubricTemplates,
+    templateLibrary
+  } = buildTemplateLibraryPayload(templates);
+
+  return {
+    endpoint: '/api/pillars',
+    pillarTypes: {
+      values: [...pillarTypes],
+      default: 'custom'
+    },
+    rubricItem: rubricItemSchema,
+    defaultRubricTemplates,
+    templateLibraryEndpoint: '/api/pillar-templates',
+    templateLibrary,
+    visualsEndpoint: '/api/schemas/pillar-visuals',
+    visualsAdminEndpoint: '/api/pillar-visuals',
+    visuals: {
+      colors: visuals.colors,
+      icons: visuals.icons
+    },
+    rubricRead: {
+      endpoint: '/api/pillars/:id/rubric',
+      response: {
+        type: 'object',
+        required: ['pillarId', 'rubricItems'],
+        additionalProperties: false,
+        properties: {
+          pillarId: { type: 'string' },
+          rubricItems: {
+            type: 'array',
+            items: rubricItemSchema
+          }
+        }
+      }
+    },
+    rubricCreate: {
+      endpoint: '/api/pillars/:id/rubric',
+      type: 'object',
+      required: ['activityType', 'tier', 'points'],
+      additionalProperties: false,
+      properties: {
+        activityType: { type: 'string', minLength: 1, maxLength: 120 },
+        tier: { type: 'string', minLength: 1, maxLength: 80 },
+        label: { type: 'string', maxLength: 180, nullable: true },
+        points: { type: 'integer', min: 1, max: 100 },
+        examples: { type: 'string', maxLength: 280, nullable: true }
+      }
+    },
+    rubricUpdate: {
+      endpoint: '/api/pillars/:id/rubric/:rubricItemId',
+      type: 'object',
+      required: [],
+      additionalProperties: false,
+      properties: {
+        activityType: { type: 'string', minLength: 1, maxLength: 120 },
+        tier: { type: 'string', minLength: 1, maxLength: 80 },
+        label: { type: 'string', maxLength: 180, nullable: true },
+        points: { type: 'integer', min: 1, max: 100 },
+        examples: { type: 'string', maxLength: 280, nullable: true }
+      }
+    },
+    notes: [
+      'Rubric defaults are backend-driven and can be updated server-side.',
+      'New pillars receive rubric snapshots from active DB templates when rubricItems is omitted.',
+      'When rubricItems is omitted, pillarType is required (except custom, which starts empty).',
+      'Pillar colors are token-driven. Store colorToken only; clients render token values locally.',
+      'Admin icon/color catalog CRUD is available at /api/pillar-visuals (writes require admin claim or internal service secret).',
+      'Template CRUD is available at /api/pillar-templates (writes require admin claim or internal service secret).',
+      'Todos and habits may reference a rubric item by id via rubricItemId.'
+    ]
   };
 }
 
@@ -241,6 +346,15 @@ function buildTodoSchema() {
         pillarId: { type: 'string', nullable: true },
         bountyPoints: { type: 'integer', min: 1, max: 150, nullable: true },
         bountyPillarId: { type: 'string', nullable: true },
+        rubricItemId: {
+          type: 'string',
+          nullable: true,
+          description: 'When provided, bounty points are derived from this pillar rubric item.'
+        },
+        autoClassify: {
+          type: 'boolean',
+          description: 'When true, backend classifies the todo text against the selected pillar rubric when rubricItemId is not provided.'
+        },
         bountyAllocations: {
           type: 'array',
           nullable: true,
@@ -277,6 +391,11 @@ function buildTodoSchema() {
         pillarId: { type: 'string', nullable: true },
         bountyPoints: { type: 'integer', min: 1, max: 150, nullable: true },
         bountyPillarId: { type: 'string', nullable: true },
+        rubricItemId: {
+          type: 'string',
+          nullable: true,
+          description: 'When provided, bounty points are derived from this pillar rubric item.'
+        },
         bountyAllocations: {
           type: 'array',
           nullable: true,
@@ -414,6 +533,15 @@ function buildHabitSchema() {
         bountyPoints: { type: 'integer', min: 1, max: 100, nullable: true },
         bountyPillarId: { type: 'string', nullable: true },
         bountyReason: { type: 'string', maxLength: 500, nullable: true },
+        rubricItemId: {
+          type: 'string',
+          nullable: true,
+          description: 'When provided, bounty points are derived from this pillar rubric item.'
+        },
+        autoClassify: {
+          type: 'boolean',
+          description: 'When true, backend classifies the habit text against the selected pillar rubric when rubricItemId is not provided.'
+        },
         bountyAllocations: {
           type: 'array',
           nullable: true,
@@ -448,6 +576,11 @@ function buildHabitSchema() {
         bountyPoints: { type: 'integer', min: 1, max: 100, nullable: true },
         bountyPillarId: { type: 'string', nullable: true },
         bountyReason: { type: 'string', maxLength: 500, nullable: true },
+        rubricItemId: {
+          type: 'string',
+          nullable: true,
+          description: 'When provided, bounty points are derived from this pillar rubric item.'
+        },
         bountyAllocations: {
           type: 'array',
           nullable: true,
@@ -734,20 +867,35 @@ function buildPointEventSchema() {
     allocation,
     create: {
       type: 'object',
-      required: ['date', 'reason', 'allocations'],
+      required: ['date', 'reason'],
       additionalProperties: false,
       properties: {
         id: { type: 'string', minLength: 1 },
         date: { type: 'string', format: 'date' },
-        reason: { type: 'string', minLength: 1, maxLength: 300 },
+        reason: {
+          type: 'string',
+          minLength: 1,
+          maxLength: 300,
+          description: 'Required activity text. Used for auto-classification when allocations and rubricItemId are omitted.'
+        },
         source: { type: 'string', enum: POINT_EVENT_SOURCE_ENUM, default: 'user' },
         ref,
+        pillarId: {
+          type: 'string',
+          nullable: true,
+          description: 'Optional pillar scope for rubricItemId resolution.'
+        },
+        rubricItemId: {
+          type: 'string',
+          nullable: true,
+          description: 'Alternative to allocations. When set, backend derives pillar + points from rubric.'
+        },
         allocations: {
           type: 'array',
           minItems: 1,
           maxItems: 3,
           items: allocation,
-          description: 'Sum of allocation points must be <= 150'
+          description: 'Optional explicit allocations. If omitted with no rubricItemId, backend classifies reason text and derives a single allocation.'
         }
       }
     },
@@ -792,7 +940,9 @@ async function buildSchemasResponse(userId) {
     userId,
     ensureBuiltins: true
   });
-  const pillarIcons = buildPillarIconSchema();
+  const pillarIcons = await buildPillarIconSchema();
+  const pillarSchema = await buildPillarSchema();
+  const pillarVisuals = await getPillarVisuals();
 
   return {
     blockTypes: blockTypes.map(toCanonicalBlockType),
@@ -800,7 +950,9 @@ async function buildSchemasResponse(userId) {
     habitSchema: buildHabitSchema(),
     daySchema: buildDaySchema(),
     planSchema: buildPlanSchema(),
+    pillarSchema,
     pillarIcons,
+    pillarVisuals,
     pointEventSchema: buildPointEventSchema(),
     eventTypes: [...VALID_EVENT_TYPES].sort()
   };
@@ -808,10 +960,20 @@ async function buildSchemasResponse(userId) {
 
 router.get('/pillar-icons', async (req, res) => {
   try {
-    const pillarIcons = buildPillarIconListResponse();
+    const pillarIcons = await buildPillarIconListResponse();
     return res.json(pillarIcons);
   } catch (error) {
     console.error('[schemas] GET /pillar-icons error:', error);
+    return res.status(500).json({ error: error.message || 'Internal server error' });
+  }
+});
+
+router.get('/pillar-visuals', async (req, res) => {
+  try {
+    const visuals = await getPillarVisuals();
+    return res.json(visuals);
+  } catch (error) {
+    console.error('[schemas] GET /pillar-visuals error:', error);
     return res.status(500).json({ error: error.message || 'Internal server error' });
   }
 });
@@ -824,6 +986,8 @@ module.exports = {
   buildDaySchema,
   buildPlanSchema,
   buildPointEventSchema,
+  buildPillarSchema,
+  buildRubricItemSchema,
   buildPillarIconSchema,
   buildPillarIconListResponse,
   toCanonicalBlockType,

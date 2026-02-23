@@ -3,6 +3,15 @@ const router = express.Router();
 const { Pillar, Conversation, Principle } = require('../models');
 const { flexibleAuth } = require('../middleware/serviceAuth');
 const { resolveEventSource, writeUserEventSafe } = require('../services/events');
+const { normalizeTemplateType, getPillarTemplateByType } = require('../services/pillarTemplates');
+const { normalizeColorToken } = require('../services/pillarVisuals');
+const {
+  getRubricItems,
+  findRubricItemById,
+  normalizeRubricItems,
+  normalizeRubricItemCreate,
+  normalizeRubricItemUpdate
+} = require('../utils/rubrics');
 
 router.use(flexibleAuth);
 
@@ -14,6 +23,58 @@ function buildPillarChangePaths(payload) {
   return Object.keys(payload)
     .filter(key => key !== 'source')
     .map(key => `pillar.${key}`);
+}
+
+async function loadUserPillar(pillarId, userId) {
+  const pillar = await Pillar.findById(pillarId);
+  if (!pillar || pillar.userId !== userId) {
+    return null;
+  }
+  return pillar;
+}
+
+async function ensurePillarRubricItems(pillar) {
+  return getRubricItems(pillar);
+}
+
+function normalizeRubricItemId(rawRubricItemId) {
+  if (typeof rawRubricItemId !== 'string') {
+    return null;
+  }
+  const trimmed = rawRubricItemId.trim();
+  return trimmed || null;
+}
+
+function normalizeColorTokenPayload(payload) {
+  if (Object.prototype.hasOwnProperty.call(payload || {}, 'color')
+    || Object.prototype.hasOwnProperty.call(payload || {}, 'customColorHex')) {
+    return {
+      error: 'Only colorToken is supported. color and customColorHex are not supported.'
+    };
+  }
+
+  if (!Object.prototype.hasOwnProperty.call(payload || {}, 'colorToken')) {
+    return { value: undefined };
+  }
+
+  const rawValue = payload?.colorToken;
+  if (rawValue === null) {
+    return { value: null };
+  }
+  if (typeof rawValue !== 'string') {
+    return { error: 'colorToken must be a string' };
+  }
+  const trimmed = rawValue.trim();
+  if (!trimmed) {
+    return { value: null };
+  }
+
+  const normalized = normalizeColorToken(trimmed);
+  if (!normalized) {
+    return { error: 'colorToken must be a valid token id' };
+  }
+
+  return { value: normalized };
 }
 
 // Get all pillars for user
@@ -159,10 +220,77 @@ router.post('/', async (req, res) => {
         await existingDefault.save();
       }
     }
-    
+
+    const hasRubricItems = Object.prototype.hasOwnProperty.call(req.body || {}, 'rubricItems');
+    const normalizedPillarTypeResult = normalizeTemplateType(req.body?.pillarType, { required: false });
+    if (normalizedPillarTypeResult.error) {
+      return res.status(400).json({ error: normalizedPillarTypeResult.error });
+    }
+    const normalizedPillarType = normalizedPillarTypeResult.value;
+
+    let resolvedRubricItems;
+    let resolvedMetadata = req.body?.metadata && typeof req.body.metadata === 'object'
+      ? { ...req.body.metadata }
+      : {};
+
+    if (hasRubricItems) {
+      const rubricItemsResult = normalizeRubricItems(req.body?.rubricItems, {
+        fallbackItems: []
+      });
+      if (rubricItemsResult.error) {
+        return res.status(400).json({ error: rubricItemsResult.error });
+      }
+      resolvedRubricItems = rubricItemsResult.value;
+    } else {
+      if (!normalizedPillarType) {
+        return res.status(400).json({
+          error: 'pillarType is required when rubricItems is omitted'
+        });
+      }
+
+      if (normalizedPillarType === 'custom') {
+        resolvedRubricItems = [];
+      } else {
+        const template = await getPillarTemplateByType(normalizedPillarType, {
+          includeInactive: true
+        });
+        if (!template || !template.isActive) {
+          return res.status(409).json({
+            error: 'Pillar template not found or inactive. Activate it before creating pillars from this type.'
+          });
+        }
+
+        resolvedRubricItems = (template.rubricItems || []).map(item => ({ ...item }));
+        resolvedMetadata = {
+          ...resolvedMetadata,
+          templateSource: {
+            pillarType: template.pillarType,
+            templateUpdatedAt: template.updatedAt
+          }
+        };
+      }
+    }
+
+    const rubricItemsResult = normalizeRubricItems(resolvedRubricItems, {
+      fallbackItems: []
+    });
+    if (rubricItemsResult.error) {
+      return res.status(400).json({ error: rubricItemsResult.error });
+    }
+
+    const colorPayloadResult = normalizeColorTokenPayload(req.body || {});
+    if (colorPayloadResult.error) {
+      return res.status(400).json({ error: colorPayloadResult.error });
+    }
+
     const pillar = await Pillar.create({
       ...req.body,
-      userId: req.user.uid
+      userId: req.user.uid,
+      pillarType: normalizedPillarType || null,
+      colorToken: colorPayloadResult.value === undefined ? null : colorPayloadResult.value,
+      customColorHex: null,
+      metadata: resolvedMetadata,
+      rubricItems: rubricItemsResult.value
     });
     await writeUserEventSafe({
       userId: req.user.uid,
@@ -184,8 +312,8 @@ router.post('/', async (req, res) => {
 // Update pillar
 router.put('/:id', async (req, res) => {
   try {
-    const pillar = await Pillar.findById(req.params.id);
-    if (!pillar || pillar.userId !== req.user.uid) {
+    const pillar = await loadUserPillar(req.params.id, req.user.uid);
+    if (!pillar) {
       return res.status(404).json({ error: 'Pillar not found' });
     }
     
@@ -197,6 +325,25 @@ router.put('/:id', async (req, res) => {
       }
     }
     
+    if (Object.prototype.hasOwnProperty.call(req.body || {}, 'rubricItems')) {
+      const rubricItemsResult = normalizeRubricItems(req.body?.rubricItems, {
+        fallbackItems: getRubricItems(pillar)
+      });
+      if (rubricItemsResult.error) {
+        return res.status(400).json({ error: rubricItemsResult.error });
+      }
+      req.body.rubricItems = rubricItemsResult.value;
+    }
+
+    const colorPayloadResult = normalizeColorTokenPayload(req.body || {});
+    if (colorPayloadResult.error) {
+      return res.status(400).json({ error: colorPayloadResult.error });
+    }
+    if (colorPayloadResult.value !== undefined) {
+      req.body.colorToken = colorPayloadResult.value;
+      req.body.customColorHex = null;
+    }
+
     Object.assign(pillar, req.body);
     await pillar.save();
     await writeUserEventSafe({
@@ -214,6 +361,156 @@ router.put('/:id', async (req, res) => {
     res.json(pillar);
   } catch (error) {
     res.status(500).json({ error: error.message });
+  }
+});
+
+// Get rubric for a pillar
+router.get('/:id/rubric', async (req, res) => {
+  try {
+    const pillar = await loadUserPillar(req.params.id, req.user.uid);
+    if (!pillar) {
+      return res.status(404).json({ error: 'Pillar not found' });
+    }
+
+    return res.json({
+      pillarId: pillar.id,
+      rubricItems: await ensurePillarRubricItems(pillar)
+    });
+  } catch (error) {
+    return res.status(500).json({ error: error.message });
+  }
+});
+
+// Add rubric item
+router.post('/:id/rubric', async (req, res) => {
+  try {
+    const pillar = await loadUserPillar(req.params.id, req.user.uid);
+    if (!pillar) {
+      return res.status(404).json({ error: 'Pillar not found' });
+    }
+
+    const itemResult = normalizeRubricItemCreate(req.body || {});
+    if (itemResult.error) {
+      return res.status(400).json({ error: itemResult.error });
+    }
+
+    const nextItems = [...await ensurePillarRubricItems(pillar)];
+    if (nextItems.some(item => item && item.id === itemResult.value.id)) {
+      return res.status(400).json({ error: 'rubric item id already exists for this pillar' });
+    }
+
+    nextItems.push(itemResult.value);
+    pillar.rubricItems = nextItems;
+    await pillar.save();
+
+    await writeUserEventSafe({
+      userId: req.user.uid,
+      type: 'pillar.updated',
+      source: resolveEventSource({
+        explicitSource: req.body?.source,
+        authSource: req.user?.source
+      }),
+      pillarId: pillar.id,
+      name: pillar.name,
+      timestamp: Math.floor(Date.now() / 1000),
+      changes: ['pillar.rubricItems']
+    });
+
+    return res.status(201).json(itemResult.value);
+  } catch (error) {
+    return res.status(500).json({ error: error.message });
+  }
+});
+
+// Update rubric item
+router.put('/:id/rubric/:rubricItemId', async (req, res) => {
+  try {
+    const pillar = await loadUserPillar(req.params.id, req.user.uid);
+    if (!pillar) {
+      return res.status(404).json({ error: 'Pillar not found' });
+    }
+
+    const rubricItemId = normalizeRubricItemId(req.params.rubricItemId);
+    if (!rubricItemId) {
+      return res.status(400).json({ error: 'rubricItemId is required' });
+    }
+
+    const currentItems = await ensurePillarRubricItems(pillar);
+    const existingItem = findRubricItemById(currentItems, rubricItemId);
+    if (!existingItem) {
+      return res.status(404).json({ error: 'Rubric item not found' });
+    }
+
+    const updatedItemResult = normalizeRubricItemUpdate(req.body || {}, existingItem);
+    if (updatedItemResult.error) {
+      return res.status(400).json({ error: updatedItemResult.error });
+    }
+
+    pillar.rubricItems = currentItems.map(item => {
+      if (!item || item.id !== rubricItemId) {
+        return item;
+      }
+      return updatedItemResult.value;
+    });
+    await pillar.save();
+
+    await writeUserEventSafe({
+      userId: req.user.uid,
+      type: 'pillar.updated',
+      source: resolveEventSource({
+        explicitSource: req.body?.source,
+        authSource: req.user?.source
+      }),
+      pillarId: pillar.id,
+      name: pillar.name,
+      timestamp: Math.floor(Date.now() / 1000),
+      changes: ['pillar.rubricItems']
+    });
+
+    return res.json(updatedItemResult.value);
+  } catch (error) {
+    return res.status(500).json({ error: error.message });
+  }
+});
+
+// Remove rubric item
+router.delete('/:id/rubric/:rubricItemId', async (req, res) => {
+  try {
+    const pillar = await loadUserPillar(req.params.id, req.user.uid);
+    if (!pillar) {
+      return res.status(404).json({ error: 'Pillar not found' });
+    }
+
+    const rubricItemId = normalizeRubricItemId(req.params.rubricItemId);
+    if (!rubricItemId) {
+      return res.status(400).json({ error: 'rubricItemId is required' });
+    }
+
+    const currentItems = await ensurePillarRubricItems(pillar);
+    const nextItems = currentItems.filter(item => item && item.id !== rubricItemId);
+    if (nextItems.length === currentItems.length) {
+      return res.status(404).json({ error: 'Rubric item not found' });
+    }
+
+    pillar.rubricItems = nextItems;
+    await pillar.save();
+
+    await writeUserEventSafe({
+      userId: req.user.uid,
+      type: 'pillar.updated',
+      source: resolveEventSource({
+        explicitSource: req.body?.source,
+        authSource: req.user?.source
+      }),
+      pillarId: pillar.id,
+      name: pillar.name,
+      timestamp: Math.floor(Date.now() / 1000),
+      changes: ['pillar.rubricItems']
+    });
+
+    return res.status(204).send();
+  } catch (error) {
+    return res.status(500).json({ error: error.message });
   }
 });
 

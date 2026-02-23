@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { Button } from "@base-ui/react/button";
+import { Input } from "@base-ui/react/input";
 
 type Action = "step1" | "step2" | "step3";
 
@@ -199,7 +200,7 @@ export function EndpointRunner() {
         <p className="text-sm text-[var(--ink-subtle)]">
           Add your API key, then run Step 1/2/3 and inspect full endpoint responses.
         </p>
-        <p className="mono text-xs text-[#b45309]">
+        <p className="mono text-xs text-[var(--ink)]">
           Step 3 writes data and uses <span className="font-semibold">mode=replace</span> on the selected date.
         </p>
       </header>
@@ -207,31 +208,31 @@ export function EndpointRunner() {
       <div className="grid gap-3 md:grid-cols-[1.6fr_1fr_1fr]">
         <label className="block">
           <span className="mb-1 block text-xs uppercase tracking-wide text-[var(--ink-subtle)]">API key</span>
-          <input
+          <Input
             value={apiKey}
             onChange={event => setApiKey(event.target.value)}
             placeholder="plr_..."
             type="password"
-            className="mono w-full rounded-md border border-[var(--line-strong)] bg-white px-3 py-2 text-sm outline-none ring-[var(--accent)] focus:ring-2"
+            className="mono w-full rounded-md border border-[var(--line-strong)] bg-[var(--bg)] px-3 py-2 text-sm outline-none ring-[var(--accent)] focus:ring-2"
           />
         </label>
 
         <label className="block">
           <span className="mb-1 block text-xs uppercase tracking-wide text-[var(--ink-subtle)]">API base URL</span>
-          <input
+          <Input
             value={baseUrl}
             onChange={event => setBaseUrl(event.target.value)}
-            className="mono w-full rounded-md border border-[var(--line-strong)] bg-white px-3 py-2 text-sm outline-none ring-[var(--accent)] focus:ring-2"
+            className="mono w-full rounded-md border border-[var(--line-strong)] bg-[var(--bg)] px-3 py-2 text-sm outline-none ring-[var(--accent)] focus:ring-2"
           />
         </label>
 
         <label className="block">
           <span className="mb-1 block text-xs uppercase tracking-wide text-[var(--ink-subtle)]">Step 3 date</span>
-          <input
+          <Input
             value={date}
             onChange={event => setDate(event.target.value)}
             type="date"
-            className="mono w-full rounded-md border border-[var(--line-strong)] bg-white px-3 py-2 text-sm outline-none ring-[var(--accent)] focus:ring-2"
+            className="mono w-full rounded-md border border-[var(--line-strong)] bg-[var(--bg)] px-3 py-2 text-sm outline-none ring-[var(--accent)] focus:ring-2"
           />
         </label>
       </div>
@@ -239,41 +240,41 @@ export function EndpointRunner() {
       <div className="mt-4 flex flex-wrap gap-2">
         <Button
           onClick={saveApiKey}
-          className="mono cursor-pointer rounded-md border border-[var(--line-strong)] bg-white px-3 py-2 text-xs text-[var(--ink)] hover:bg-[#f1f4ec]"
+          className="mono cursor-pointer rounded-md border border-[var(--line-strong)] bg-[var(--bg)] px-3 py-2 text-xs text-[var(--ink)] hover:bg-[var(--bg-elevated)]"
         >
           Save Key
         </Button>
         <Button
           onClick={clearApiKey}
-          className="mono cursor-pointer rounded-md border border-[var(--line-strong)] bg-white px-3 py-2 text-xs text-[var(--ink)] hover:bg-[#f1f4ec]"
+          className="mono cursor-pointer rounded-md border border-[var(--line-strong)] bg-[var(--bg)] px-3 py-2 text-xs text-[var(--ink)] hover:bg-[var(--bg-elevated)]"
         >
           Clear Key
         </Button>
         <Button
           disabled={busy}
           onClick={() => runOne("step1")}
-          className="mono cursor-pointer rounded-md border border-[var(--line-strong)] bg-white px-3 py-2 text-xs text-[var(--ink)] hover:bg-[#f1f4ec] disabled:cursor-not-allowed disabled:opacity-60"
+          className="mono cursor-pointer rounded-md border border-[var(--line-strong)] bg-[var(--bg)] px-3 py-2 text-xs text-[var(--ink)] hover:bg-[var(--bg-elevated)] disabled:cursor-not-allowed disabled:opacity-60"
         >
           Run Step 1
         </Button>
         <Button
           disabled={busy}
           onClick={() => runOne("step2")}
-          className="mono cursor-pointer rounded-md border border-[var(--line-strong)] bg-white px-3 py-2 text-xs text-[var(--ink)] hover:bg-[#f1f4ec] disabled:cursor-not-allowed disabled:opacity-60"
+          className="mono cursor-pointer rounded-md border border-[var(--line-strong)] bg-[var(--bg)] px-3 py-2 text-xs text-[var(--ink)] hover:bg-[var(--bg-elevated)] disabled:cursor-not-allowed disabled:opacity-60"
         >
           Run Step 2
         </Button>
         <Button
           disabled={busy}
           onClick={() => runOne("step3")}
-          className="mono cursor-pointer rounded-md border border-[var(--line-strong)] bg-[#fde68a] px-3 py-2 text-xs text-[#7c2d12] hover:bg-[#fcd34d] disabled:cursor-not-allowed disabled:opacity-60"
+          className="mono cursor-pointer rounded-md border border-[var(--line-strong)] bg-[var(--bg-elevated)] px-3 py-2 text-xs text-[var(--ink)] hover:bg-[var(--line)] disabled:cursor-not-allowed disabled:opacity-60"
         >
           Run Step 3 (Write)
         </Button>
         <Button
           disabled={busy}
           onClick={runAll}
-          className="mono cursor-pointer rounded-md border border-[var(--accent)] bg-[var(--accent-soft)] px-3 py-2 text-xs text-[var(--accent)] hover:bg-[#bfe8d8] disabled:cursor-not-allowed disabled:opacity-60"
+          className="mono cursor-pointer rounded-md border border-[var(--accent)] bg-[var(--accent-soft)] px-3 py-2 text-xs text-[var(--accent)] hover:bg-[var(--bg-elevated)] disabled:cursor-not-allowed disabled:opacity-60"
         >
           Run All
         </Button>
@@ -291,16 +292,16 @@ export function EndpointRunner() {
                 : "error";
 
           return (
-            <article key={action} className="rounded-md border border-[var(--line)] bg-white p-3">
+            <article key={action} className="rounded-md border border-[var(--line)] bg-[var(--bg)] p-3">
               <header className="mb-2 flex items-center justify-between gap-2">
                 <h3 className="mono text-xs uppercase tracking-wide">{action}</h3>
-                <span className="mono rounded bg-[#eef2ea] px-2 py-1 text-xs text-[var(--ink-subtle)]">{statusLabel}</span>
+                <span className="mono rounded bg-[var(--bg-elevated)] px-2 py-1 text-xs text-[var(--ink-subtle)]">{statusLabel}</span>
               </header>
               {result.error ? (
-                <p className="mono rounded bg-[#fff5f5] px-2 py-2 text-xs text-[#b91c1c]">{result.error}</p>
+                <p className="mono rounded bg-[var(--bg-elevated)] px-2 py-2 text-xs text-[var(--ink)]">{result.error}</p>
               ) : null}
               {result.data ? (
-                <pre className="mono max-h-80 overflow-auto rounded bg-[#1f2621] p-3 text-xs text-[#d7f4df]">
+                <pre className="mono max-h-80 overflow-auto rounded bg-[var(--bg)] p-3 text-xs text-[var(--ink)]">
                   {jsonString(result.data)}
                 </pre>
               ) : null}

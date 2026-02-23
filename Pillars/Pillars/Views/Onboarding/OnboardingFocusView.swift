@@ -2,7 +2,7 @@
 //  OnboardingFocusView.swift
 //  Pillars
 //
-//  First onboarding step - select a pillar to focus on
+//  Single-step onboarding selection for pillar templates.
 //
 
 import SwiftUI
@@ -10,154 +10,252 @@ import SwiftUI
 struct PillarOption: Identifiable, Equatable {
     let id: String
     let title: String
+    let description: String?
+    let pillarType: String
+    let iconToken: String?
+    let colorToken: String?
     let color: String
-    
-    init(id: String, title: String, color: String = "#007AFF") {
+
+    init(
+        id: String,
+        title: String,
+        color: String = "#607D8B",
+        description: String? = nil,
+        pillarType: String? = nil,
+        iconToken: String? = nil,
+        colorToken: String? = nil
+    ) {
+        let normalizedType = pillarType?
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .lowercased()
+        let resolvedType = (normalizedType?.isEmpty == false) ? (normalizedType ?? "") : id
+        let normalizedIconToken = PillarIconRegistry.normalizeToken(iconToken)
+        let normalizedColorToken = PillarColorRegistry.normalizeToken(colorToken)
+            ?? PillarColorRegistry.token(forHex: color)
+            ?? PillarIconRegistry.defaultColorToken(for: normalizedIconToken)
+
         self.id = id
         self.title = title
-        self.color = color
+        self.description = description
+        self.pillarType = resolvedType
+        self.iconToken = normalizedIconToken
+        self.colorToken = normalizedColorToken
+        self.color = PillarColorRegistry.hex(for: normalizedColorToken)
     }
-    
-    /// Fallback hardcoded pillars - used when API content is unavailable
-    static let allPillars: [PillarOption] = [
-        PillarOption(id: "family", title: "Family", color: "#FF6B6B"),
-        PillarOption(id: "marriage", title: "Marriage / Partner", color: "#E91E63"),
-        PillarOption(id: "parenting", title: "Parenting", color: "#FF9800"),
-        PillarOption(id: "faith", title: "Faith / Spirituality", color: "#9C27B0"),
-        PillarOption(id: "fitness", title: "Fitness / Health", color: "#4CAF50"),
-        PillarOption(id: "finances", title: "Finances", color: "#2196F3"),
-        PillarOption(id: "work", title: "Work", color: "#607D8B"),
-        PillarOption(id: "friendships", title: "Friendships", color: "#00BCD4"),
-        PillarOption(id: "home", title: "Home", color: "#795548"),
-        PillarOption(id: "self", title: "Self", color: "#673AB7"),
-        PillarOption(id: "custom", title: "Custom", color: "#007AFF")
+
+    var iconSystemName: String {
+        PillarIconRegistry.systemName(for: iconToken)
+    }
+
+    var accentColor: Color {
+        PillarColorRegistry.color(for: colorToken)
+    }
+
+    static let allPillars: [PillarOption] = fallbackTemplatePillars
+
+    static let fallbackTemplatePillars: [PillarOption] = [
+        PillarOption(
+            id: "marriage",
+            title: "Marriage",
+            description: "Connection, quality time, and support for your partner.",
+            pillarType: "marriage",
+            iconToken: "heart",
+            colorToken: "rose"
+        ),
+        PillarOption(
+            id: "physical",
+            title: "Physical",
+            description: "Fitness, recovery, and daily health habits.",
+            pillarType: "physical",
+            iconToken: "figure",
+            colorToken: "green"
+        ),
+        PillarOption(
+            id: "career",
+            title: "Career",
+            description: "Deep work, milestones, and professional growth.",
+            pillarType: "career",
+            iconToken: "briefcase",
+            colorToken: "slate"
+        ),
+        PillarOption(
+            id: "finances",
+            title: "Finances",
+            description: "Budgeting, planning, and long-term money moves.",
+            pillarType: "finances",
+            iconToken: "dollarsign",
+            colorToken: "blue"
+        ),
+        PillarOption(
+            id: "house",
+            title: "House",
+            description: "Home maintenance, projects, and upkeep.",
+            pillarType: "house",
+            iconToken: "house",
+            colorToken: "amber"
+        ),
+        PillarOption(
+            id: "mental_health",
+            title: "Mental Health",
+            description: "Mindfulness, rest, and emotional wellbeing.",
+            pillarType: "mental_health",
+            iconToken: "brain",
+            colorToken: "violet"
+        ),
+        PillarOption(
+            id: "spiritual",
+            title: "Spiritual",
+            description: "Practice, community, and service.",
+            pillarType: "spiritual",
+            iconToken: "leaf",
+            colorToken: "mint"
+        ),
+        PillarOption(
+            id: "fatherhood",
+            title: "Fatherhood",
+            description: "Presence, teaching, and family moments.",
+            pillarType: "fatherhood",
+            iconToken: "figure2",
+            colorToken: "orange"
+        )
     ]
 }
 
 struct OnboardingFocusView: View {
-    @Binding var selectedPillar: PillarOption?
-    @State private var customPillarName: String = ""
-    @State private var showCustomInput: Bool = false
-    @FocusState private var isCustomFieldFocused: Bool
-    
-    /// Pillars to display - can be from API or fallback
-    var pillars: [PillarOption] = PillarOption.allPillars
-    
-    let onContinue: () -> Void
-    
+    let pillars: [PillarOption]
+    @Binding var selectedPillarIds: Set<String>
+    let isSubmitting: Bool
+    let onCreate: () -> Void
+
+    private var selectedCount: Int {
+        selectedPillarIds.count
+    }
+
+    private var callToActionTitle: String {
+        if isSubmitting {
+            return "Creating Pillars..."
+        }
+        if selectedCount == 1 {
+            return "Create 1 Pillar"
+        }
+        return "Create \(selectedCount) Pillars"
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: S2.Spacing.xxl) {
-            // Title
-            Text("What's one area of your life you want to be more intentional about?")
+            Text("What areas of your life do you want to focus on?")
                 .font(.system(size: 28, weight: .bold))
                 .foregroundColor(S2.Colors.primaryText)
                 .fixedSize(horizontal: false, vertical: true)
-            
-            // Selection options
+
+            Text("Select all that apply.")
+                .font(.system(size: 15))
+                .foregroundColor(S2.Colors.secondaryText)
+
             ScrollView(showsIndicators: false) {
                 VStack(spacing: S2.Spacing.md) {
-                    // Show pillars from ViewModel (or fallback)
                     ForEach(pillars) { pillar in
-                        if pillar.id == "custom" {
-                            // Custom option with text field
-                            customPillarRow(pillar: pillar)
-                        } else {
-                            OnboardingSelectionRow(
-                                title: pillar.title,
-                                isSelected: selectedPillar?.id == pillar.id
-                            ) {
-                                selectPillar(pillar)
-                            }
+                        PillarSelectionRow(
+                            pillar: pillar,
+                            isSelected: selectedPillarIds.contains(pillar.id)
+                        ) {
+                            toggleSelection(for: pillar.id)
                         }
                     }
-                    
-                    // Always show custom option at the end if not in pillars
-                    if !pillars.contains(where: { $0.id == "custom" }) {
-                        customPillarRow(pillar: PillarOption(id: "custom", title: "Custom"))
-                    }
                 }
-                .padding(.bottom, S2.Spacing.xxxl)
+                .padding(.bottom, S2.Spacing.xl)
             }
+
+            S2Button(
+                title: callToActionTitle,
+                icon: selectedCount > 0 ? "checkmark.circle.fill" : nil,
+                variant: .primary,
+                centerContent: true
+            ) {
+                onCreate()
+            }
+            .disabled(selectedCount == 0 || isSubmitting)
+            .opacity((selectedCount == 0 || isSubmitting) ? 0.5 : 1)
         }
     }
-    
-    @ViewBuilder
-    private func customPillarRow(pillar: PillarOption) -> some View {
-        if showCustomInput {
-            // Show text field for custom input
-            HStack {
-                TextField("Enter your pillar", text: $customPillarName)
-                    .font(.system(size: 17, weight: .regular))
-                    .foregroundColor(S2.Colors.primaryText)
-                    .focused($isCustomFieldFocused)
-                    .onSubmit {
-                        if !customPillarName.isEmpty {
-                            let customPillar = PillarOption(id: "custom", title: customPillarName)
-                            selectedPillar = customPillar
-                            advanceAfterDelay()
-                        }
-                    }
-                
-                Spacer()
-                
-                // Checkmark button to confirm
-                Button {
-                    if !customPillarName.isEmpty {
-                        let customPillar = PillarOption(id: "custom", title: customPillarName)
-                        selectedPillar = customPillar
-                        advanceAfterDelay()
-                    }
-                } label: {
-                    Image(systemName: "checkmark.circle.fill")
-                        .font(.system(size: 24))
-                        .foregroundColor(customPillarName.isEmpty ? S2.Colors.tertiaryText : S2.Colors.primaryText)
+
+    private func toggleSelection(for pillarId: String) {
+        if selectedPillarIds.contains(pillarId) {
+            selectedPillarIds.remove(pillarId)
+        } else {
+            selectedPillarIds.insert(pillarId)
+        }
+    }
+}
+
+private struct PillarSelectionRow: View {
+    let pillar: PillarOption
+    let isSelected: Bool
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: S2.Spacing.md) {
+                ZStack {
+                    Circle()
+                        .fill(pillar.accentColor.opacity(0.16))
+                        .frame(width: 36, height: 36)
+
+                    Image(systemName: pillar.iconSystemName)
+                        .font(.system(size: 17, weight: .semibold))
+                        .foregroundColor(pillar.accentColor)
                 }
-                .disabled(customPillarName.isEmpty)
+
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(pillar.title)
+                        .font(.system(size: 17, weight: .semibold))
+                        .foregroundColor(S2.Colors.primaryText)
+
+                    if let description = pillar.description,
+                       !description.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                        Text(description)
+                            .font(.system(size: 13))
+                            .foregroundColor(S2.Colors.secondaryText)
+                            .lineLimit(2)
+                    }
+                }
+
+                Spacer()
+
+                ZStack {
+                    Circle()
+                        .stroke(isSelected ? Color.clear : S2.Colors.tertiaryText, lineWidth: 1.5)
+                        .frame(width: 24, height: 24)
+
+                    if isSelected {
+                        Circle()
+                            .fill(S2.Colors.primaryText)
+                            .frame(width: 24, height: 24)
+
+                        Image(systemName: "checkmark")
+                            .font(.system(size: 12, weight: .bold))
+                            .foregroundColor(S2.Colors.primarySurface)
+                    }
+                }
             }
             .padding(.horizontal, S2.Spacing.lg)
             .padding(.vertical, S2.Spacing.lg)
             .background(
                 RoundedRectangle(cornerRadius: S2.CornerRadius.md)
-                    .fill(S2.Colors.secondarySurface)
+                    .fill(isSelected ? S2.Colors.secondarySurface : S2.Colors.secondarySurface.opacity(0.6))
             )
-        } else {
-            // Show regular row that expands to text field
-            OnboardingSelectionRow(
-                title: pillar.title,
-                isSelected: false
-            ) {
-                withAnimation(.easeInOut(duration: 0.2)) {
-                    showCustomInput = true
-                }
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-                    isCustomFieldFocused = true
-                }
-            }
         }
-    }
-    
-    private func selectPillar(_ pillar: PillarOption) {
-        withAnimation(.easeInOut(duration: 0.2)) {
-            selectedPillar = pillar
-            showCustomInput = false
-            customPillarName = ""
-        }
-        advanceAfterDelay()
-    }
-    
-    private func advanceAfterDelay() {
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
-            onContinue()
-        }
+        .buttonStyle(.plain)
     }
 }
 
 #Preview {
     OnboardingFocusView(
-        selectedPillar: .constant(nil),
-        pillars: PillarOption.allPillars
+        pillars: PillarOption.fallbackTemplatePillars,
+        selectedPillarIds: .constant(["marriage", "career"]),
+        isSubmitting: false
     ) {
-        print("Continue tapped")
+        print("Create selected pillars")
     }
     .padding(.horizontal, S2.Spacing.xl)
     .padding(.top, S2.Spacing.xxxl)

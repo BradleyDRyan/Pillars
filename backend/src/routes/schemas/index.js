@@ -7,11 +7,11 @@ const {
   buildDaySchema,
   buildPlanSchema,
   buildPointEventSchema,
+  buildPillarSchema,
   buildPillarIconListResponse,
   toCanonicalBlockType,
-  buildPillarIconSchema,
-  router: legacyRouter
-} = require('../schemasLegacy');
+  router: contractRouter
+} = require('../schemasContract');
 
 const { db } = require('../../config/firebase');
 const { listBlockTypesForUser } = require('../../services/blockTypes');
@@ -90,9 +90,13 @@ schemasRouter.get('/event-types', async (req, res) => {
 
 schemasRouter.get('/pillars', async (req, res) => {
   try {
-    const pillarIcons = buildPillarIconListResponse();
+    const pillarIcons = await buildPillarIconListResponse();
+    const pillarSchema = await buildPillarSchema();
     return res.json({
       ...pillarIcons,
+      pillarIcons,
+      pillarVisuals: pillarSchema.visuals || null,
+      pillarSchema,
       endpoint: '/api/schemas/pillars'
     });
   } catch (error) {
@@ -103,7 +107,7 @@ schemasRouter.get('/pillars', async (req, res) => {
 
 schemasRouter.get('/pillar-icons', async (req, res) => {
   try {
-    const pillarIcons = buildPillarIconListResponse();
+    const pillarIcons = await buildPillarIconListResponse();
     return res.json(pillarIcons);
   } catch (error) {
     console.error('[schemas] GET /pillar-icons error:', error);
@@ -111,6 +115,6 @@ schemasRouter.get('/pillar-icons', async (req, res) => {
   }
 });
 
-schemasRouter.use('/', legacyRouter);
+schemasRouter.use('/', contractRouter);
 
 module.exports = schemasRouter;

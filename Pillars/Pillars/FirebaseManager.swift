@@ -219,6 +219,13 @@ class FirebaseManager: ObservableObject {
     }
     
     // MARK: - Onboarding
+
+    struct OnboardingPillarSelection: Hashable {
+        let name: String
+        let pillarType: String
+        let iconToken: String?
+        let colorToken: String?
+    }
     
     /// Check if user has completed onboarding
     @MainActor
@@ -242,7 +249,12 @@ class FirebaseManager: ObservableObject {
     
     /// Complete onboarding and save selected pillar and principles
     @MainActor
-    func completeOnboarding(selectedPillar: String, pillarColor: String = "#007AFF", principles: [String] = []) async {
+    func completeOnboarding(
+        selectedPillar: String,
+        pillarColor: String = "#007AFF",
+        principles: [String] = [],
+        pillarType: PillarType? = nil
+    ) async {
         guard let firestore = firestore,
               let userId = currentUser?.uid else {
             print("❌ Cannot complete onboarding: missing firestore or user")
@@ -250,28 +262,20 @@ class FirebaseManager: ObservableObject {
         }
         
         do {
-            // 1. Create the Pillar document
-            let pillarId = UUID().uuidString
+            // 1. Create the Pillar document through backend to ensure template-driven rubric defaults.
             let now = Timestamp(date: Date())
-            
-            let pillarData: [String: Any] = [
-                "userId": userId,
-                "name": selectedPillar,
-                "description": "",
-                "color": pillarColor,
-                "isDefault": true,
-                "isArchived": false,
-                "stats": [
-                    "conversationCount": 0,
-                    "principleCount": principles.count,
-                    "wisdomCount": 0,
-                    "resourceCount": 0
-                ],
-                "createdAt": now,
-                "updatedAt": now
-            ]
-            
-            try await firestore.collection("pillars").document(pillarId).setData(pillarData)
+            let resolvedPillarType = pillarType
+                ?? PillarType.resolve(selectedPillar)
+                ?? PillarType.infer(name: selectedPillar, icon: nil)
+            let createdPillar = try await APIService.shared.createPillar(
+                name: selectedPillar,
+                description: "",
+                colorToken: PillarColorRegistry.token(forHex: pillarColor),
+                iconToken: nil,
+                pillarType: resolvedPillarType?.rawValue ?? "custom",
+                isDefault: true
+            )
+            let pillarId = createdPillar.id
             print("✅ Created pillar '\(selectedPillar)' with id: \(pillarId)")
             
             // 2. Create Principle documents for each selected principle
@@ -294,20 +298,88 @@ class FirebaseManager: ObservableObject {
             }
             
             // 3. Update user document with onboarding completion
-            try await firestore.collection("users").document(userId).setData([
+            var userPatch: [String: Any] = [
                 "hasCompletedOnboarding": true,
                 "onboardingCompletedAt": FieldValue.serverTimestamp(),
                 "initialPillar": selectedPillar,
                 "initialPillarId": pillarId,
                 "initialPrinciples": principles,
                 "updatedAt": FieldValue.serverTimestamp()
-            ], merge: true)
+            ]
+            if let resolvedPillarType {
+                userPatch["initialPillarType"] = resolvedPillarType.rawValue
+            }
+            try await firestore.collection("users").document(userId).setData(userPatch, merge: true)
             
             self.hasCompletedOnboarding = true
             print("✅ Onboarding completed with pillar: \(selectedPillar), \(principles.count) principles")
         } catch {
             print("❌ Failed to complete onboarding: \(error)")
         }
+    }
+
+    /// Complete onboarding by creating one pillar per selected template.
+    @MainActor
+    func completeOnboarding(selectedPillars: [OnboardingPillarSelection]) async throws {
+        guard let firestore = firestore else {
+            throw FirebaseError.firebaseNotConfigured
+        }
+        guard let userId = currentUser?.uid else {
+            throw FirebaseError.notAuthenticated
+        }
+
+        let normalizedSelections = normalizeOnboardingSelections(selectedPillars)
+        guard !normalizedSelections.isEmpty else {
+            throw FirebaseError.invalidOnboardingSelection
+        }
+
+        var createdPillars: [(id: String, name: String, pillarType: String)] = []
+
+        for (index, selection) in normalizedSelections.enumerated() {
+            let resolvedIconToken = PillarIconRegistry.normalizeToken(selection.iconToken)
+            let resolvedColorToken = PillarColorRegistry.normalizeToken(selection.colorToken)
+                ?? PillarIconRegistry.defaultColorToken(for: resolvedIconToken)
+
+            do {
+                let createdPillar = try await APIService.shared.createPillar(
+                    name: selection.name,
+                    description: "",
+                    colorToken: resolvedColorToken,
+                    iconToken: resolvedIconToken,
+                    pillarType: selection.pillarType,
+                    isDefault: index == 0
+                )
+
+                createdPillars.append((
+                    id: createdPillar.id,
+                    name: selection.name,
+                    pillarType: selection.pillarType
+                ))
+            } catch {
+                print("⚠️ Failed to create onboarding pillar '\(selection.name)': \(error)")
+            }
+        }
+
+        guard !createdPillars.isEmpty else {
+            throw FirebaseError.onboardingFailed
+        }
+
+        let userPatch: [String: Any] = [
+            "hasCompletedOnboarding": true,
+            "onboardingCompletedAt": FieldValue.serverTimestamp(),
+            "initialPillar": createdPillars[0].name,
+            "initialPillarId": createdPillars[0].id,
+            "initialPillarType": createdPillars[0].pillarType,
+            "initialPillars": createdPillars.map { $0.name },
+            "initialPillarIds": createdPillars.map { $0.id },
+            "initialPillarTypes": createdPillars.map { $0.pillarType },
+            "updatedAt": FieldValue.serverTimestamp()
+        ]
+
+        try await firestore.collection("users").document(userId).setData(userPatch, merge: true)
+        hasCompletedOnboarding = true
+
+        print("✅ Onboarding completed with \(createdPillars.count) pillars")
     }
     
     /// Reset onboarding for testing purposes
@@ -346,6 +418,118 @@ class FirebaseManager: ObservableObject {
         }
         try await firestore.collection("users").document(userId).setData(data, merge: true)
     }
+
+    // MARK: - Development Data Reset
+
+    struct UserDataDeletionSummary {
+        let deletedCounts: [String: Int]
+
+        var totalDeleted: Int {
+            deletedCounts.values.reduce(0, +)
+        }
+    }
+
+    @MainActor
+    func deleteAllUserDataForCurrentUser() async throws -> UserDataDeletionSummary {
+        guard let firestore = firestore else {
+            throw FirebaseError.firebaseNotConfigured
+        }
+        guard let userId = currentUser?.uid else {
+            throw FirebaseError.notAuthenticated
+        }
+
+        // Keep this list aligned with user-scoped collections used across iOS.
+        let userScopedCollections = [
+            "pillars",
+            "principles",
+            "todos",
+            "habits",
+            "habitLogs",
+            "habitGroups",
+            "dayBlocks",
+            "pointEvents",
+            "insights",
+            "blockTypes"
+        ]
+
+        var deletedCounts: [String: Int] = [:]
+
+        for collectionName in userScopedCollections {
+            let deleted = try await deleteDocuments(
+                inCollection: collectionName,
+                forUserId: userId,
+                firestore: firestore
+            )
+            if deleted > 0 {
+                deletedCounts[collectionName] = deleted
+            }
+        }
+
+        try await firestore.collection("users").document(userId).delete()
+        deletedCounts["users"] = 1
+
+        hasCompletedOnboarding = false
+        isCheckingOnboardingStatus = false
+
+        return UserDataDeletionSummary(deletedCounts: deletedCounts)
+    }
+
+    private func deleteDocuments(
+        inCollection collectionName: String,
+        forUserId userId: String,
+        firestore: Firestore,
+        batchSize: Int = 250
+    ) async throws -> Int {
+        var totalDeleted = 0
+
+        while true {
+            let snapshot = try await firestore.collection(collectionName)
+                .whereField("userId", isEqualTo: userId)
+                .limit(to: batchSize)
+                .getDocuments()
+            let docs = snapshot.documents
+            guard !docs.isEmpty else { break }
+
+            let batch = firestore.batch()
+            for doc in docs {
+                batch.deleteDocument(doc.reference)
+            }
+            try await batch.commit()
+            totalDeleted += docs.count
+        }
+
+        return totalDeleted
+    }
+
+    private func normalizeOnboardingSelections(
+        _ selections: [OnboardingPillarSelection]
+    ) -> [OnboardingPillarSelection] {
+        var seenTypes = Set<String>()
+        var normalized: [OnboardingPillarSelection] = []
+
+        for selection in selections {
+            let trimmedName = selection.name.trimmingCharacters(in: .whitespacesAndNewlines)
+            let trimmedType = selection.pillarType
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+                .lowercased()
+
+            guard !trimmedName.isEmpty else { continue }
+            guard !trimmedType.isEmpty else { continue }
+            guard !seenTypes.contains(trimmedType) else { continue }
+
+            seenTypes.insert(trimmedType)
+            normalized.append(
+                OnboardingPillarSelection(
+                    name: trimmedName,
+                    pillarType: trimmedType,
+                    iconToken: selection.iconToken,
+                    colorToken: selection.colorToken
+                )
+            )
+        }
+
+        return normalized
+    }
     
     deinit {
         if let authStateListener = authStateListener {
@@ -357,6 +541,9 @@ class FirebaseManager: ObservableObject {
 enum FirebaseError: LocalizedError {
     case missingVerificationID
     case firebaseNotConfigured
+    case notAuthenticated
+    case invalidOnboardingSelection
+    case onboardingFailed
     
     var errorDescription: String? {
         switch self {
@@ -364,6 +551,12 @@ enum FirebaseError: LocalizedError {
             return "Session expired. Please request a new code."
         case .firebaseNotConfigured:
             return "Firebase is not properly configured."
+        case .notAuthenticated:
+            return "You must be signed in."
+        case .invalidOnboardingSelection:
+            return "Pick at least one focus area to continue."
+        case .onboardingFailed:
+            return "Failed to create pillars during onboarding."
         }
     }
 }

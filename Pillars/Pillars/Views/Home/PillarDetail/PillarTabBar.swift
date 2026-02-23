@@ -21,15 +21,16 @@ struct PillarTabBar: View {
                         selectedIndex = index
                     }
                 } label: {
-                    VStack(spacing: 10) {
+                    VStack(spacing: S2.Spacing.md) {
                         Text(title)
-                            .font(.system(size: 15, weight: selectedIndex == index ? .semibold : .regular))
-                            .foregroundColor(selectedIndex == index ? Color(UIColor.label) : Color(UIColor.label).opacity(0.5))
+                            .font(S2.TextStyle.subheadline)
+                            .fontWeight(selectedIndex == index ? .semibold : .regular)
+                            .foregroundColor(selectedIndex == index ? S2.Colors.primaryText : S2.Colors.secondaryText)
                         
                         // Underline indicator
                         if selectedIndex == index {
                             Rectangle()
-                                .fill(Color.primary)
+                                .fill(S2.Colors.primaryText)
                                 .frame(height: 2)
                                 .matchedGeometryEffect(id: "underline", in: namespace)
                         } else {
@@ -43,7 +44,7 @@ struct PillarTabBar: View {
                 .buttonStyle(.plain)
             }
         }
-        .padding(.horizontal, 20)
+        .padding(.horizontal, S2.Spacing.xl)
     }
 }
 
@@ -67,6 +68,5 @@ struct PillarTabBar: View {
     
     return PreviewWrapper()
 }
-
 
 

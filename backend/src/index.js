@@ -22,6 +22,8 @@ const phoneAuthRoutes = require('./routes/phone-auth');
 const conversationRoutes = require('./routes/conversations');
 const messageRoutes = require('./routes/messages');
 const pillarRoutes = require('./routes/pillars');
+const pillarTemplateRoutes = require('./routes/pillar-templates');
+const pillarVisualRoutes = require('./routes/pillar-visuals');
 const principleRoutes = require('./routes/principles');
 const insightRoutes = require('./routes/insights');
 const aiRoutes = require('./routes/ai');
@@ -69,6 +71,8 @@ app.get('/', (req, res) => {
       api: '/api',
       users: '/users',
       pillars: '/api/pillars',
+      pillarTemplates: '/api/pillar-templates',
+      pillarVisuals: '/api/pillar-visuals',
       principles: '/api/principles',
       insights: '/api/insights',
       conversations: '/api/conversations',
@@ -93,6 +97,8 @@ app.use('/auth/phone', phoneAuthRoutes);
 app.use('/api', apiRoutes);
 app.use('/users', userRoutes);
 app.use('/api/pillars', pillarRoutes);
+app.use('/api/pillar-templates', pillarTemplateRoutes);
+app.use('/api/pillar-visuals', pillarVisualRoutes);
 app.use('/api/principles', principleRoutes);
 app.use('/api/insights', insightRoutes);
 app.use('/api/conversations', conversationRoutes);

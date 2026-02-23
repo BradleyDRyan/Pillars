@@ -22,6 +22,7 @@ export type JsonObjectSchema = {
   properties: Record<string, JsonSchemaProperty>;
   required: string[];
   additionalProperties: boolean;
+  atLeastOneOf?: string[];
 };
 
 export type BlockTypeSchema = {
@@ -37,10 +38,83 @@ export type BlockTypeSchema = {
 
 export type SchemasResponse = {
   blockTypes: BlockTypeSchema[];
+  pillarSchema: {
+    endpoint: string;
+    pillarTypes?: {
+      values: string[];
+      default?: string;
+    };
+    rubricItem: JsonObjectSchema;
+    templateLibraryEndpoint?: string;
+    visualsEndpoint?: string;
+    visualsAdminEndpoint?: string;
+    visuals?: {
+      colors: Array<{
+        id: string;
+        label: string;
+        order: number;
+        isActive: boolean;
+      }>;
+      icons: Array<{
+        id: string;
+        label: string;
+        defaultColorToken?: string | null;
+        order: number;
+        isActive: boolean;
+      }>;
+    };
+    templateLibrary?: Array<{
+      pillarType: string;
+      name: string;
+      description?: string | null;
+      icon?: string | null;
+      colorToken?: string | null;
+      order: number;
+      rubricItemCount: number;
+    }>;
+    defaultRubricTemplates?: Record<
+      string,
+      Array<{
+        id: string;
+        activityType: string;
+        tier: string;
+        label: string;
+        points: number;
+        examples?: string | null;
+        createdAt: number;
+        updatedAt: number;
+      }>
+    >;
+    rubricRead: {
+      endpoint: string;
+      response: JsonObjectSchema;
+    };
+    rubricCreate: JsonObjectSchema;
+    rubricUpdate: JsonObjectSchema;
+    notes: string[];
+  };
   pillarIcons: {
     endpoint: string;
     description: string;
     values: string[];
+  };
+  pillarVisuals?: {
+    endpoint: string;
+    source: string;
+    updatedAt: number;
+    colors: Array<{
+      id: string;
+      label: string;
+      order: number;
+      isActive: boolean;
+    }>;
+    icons: Array<{
+      id: string;
+      label: string;
+      defaultColorToken?: string | null;
+      order: number;
+      isActive: boolean;
+    }>;
   };
   todoSchema: {
     listQuery: JsonObjectSchema;

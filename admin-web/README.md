@@ -10,6 +10,12 @@ Next.js admin control plane for inspecting canonical API contracts from `GET /ap
   - `habitSchema`
   - `daySchema`
   - `eventTypes`
+- Pillar template manager (`/pillar-templates`):
+  - Create new template types (outside the core defaults)
+  - Edit template metadata (`name`, `description`, `icon`, `color`, `order`, `isActive`)
+  - Add/edit/remove default rubric items on a template
+  - Soft delete and restore templates
+  - Template changes apply to future pillar creations only
 - Step Flow Runner:
   - Enter API key in UI.
   - Run Step 1 (`GET /api/context`), Step 2 (`GET /api/schemas`), Step 3 demo write (`POST /api/todos`, `/api/habits`, `/api/days/:date/blocks/batch`).
@@ -24,11 +30,12 @@ Create `admin-web/.env.local`:
 ```bash
 PILLARS_API_BASE_URL=https://pillars-phi.vercel.app
 
-# Option A: user-scoped API key auth
+# Option A: user-scoped API key auth (read-only pages like /schemas)
 PILLARS_API_KEY=your_user_scoped_api_key
 
-# Option B: internal service auth (requires both)
+# Option B: internal service auth (required for /pillar-templates writes)
 PILLARS_INTERNAL_SERVICE_SECRET=your_internal_service_secret
+# Optional for read calls via internal auth fallback
 PILLARS_USER_ID=your_firebase_uid
 
 # Optional local panel auth
@@ -40,6 +47,7 @@ Notes:
 - You must set either:
   - `PILLARS_API_KEY`, or
   - both `PILLARS_INTERNAL_SERVICE_SECRET` and `PILLARS_USER_ID`.
+- For template CRUD write actions (`/pillar-templates`), set `PILLARS_INTERNAL_SERVICE_SECRET`.
 - `PILLARS_API_BASE_URL` defaults to production if omitted.
 - If `ADMIN_PANEL_USER` or `ADMIN_PANEL_PASSWORD` is missing, middleware allows access without auth.
 
@@ -51,7 +59,7 @@ npm install
 npm run dev
 ```
 
-Open [http://localhost:3000/schemas](http://localhost:3000/schemas).
+Open [http://localhost:3000/schemas](http://localhost:3000/schemas) or [http://localhost:3000/pillar-templates](http://localhost:3000/pillar-templates).
 
 ## Build and Verification
 

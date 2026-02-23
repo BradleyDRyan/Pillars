@@ -55,11 +55,13 @@ struct PillarsTabView: View {
                 }
             }
             .sheet(isPresented: $showingAddPillar) {
-                PillarFormView(mode: .create)
+                PillarTemplatePickerView()
                     .environmentObject(viewModel)
             }
             .navigationDestination(item: $selectedPillar) { pillar in
-                PillarDetailView(pillar: pillar)
+                PillarDetailView(pillar: pillar) {
+                    selectedPillar = nil
+                }
                     .environmentObject(viewModel)
             }
         }
@@ -70,6 +72,7 @@ struct PillarsTabView: View {
             }
             viewModel.startListening(userId: userId)
         }
+        .environmentObject(viewModel)
     }
     
     // MARK: - Empty State
@@ -112,4 +115,3 @@ struct PillarsTabView: View {
     PillarsTabView()
         .environmentObject(FirebaseManager.shared)
 }
-

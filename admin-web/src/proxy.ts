@@ -48,5 +48,13 @@ export function proxy(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/", "/schemas/:path*", "/api/agent-runner"]
+  matcher: [
+    "/",
+    "/schemas/:path*",
+    "/pillar-templates/:path*",
+    "/pillars/:path*",
+    "/api/agent-runner",
+    "/api/pillar-templates/:path*",
+    "/api/pillar-visuals/:path*"
+  ]
 };

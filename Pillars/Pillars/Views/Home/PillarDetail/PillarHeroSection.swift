@@ -9,6 +9,7 @@ import SwiftUI
 
 struct PillarHeroSection: View {
     let pillar: Pillar
+    @EnvironmentObject var viewModel: PillarsViewModel
     
     var body: some View {
         VStack(spacing: 6) {
@@ -26,15 +27,9 @@ struct PillarHeroSection: View {
     
     @ViewBuilder
     private var pillarIcon: some View {
-        if let icon = pillar.icon {
-            Image(systemName: icon.systemName)
-                .font(.system(size: 28, weight: .semibold, design: .rounded))
-                .foregroundColor(pillar.colorValue)
-        } else {
-            Image(systemName: PillarIcon.default.systemName)
-                .font(.system(size: 28, weight: .semibold, design: .rounded))
-                .foregroundColor(pillar.colorValue)
-        }
+        Image(systemName: viewModel.iconSystemName(forToken: pillar.iconToken))
+            .font(.system(size: 28, weight: .semibold, design: .rounded))
+            .foregroundColor(pillar.colorValue)
     }
 }
 
@@ -46,4 +41,5 @@ struct PillarHeroSection: View {
         color: "#c6316d",
         icon: .briefcase
     ))
+    .environmentObject(PillarsViewModel())
 }

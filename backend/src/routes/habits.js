@@ -3,6 +3,8 @@ const { db } = require('../config/firebase');
 const { flexibleAuth } = require('../middleware/serviceAuth');
 const { resolveValidatedPillarId } = require('../utils/pillarValidation');
 const { resolveEventSource, writeUserEventSafe } = require('../services/events');
+const { resolveRubricSelection } = require('../utils/rubrics');
+const { classifyAgainstRubric } = require('../services/classification');
 
 const router = express.Router();
 router.use(flexibleAuth);
@@ -64,6 +66,24 @@ function normalizeString(raw, maxLength = 255) {
     return trimmed.slice(0, maxLength);
   }
   return trimmed;
+}
+
+function shouldAutoClassifyFromCreate({ source, autoClassify }) {
+  if (autoClassify === true) {
+    return true;
+  }
+  if (typeof source !== 'string') {
+    return false;
+  }
+  return source.trim().toLowerCase() === 'clawdbot';
+}
+
+function buildClassificationText(...parts) {
+  return parts
+    .filter(part => typeof part === 'string')
+    .map(part => part.trim())
+    .filter(Boolean)
+    .join('\n');
 }
 
 function normalizeHabitGroupName(rawName) {
@@ -375,6 +395,32 @@ function normalizeHabitPayload(body, options = {}) {
     payload.bountyPillarId = body.bountyPillarId;
   } else if (!partial) {
     payload.bountyPillarId = null;
+  }
+
+  const hasRubricItemId = Object.prototype.hasOwnProperty.call(body || {}, 'rubricItemId');
+  if (hasRubricItemId) {
+    if (body.rubricItemId === null) {
+      payload.rubricItemId = null;
+    } else if (typeof body.rubricItemId !== 'string') {
+      return { error: 'rubricItemId must be a string or null' };
+    } else {
+      const trimmed = body.rubricItemId.trim();
+      if (!trimmed) {
+        return { error: 'rubricItemId must be a non-empty string or null' };
+      }
+      payload.rubricItemId = trimmed;
+    }
+  } else if (!partial) {
+    payload.rubricItemId = null;
+  }
+
+  if (!partial && Object.prototype.hasOwnProperty.call(body || {}, 'autoClassify')) {
+    if (typeof body.autoClassify !== 'boolean') {
+      return { error: 'autoClassify must be a boolean' };
+    }
+    payload.autoClassify = body.autoClassify;
+  } else if (!partial) {
+    payload.autoClassify = false;
   }
 
   const bountyReasonResult = normalizeBountyReason(body?.bountyReason);
@@ -1003,13 +1049,71 @@ router.post('/', async (req, res) => {
       }
     }
 
+    let rubricSelection = null;
+    if (normalized.data.rubricItemId) {
+      try {
+        rubricSelection = await resolveRubricSelection({
+          db,
+          userId,
+          pillarId: validatedPillarId ?? null,
+          rubricItemId: normalized.data.rubricItemId
+        });
+      } catch (error) {
+        return res.status(error?.status || 400).json({ error: error.message });
+      }
+
+      validatedPillarId = rubricSelection.pillarId;
+      validatedBountyPillarId = rubricSelection.pillarId;
+    } else if (shouldAutoClassifyFromCreate({
+      source: req.body?.source,
+      autoClassify: normalized.data.autoClassify
+    })) {
+      if (!validatedPillarId) {
+        return res.status(400).json({
+          error: 'pillarId is required for auto-classification'
+        });
+      }
+
+      const classificationText = buildClassificationText(
+        normalized.data.name,
+        normalized.data.description
+      );
+
+      let classified;
+      try {
+        classified = await classifyAgainstRubric({
+          db,
+          userId,
+          text: classificationText,
+          pillarId: validatedPillarId
+        });
+      } catch (error) {
+        return res.status(error?.status || 500).json({ error: error.message });
+      }
+
+      rubricSelection = {
+        pillarId: classified.pillarId,
+        rubricItem: classified.rubricItem
+      };
+      validatedPillarId = classified.pillarId;
+      validatedBountyPillarId = classified.pillarId;
+    }
+
     const bountyCreate = await normalizeBountyForHabitCreate({
       userId,
-      body: {
-        bountyPoints: normalized.data.bountyPoints,
-        bountyAllocations: normalized.data.bountyAllocations,
-        bountyPillarId: validatedBountyPillarId ?? normalized.data.bountyPillarId
-      },
+      body: rubricSelection
+        ? {
+          bountyAllocations: [{
+            pillarId: rubricSelection.pillarId,
+            points: rubricSelection.rubricItem.points
+          }],
+          bountyPillarId: rubricSelection.pillarId
+        }
+        : {
+          bountyPoints: normalized.data.bountyPoints,
+          bountyAllocations: normalized.data.bountyAllocations,
+          bountyPillarId: validatedBountyPillarId ?? normalized.data.bountyPillarId
+        },
       defaultPillarId: validatedPillarId ?? null
     });
     if (bountyCreate.error) {
@@ -1038,17 +1142,21 @@ router.post('/', async (req, res) => {
       }
     }
 
+    const { autoClassify: _autoClassify, ...habitData } = normalized.data;
     const now = nowTs();
     const payload = {
       id: habitRef.id,
       userId,
-      ...normalized.data,
+      ...habitData,
       pillarId: validatedPillarId ?? null,
       bountyPillarId: validatedBountyPillarId ?? null,
       bountyAllocations: bountyCreate.allocations || null,
       bountyPoints: bountyCreate.allocations
         ? (bountyCreate.allocations.length === 1 ? bountyCreate.allocations[0].points : null)
         : null,
+      rubricItemId: rubricSelection
+        ? rubricSelection.rubricItem.id
+        : (normalized.data.rubricItemId ?? null),
       groupId: groupResolution.provided ? (groupResolution.groupId ?? null) : null,
       groupName: groupResolution.provided ? (groupResolution.groupName ?? null) : null,
       createdAt: now,
@@ -1481,6 +1589,32 @@ const updateHabitHandler = async (req, res) => {
       payload.bountyPillarId = validatedBountyPillarId ?? null;
     }
 
+    let rubricSelection = null;
+    if (Object.prototype.hasOwnProperty.call(normalized.data, 'rubricItemId')) {
+      if (normalized.data.rubricItemId === null) {
+        payload.rubricItemId = null;
+      } else {
+        const pillarIdForRubric = Object.prototype.hasOwnProperty.call(payload, 'pillarId')
+          ? (payload.pillarId ?? null)
+          : (habit.pillarId ?? null);
+
+        try {
+          rubricSelection = await resolveRubricSelection({
+            db,
+            userId,
+            pillarId: pillarIdForRubric,
+            rubricItemId: normalized.data.rubricItemId
+          });
+        } catch (error) {
+          return res.status(error?.status || 400).json({ error: error.message });
+        }
+
+        payload.rubricItemId = rubricSelection.rubricItem.id;
+        payload.pillarId = rubricSelection.pillarId;
+        payload.bountyPillarId = rubricSelection.pillarId;
+      }
+    }
+
     const bountyUpdateInput = {};
     if (Object.prototype.hasOwnProperty.call(normalized.data, 'bountyPoints')) {
       bountyUpdateInput.bountyPoints = normalized.data.bountyPoints;
@@ -1490,6 +1624,13 @@ const updateHabitHandler = async (req, res) => {
     }
     if (Object.prototype.hasOwnProperty.call(normalized.data, 'bountyPillarId')) {
       bountyUpdateInput.bountyPillarId = validatedBountyPillarId ?? null;
+    }
+    if (rubricSelection) {
+      bountyUpdateInput.bountyAllocations = [{
+        pillarId: rubricSelection.pillarId,
+        points: rubricSelection.rubricItem.points
+      }];
+      bountyUpdateInput.bountyPillarId = rubricSelection.pillarId;
     }
 
     const bountyUpdate = await normalizeBountyForHabitUpdate({

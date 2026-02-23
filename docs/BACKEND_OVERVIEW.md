@@ -1,6 +1,6 @@
 # Pillars Backend Overview
 
-Last updated: 2026-02-20
+Last updated: 2026-02-23
 
 ## Executive Summary
 
@@ -55,6 +55,8 @@ Mounted route groups from `backend/src/index.js` and `backend/api/index.js`:
 | `/users` | profile + admin user operations + user API key lifecycle (`/users/api-key`) | token |
 | `/api` | health/sample endpoints | mixed |
 | `/api/pillars` | user pillar CRUD + stats | token, user API key, or internal service secret + `x-user-id` |
+| `/api/pillar-templates` | pillar template library + template rubric CRUD | read: token/user API key/internal; write: Firebase admin claim (`role=admin`) or internal service secret bearer |
+| `/api/pillar-visuals` | pillar icon/color token catalog CRUD | read: token/user API key/internal; write: Firebase admin claim (`role=admin`) or internal service secret bearer |
 | `/api/principles` | user principle CRUD/assignment | token, user API key, or internal service secret + `x-user-id` |
 | `/api/insights` | user insight CRUD/assignment | token, user API key, or internal service secret + `x-user-id` |
 | `/api/conversations` | conversation CRUD + nested message writes | token |
@@ -71,7 +73,7 @@ Mounted route groups from `backend/src/index.js` and `backend/api/index.js`:
 | `/api/days/:date/blocks` | day block CRUD + projected primitive write-through | token, user API key, or internal service secret + `x-user-id` |
 | `/api/day-templates` | per-user day templates | token, user API key, or internal service secret + `x-user-id` |
 | `/api/block-types` | user-scoped block type definitions (built-in + custom) | token, user API key, or internal service secret + `x-user-id` |
-| `/api/schemas` | canonical machine-readable write schemas (`blockTypes`, `todoSchema`, `habitSchema`, `daySchema`, `eventTypes`) | token, user API key, or internal service secret + `x-user-id` |
+| `/api/schemas` | canonical machine-readable write schemas (`blockTypes`, `todoSchema`, `habitSchema`, `pillarSchema`, `daySchema`, `eventTypes`) | token, user API key, or internal service secret + `x-user-id` |
 | `/api/context` | single-call aggregated context read (days + selected primitives) | token, user API key, or internal service secret + `x-user-id` |
 | `/api/todos` | per-user Todo primitive (Todoist-style task API, optional `pillarId`) | token, user API key, or internal service secret + `x-user-id` |
 | `/api/habits` | per-user Habit primitive + daily logs (optional `pillarId`) | token, user API key, or internal service secret + `x-user-id` |
@@ -95,7 +97,7 @@ Block System v1 routes:
 - `GET /api/days/today` and `GET /api/days/by-date/:date` return `200` with `exists:false` when a day has no persisted blocks (empty-day is not treated as an error)
 - `POST /api/days/by-date/:date/generate` is disabled (`410 Gone`)
 - Day-native default block types (`sleep`, `feeling`, `workout`, `reflection`) are disabled from write surfaces
-- `POST /api/todos` supports optional `schedule: { date, sectionId, order }` and returns `{ todo, scheduled }` where `scheduled` includes deterministic projection id `proj_todo_<todoId>` when scheduled
+- `POST /api/todos` supports optional `schedule: { date, sectionId, order }`, optional `rubricItemId`, optional `autoClassify:boolean`, and returns `{ todo, scheduled }` where `scheduled` includes deterministic projection id `proj_todo_<todoId>` when scheduled
 - Todo bounty payouts are trigger-driven:
 - iOS/clients write todo completion directly in Firestore.
 - Firebase function `functions/src/todoBountyTrigger.js` reconciles `pointEvents` (`pe_todo_<todoId>`) and `todos.bountyPaidAt`.
@@ -125,6 +127,13 @@ Day template scheduling:
 
 Pillar-linked primitive contract:
 - `pillarId` is first-class and nullable on `todo`, `habit`, and Day-native `block` payloads.
+- `POST /api/pillars` requires `pillarType` when `rubricItems` is omitted.
+- `pillarType=custom` creates an empty rubric; non-custom `pillarType` copies active rubric defaults from `pillarTemplates`.
+- Copied template rubric items are a snapshot at creation time (`metadata.templateSource`) and are never back-propagated from later template edits.
+- Pillar visuals are token-only. Backend publishes selectable options (`id`, `label`, ordering, active flags, and icon `defaultColorToken`); clients render token values locally.
+- `rubricItemId` is optional on `todo` and `habit`; when provided, backend resolves pillar + bounty points from the pillar rubric item.
+- On todo/habit create, when `rubricItemId` is omitted, backend auto-classifies only when `source=clawdbot` or `autoClassify=true` (requires `pillarId`).
+- `POST /api/point-events` accepts `rubricItemId` (plus optional `pillarId`) as an alternative to explicit allocations, and supports reason-driven classification when both `allocations` and `rubricItemId` are omitted.
 - Validation is strict: provided `pillarId` must belong to the authenticated user, otherwise `400 Invalid pillarId`.
 - Day projection mirrors primitive tags:
 - projected todo block `pillarId` mirrors `todo.pillarId` (`proj_todo_<todoId>`)
@@ -170,6 +179,7 @@ Pillar-linked primitive contract:
 - `users`
 - `sessions`
 - `pillars`
+- `pillarTemplates`
 - `principles`
 - `insights`
 - `conversations`

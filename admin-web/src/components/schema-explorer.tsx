@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import { Tabs } from "@base-ui/react/tabs";
 import { Accordion } from "@base-ui/react/accordion";
 import { Button } from "@base-ui/react/button";
+import { Input } from "@base-ui/react/input";
 import { EndpointRunner } from "@/components/endpoint-runner";
 import type {
   BlockTypeSchema,
@@ -63,19 +64,19 @@ function JsonSchemaTable({
             {rows.map(([field, prop]) => (
               <tr key={field}>
                 <td className="border-b border-[var(--line)] py-3 align-top">
-                  <span className="mono rounded bg-white px-2 py-1 text-xs">{field}</span>
+                  <span className="mono rounded bg-[var(--bg)] px-2 py-1 text-xs">{field}</span>
                 </td>
                 <td className="border-b border-[var(--line)] py-3 align-top">
                   {schema.required.includes(field) ? (
                     <span className="mono rounded bg-[var(--accent-soft)] px-2 py-1 text-xs text-[var(--accent)]">yes</span>
                   ) : (
-                    <span className="mono rounded bg-[#ecefe9] px-2 py-1 text-xs text-[var(--ink-subtle)]">no</span>
+                    <span className="mono rounded bg-[var(--bg-elevated)] px-2 py-1 text-xs text-[var(--ink-subtle)]">no</span>
                   )}
                 </td>
                 <td className="border-b border-[var(--line)] py-3 align-top">
                   <div className="flex flex-wrap gap-2">
                     {propertyMetaList(prop).map(([label, value]) => (
-                      <span key={`${field}-${label}`} className="mono rounded bg-white px-2 py-1 text-xs text-[var(--ink-subtle)]">
+                      <span key={`${field}-${label}`} className="mono rounded bg-[var(--bg)] px-2 py-1 text-xs text-[var(--ink-subtle)]">
                         {label}: {value}
                       </span>
                     ))}
@@ -98,7 +99,7 @@ function BlockTypeCard({ blockType }: { blockType: BlockTypeSchema }) {
         <div>
           <h4 className="text-base font-semibold">
             {blockType.name || blockType.id}
-            <span className="mono ml-2 rounded bg-white px-2 py-1 text-xs text-[var(--ink-subtle)]">{blockType.id}</span>
+            <span className="mono ml-2 rounded bg-[var(--bg)] px-2 py-1 text-xs text-[var(--ink-subtle)]">{blockType.id}</span>
           </h4>
           <p className="mt-1 text-sm text-[var(--ink-subtle)]">
             section: <span className="mono">{blockType.defaultSection}</span> · category:{" "}
@@ -110,7 +111,7 @@ function BlockTypeCard({ blockType }: { blockType: BlockTypeSchema }) {
         </div>
         {blockType.color ? (
           <span
-            className="h-8 w-8 rounded-full border border-[var(--line-strong)]"
+            className="h-8 w-8  border border-[var(--line-strong)]"
             style={{ backgroundColor: blockType.color }}
             aria-label={blockType.color}
             title={blockType.color}
@@ -120,13 +121,13 @@ function BlockTypeCard({ blockType }: { blockType: BlockTypeSchema }) {
       <Accordion.Root defaultValue={["schema"]}>
         <Accordion.Item value="schema" className="border-t border-[var(--line)] pt-3">
           <Accordion.Header>
-            <Accordion.Trigger className="mono flex w-full cursor-pointer items-center justify-between rounded-md bg-white px-3 py-2 text-left text-xs">
+            <Accordion.Trigger className="mono flex w-full cursor-pointer items-center justify-between rounded-md bg-[var(--bg)] px-3 py-2 text-left text-xs">
               Expand data schema
               <span aria-hidden>+</span>
             </Accordion.Trigger>
           </Accordion.Header>
           <Accordion.Panel>
-            <pre className="mono mt-2 max-h-64 overflow-auto rounded-md bg-[#1f2621] p-3 text-xs text-[#d7f4df]">{schemaText}</pre>
+            <pre className="mono mt-2 max-h-64 overflow-auto rounded-md bg-[var(--bg)] p-3 text-xs text-[var(--ink)]">{schemaText}</pre>
           </Accordion.Panel>
         </Accordion.Item>
       </Accordion.Root>
@@ -146,7 +147,7 @@ function CopyButton({ value, label }: { value: unknown; label: string }) {
   return (
     <Button
       onClick={handleCopy}
-      className="mono cursor-pointer rounded-md border border-[var(--line-strong)] bg-white px-3 py-2 text-xs text-[var(--ink)] hover:bg-[#f1f4ec]"
+      className="mono cursor-pointer rounded-md border border-[var(--line-strong)] bg-[var(--bg)] px-3 py-2 text-xs text-[var(--ink)] hover:bg-[var(--bg-elevated)]"
     >
       {copied ? "Copied" : `Copy ${label}`}
     </Button>
@@ -168,7 +169,7 @@ export function SchemaExplorer({ data }: Props) {
   }, [data.blockTypes, query]);
 
   return (
-    <main className="fade-in mx-auto w-full max-w-[1200px] px-4 py-8 md:px-8">
+    <main className="fade-in mx-auto w-full max-w-[1240px] px-4 py-8 md:px-8 max-h-[100vh]">
       <section className="mb-6">
         <h1 className="text-3xl font-semibold tracking-tight md:text-4xl">Pillars Schema Control Plane</h1>
         <p className="mt-2 max-w-3xl text-sm text-[var(--ink-subtle)] md:text-base">
@@ -190,7 +191,7 @@ export function SchemaExplorer({ data }: Props) {
             <Tabs.Tab
               key={value}
               value={value}
-              className="mono cursor-pointer rounded-md border border-[var(--line)] bg-white px-3 py-2 text-xs text-[var(--ink)] data-[active]:border-[var(--accent)] data-[active]:bg-[var(--accent-soft)]"
+              className="mono cursor-pointer rounded-md border border-[var(--line)] bg-[var(--bg)] px-3 py-2 text-xs text-[var(--ink)] data-[active]:border-[var(--accent)] data-[active]:bg-[var(--accent-soft)]"
             >
               {label}
             </Tabs.Tab>
@@ -201,11 +202,11 @@ export function SchemaExplorer({ data }: Props) {
           <div className="mb-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
             <label className="flex-1">
               <span className="mb-1 block text-xs uppercase tracking-wide text-[var(--ink-subtle)]">Filter block types</span>
-              <input
+              <Input
                 value={query}
                 onChange={(event) => setQuery(event.target.value)}
                 placeholder="sleep, feeling, custom..."
-                className="w-full rounded-md border border-[var(--line-strong)] bg-white px-3 py-2 text-sm outline-none ring-[var(--accent)] focus:ring-2"
+                className="w-full rounded-md border border-[var(--line-strong)] bg-[var(--bg)] px-3 py-2 text-sm outline-none ring-[var(--accent)] focus:ring-2"
               />
             </label>
             <CopyButton value={data.blockTypes} label="blockTypes" />
@@ -248,7 +249,7 @@ export function SchemaExplorer({ data }: Props) {
             <p className="mt-1 text-sm text-[var(--ink-subtle)]">
               Contract used by <span className="mono">POST /api/days/:date/blocks/batch</span>
             </p>
-            <pre className="mono mt-3 max-h-[460px] overflow-auto rounded-md bg-[#1f2621] p-4 text-xs text-[#d7f4df]">
+            <pre className="mono mt-3 max-h-[460px] overflow-auto rounded-md bg-[var(--bg)] p-4 text-xs text-[var(--ink)]">
               {prettyJson(data.daySchema)}
             </pre>
           </article>
@@ -262,7 +263,7 @@ export function SchemaExplorer({ data }: Props) {
             <h3 className="text-lg font-semibold">Event Types</h3>
             <div className="mt-3 flex flex-wrap gap-2">
               {data.eventTypes.map((eventType) => (
-                <span key={eventType} className="mono rounded-md bg-white px-2.5 py-1.5 text-xs">
+                <span key={eventType} className="mono rounded-md bg-[var(--bg)] px-2.5 py-1.5 text-xs">
                   {eventType}
                 </span>
               ))}

@@ -1,6 +1,6 @@
 # Agent API Config (Production)
 
-Last updated: 2026-02-21
+Last updated: 2026-02-23
 
 Use this for external agents (not local dev).
 
@@ -31,7 +31,32 @@ Use this for external agents (not local dev).
       "get": "GET /api/pillars/:id",
       "create": "POST /api/pillars",
       "update": "PUT /api/pillars/:id",
+      "rubricGet": "GET /api/pillars/:id/rubric",
+      "rubricAdd": "POST /api/pillars/:id/rubric",
+      "rubricUpdate": "PUT /api/pillars/:id/rubric/:rubricItemId",
+      "rubricDelete": "DELETE /api/pillars/:id/rubric/:rubricItemId",
       "delete": "DELETE /api/pillars/:id"
+    },
+    "pillarTemplates": {
+      "list": "GET /api/pillar-templates?includeInactive=true|false",
+      "get": "GET /api/pillar-templates/:pillarType",
+      "create": "POST /api/pillar-templates (admin claim or internal secret)",
+      "update": "PATCH /api/pillar-templates/:pillarType (admin claim or internal secret)",
+      "deactivate": "DELETE /api/pillar-templates/:pillarType (soft delete)",
+      "restore": "POST /api/pillar-templates/:pillarType/restore",
+      "rubricAdd": "POST /api/pillar-templates/:pillarType/rubric",
+      "rubricUpdate": "PATCH /api/pillar-templates/:pillarType/rubric/:rubricItemId (label/points)",
+      "rubricDelete": "DELETE /api/pillar-templates/:pillarType/rubric/:rubricItemId"
+    },
+    "pillarVisuals": {
+      "list": "GET /api/pillar-visuals",
+      "replace": "PUT /api/pillar-visuals (admin claim or internal secret)",
+      "colorsCreate": "POST /api/pillar-visuals/colors (admin claim or internal secret)",
+      "colorsUpdate": "PATCH /api/pillar-visuals/colors/:colorId (admin claim or internal secret)",
+      "colorsDelete": "DELETE /api/pillar-visuals/colors/:colorId (admin claim or internal secret)",
+      "iconsCreate": "POST /api/pillar-visuals/icons (admin claim or internal secret)",
+      "iconsUpdate": "PATCH /api/pillar-visuals/icons/:iconId (admin claim or internal secret)",
+      "iconsDelete": "DELETE /api/pillar-visuals/icons/:iconId (admin claim or internal secret)"
     },
     "principles": {
       "list": "GET /api/principles",
@@ -77,9 +102,9 @@ Use this for external agents (not local dev).
     },
     "todos": {
       "list": "GET /api/todos (filters: status=active|completed|all; dueDate=YYYY-MM-DD|none; archived=exclude|include|only; q=<search>; sectionId=morning|afternoon|evening; parentId=none|any|all|<todoId>; pillarId=<id>|none; includeSubtasks=true|false; flat=true|false; legacy aliases: search, includeArchived)",
-      "create": "POST /api/todos (optional pillarId, optional schedule:{date,sectionId,order}; response includes {todo,scheduled})",
+      "create": "POST /api/todos (optional pillarId, optional rubricItemId, optional autoClassify:boolean, optional schedule:{date,sectionId,order}; response includes {todo,scheduled})",
       "get": "GET /api/todos/:id",
-      "update": "PUT /api/todos/:id (optional pillarId)",
+      "update": "PUT /api/todos/:id (optional pillarId, optional rubricItemId)",
       "delete": "DELETE /api/todos/:id",
       "close": "POST /api/todos/:id/close (todo status mutation; bounty payout side effects are trigger-driven)",
       "reopen": "POST /api/todos/:id/reopen (todo status mutation; bounty reversal side effects are trigger-driven)",
@@ -88,9 +113,9 @@ Use this for external agents (not local dev).
     },
     "habits": {
       "list": "GET /api/habits (filters: status=active|inactive|all; archived=exclude|include|only; q=<search>; sectionId=morning|afternoon|evening; dayOfWeek=sunday..saturday; pillarId=<id>|none; groupId=<id>|none; legacy aliases: active, search, includeArchived)",
-      "create": "POST /api/habits (optional pillarId, optional groupId, optional bountyPoints/bountyAllocations)",
+      "create": "POST /api/habits (optional pillarId, optional rubricItemId, optional autoClassify:boolean, optional groupId, optional bountyPoints/bountyAllocations)",
       "get": "GET /api/habits/:id",
-      "update": "PUT|PATCH /api/habits/:id (optional pillarId, optional groupId, optional bountyPoints/bountyAllocations; response includes {habit})",
+      "update": "PUT|PATCH /api/habits/:id (optional pillarId, optional rubricItemId, optional groupId, optional bountyPoints/bountyAllocations; response includes {habit})",
       "archive": "POST /api/habits/:id/archive",
       "unarchive": "POST /api/habits/:id/unarchive",
       "delete": "DELETE /api/habits/:id",
@@ -157,11 +182,25 @@ Use this for external agents (not local dev).
 ## Pillar Tagging Contract
 
 - `pillarId` is optional and nullable on `todo`, `habit`, and Day-native `block` payloads.
+- `rubricItemId` is optional on `todo` and `habit` mutations.
+- For `POST /api/pillars`, when `rubricItems` is omitted, `pillarType` is required.
+- `pillarType=custom` creates with an empty rubric; non-custom types copy active defaults from `/api/pillar-templates`.
+- Pillar visuals are token-only: use `colorToken` and `icon` tokens. `hex`, `systemName`, and `customColorHex` are not accepted on visual catalog writes.
+- Copied rubric defaults are a snapshot at pillar creation time and do not retroactively update existing pillars.
+- When `rubricItemId` is provided, backend resolves its owning pillar and auto-sets bounty points from rubric.
+- When `rubricItemId` is omitted on create, backend auto-classifies only when `source=clawdbot` or `autoClassify=true` (requires `pillarId`).
 - Projected ids are virtual:
   - todo projection: `proj_todo_<todoId>`
   - habit projection: `proj_habit_<habitId>`
 - Projected block `pillarId` mirrors primitive `pillarId` and cannot diverge.
 - Ownership validation is strict: foreign/unknown `pillarId` returns `400 Invalid pillarId`.
+
+## Ad Hoc Scoring Contract
+
+- `POST /api/point-events` supports either:
+- explicit `allocations`, or
+- `rubricItemId` (optional `pillarId` for disambiguation), which auto-derives allocation points from the matched pillar rubric item, or
+- reason-driven classification when both `allocations` and `rubricItemId` are omitted (scoped by optional `pillarId`, otherwise across all pillars).
 
 ## Quick Smoke Test
 

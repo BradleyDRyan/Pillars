@@ -81,6 +81,114 @@ class APIService: ObservableObject {
         return try await handleResponse(data, response, nil, type: [Pillar].self)
     }
 
+    func fetchPillarTemplates(includeInactive: Bool = false) async throws -> [PillarTemplate] {
+        _ = try await getFirebaseToken()
+
+        var components = URLComponents(string: "\(baseURL)/pillar-templates")
+        if includeInactive {
+            components?.queryItems = [URLQueryItem(name: "includeInactive", value: "true")]
+        }
+        guard let url = components?.url else {
+            throw APIError.invalidURL("\(baseURL)/pillar-templates")
+        }
+
+        let request = createRequest(url: url)
+        let (data, response) = try await session.data(for: request)
+        return try await handleResponse(data, response, nil, type: [PillarTemplate].self)
+    }
+
+    func createPillar(
+        name: String,
+        description: String = "",
+        colorToken: String? = nil,
+        iconToken: String?,
+        pillarType: String?,
+        isDefault: Bool = false,
+        metadata: [String: String]? = nil,
+        rubricItems: [[String: Any]]? = nil
+    ) async throws -> Pillar {
+        _ = try await getFirebaseToken()
+        guard let url = URL(string: "\(baseURL)/pillars") else {
+            throw APIError.invalidURL("\(baseURL)/pillars")
+        }
+
+        var payload: [String: Any] = [
+            "name": name,
+            "description": description,
+            "isDefault": isDefault
+        ]
+
+        if let iconToken,
+           !iconToken.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            payload["icon"] = iconToken
+        }
+        if let colorToken, !colorToken.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            payload["colorToken"] = colorToken
+        }
+        if let pillarType, !pillarType.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            payload["pillarType"] = pillarType
+        }
+        if let metadata {
+            payload["metadata"] = metadata
+        }
+        if let rubricItems {
+            payload["rubricItems"] = rubricItems
+        }
+
+        let body = try JSONSerialization.data(withJSONObject: payload, options: [])
+        let request = createRequest(url: url, method: "POST", body: body)
+        let (data, response) = try await session.data(for: request)
+        return try await handleResponse(data, response, nil, type: Pillar.self)
+    }
+
+    func fetchDefaultRubricTemplates() async throws -> [PillarType: [PillarRubricItem]] {
+        _ = try await getFirebaseToken()
+        guard let url = URL(string: "\(baseURL)/schemas/pillars") else {
+            throw APIError.invalidURL("\(baseURL)/schemas/pillars")
+        }
+
+        let request = createRequest(url: url)
+        let (data, response) = try await session.data(for: request)
+        let payload = try await handleResponse(data, response, nil, type: PillarSchemasEnvelope.self)
+
+        let templates = payload.pillarSchema.defaultRubricTemplates ?? [:]
+        var mapped: [PillarType: [PillarRubricItem]] = [:]
+
+        for (rawType, rawItems) in templates {
+            guard let pillarType = PillarType.resolve(rawType) else { continue }
+
+            let normalized = rawItems.map { item in
+                PillarRubricItem(
+                    id: item.id,
+                    activityType: item.activityType,
+                    tier: item.tier,
+                    label: item.label,
+                    points: item.points,
+                    examples: item.examples,
+                    createdAt: item.createdAt,
+                    updatedAt: item.updatedAt
+                )
+            }
+
+            if !normalized.isEmpty {
+                mapped[pillarType] = normalized
+            }
+        }
+
+        return mapped
+    }
+
+    func fetchPillarVisuals() async throws -> PillarVisualsResponse {
+        _ = try await getFirebaseToken()
+        guard let url = URL(string: "\(baseURL)/schemas/pillar-visuals") else {
+            throw APIError.invalidURL("\(baseURL)/schemas/pillar-visuals")
+        }
+
+        let request = createRequest(url: url)
+        let (data, response) = try await session.data(for: request)
+        return try await handleResponse(data, response, nil, type: PillarVisualsResponse.self)
+    }
+
     // MARK: - Point Events
 
     func fetchPointEvents(pillarId: String, fromDate: String? = nil, toDate: String? = nil) async throws -> [PointEvent] {
@@ -181,4 +289,23 @@ enum APIError: LocalizedError {
 struct PointEventsResponse: Codable {
     let items: [PointEvent]
     let count: Int
+}
+
+private struct PillarSchemasEnvelope: Codable {
+    let pillarSchema: PillarSchemaPayload
+}
+
+private struct PillarSchemaPayload: Codable {
+    let defaultRubricTemplates: [String: [PillarSchemaRubricItem]]?
+}
+
+private struct PillarSchemaRubricItem: Codable {
+    let id: String
+    let activityType: String
+    let tier: String
+    let label: String
+    let points: Int
+    let examples: String?
+    let createdAt: TimeInterval?
+    let updatedAt: TimeInterval?
 }

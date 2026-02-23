@@ -9,11 +9,13 @@ import SwiftUI
 
 struct PillarDetailView: View {
     let pillar: Pillar
-    @Environment(\.dismiss) private var dismiss
+    let onClose: () -> Void
     @EnvironmentObject var viewModel: PillarsViewModel
     @State private var showingEditSheet = false
     @State private var selectedTab: Int? = 0
     @State private var scrollOffset: CGFloat = 0
+
+    private let tabs = ["Principles", "Saves", "Points", "Rubric"]
     
     private let heroMaxHeight: CGFloat = 88
     
@@ -41,11 +43,15 @@ struct PillarDetailView: View {
         let adjustedOffset = scrollOffset - titleFadeStart
         return min(1, max(0, adjustedOffset / titleFadeDistance))
     }
+
+    private var livePillar: Pillar {
+        viewModel.pillars.first(where: { $0.id == pillar.id }) ?? pillar
+    }
     
     var body: some View {
         VStack(spacing: 0) {
             // Hero that shrinks, scales, and moves up based on scroll
-            PillarHeroSection(pillar: pillar)
+            PillarHeroSection(pillar: livePillar)
                 .scaleEffect(1 - (heroScaleProgress * 0.1))
                 .offset(y: -scrollOffset * 0.5)
                 .frame(height: heroHeight)
@@ -53,7 +59,7 @@ struct PillarDetailView: View {
             
             // Tab bar (always visible)
             PillarTabBar(
-                tabs: ["Principles", "Saves", "Points"],
+                tabs: tabs,
                 selectedIndex: Binding(
                     get: { selectedTab ?? 0 },
                     set: { selectedTab = $0 }
@@ -66,22 +72,28 @@ struct PillarDetailView: View {
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(alignment: .top, spacing: 0) {
                     TabContentScrollView(offset: selectedTab == 0 ? $scrollOffset : .constant(0)) {
-                        PrinciplesContentView(pillar: pillar)
+                        PrinciplesContentView(pillar: livePillar)
                     }
                     .containerRelativeFrame(.horizontal)
                     .id(0)
                     
                     TabContentScrollView(offset: selectedTab == 1 ? $scrollOffset : .constant(0)) {
-                        SavesContentView(pillar: pillar)
+                        SavesContentView(pillar: livePillar)
                     }
                     .containerRelativeFrame(.horizontal)
                     .id(1)
 
                     TabContentScrollView(offset: selectedTab == 2 ? $scrollOffset : .constant(0)) {
-                        PointsContentView(pillar: pillar)
+                        PointsContentView(pillar: livePillar)
                     }
                     .containerRelativeFrame(.horizontal)
                     .id(2)
+
+                    TabContentScrollView(offset: selectedTab == 3 ? $scrollOffset : .constant(0)) {
+                        RubricContentView(pillar: livePillar)
+                    }
+                    .containerRelativeFrame(.horizontal)
+                    .id(3)
                 }
                 .scrollTargetLayout()
             }
@@ -98,20 +110,25 @@ struct PillarDetailView: View {
             
             ToolbarItem(placement: .principal) {
                 // Title fades in as hero collapses
-                Text(pillar.name)
+                Text(livePillar.name)
                     .font(.system(size: 17, weight: .semibold))
                     .foregroundColor(.primary)
                     .opacity(collapseProgress)
             }
             
             ToolbarItem(placement: .topBarTrailing) {
-                moreMenu
+                HStack(spacing: 12) {
+                    editButton
+                    deleteMenu
+                }
             }
         }
         .navigationBarBackButtonHidden(true)
         .sheet(isPresented: $showingEditSheet) {
-            PillarFormView(mode: .edit(pillar))
-                .environmentObject(viewModel)
+            NavigationStack {
+                PillarFormView(mode: .edit(livePillar))
+                    .environmentObject(viewModel)
+            }
         }
     }
     
@@ -119,26 +136,31 @@ struct PillarDetailView: View {
     
     private var backButton: some View {
         Button {
-            dismiss()
+            onClose()
         } label: {
             Image(systemName: "chevron.down")
                 .font(.system(size: 16, weight: .semibold))
-                .foregroundColor(pillar.colorValue)
+                .foregroundColor(livePillar.colorValue)
         }
         .buttonStyle(.plain)
     }
     
-    private var moreMenu: some View {
+    private var editButton: some View {
+        Button {
+            showingEditSheet = true
+        } label: {
+            Image(systemName: "pencil")
+                .font(.system(size: 16, weight: .semibold))
+                .foregroundColor(livePillar.colorValue)
+        }
+        .buttonStyle(.plain)
+    }
+
+    private var deleteMenu: some View {
         Menu {
-            Button {
-                showingEditSheet = true
-            } label: {
-                Label("Edit", systemImage: "pencil")
-            }
-            
             Button(role: .destructive) {
                 Task {
-                    try? await viewModel.deletePillar(pillar)
+                    try? await viewModel.deletePillar(livePillar)
                 }
             } label: {
                 Label("Delete", systemImage: "trash")
@@ -146,7 +168,7 @@ struct PillarDetailView: View {
         } label: {
             Image(systemName: "ellipsis")
                 .font(.system(size: 16, weight: .semibold))
-                .foregroundColor(pillar.colorValue)
+                .foregroundColor(livePillar.colorValue)
         }
         .buttonStyle(.plain)
     }
@@ -172,14 +194,17 @@ struct TabContentScrollView<Content: View>: View {
 
 #Preview {
     NavigationStack {
-        PillarDetailView(pillar: Pillar(
-            id: "1",
-            userId: "user1",
-            name: "Career",
-            description: "Professional growth",
-            color: "#c6316d",
-            icon: .briefcase
-        ))
+        PillarDetailView(
+            pillar: Pillar(
+                id: "1",
+                userId: "user1",
+                name: "Career",
+                description: "Professional growth",
+                color: "#c6316d",
+                icon: .briefcase
+            ),
+            onClose: {}
+        )
         .environmentObject(PillarsViewModel())
         .environmentObject(FirebaseManager.shared)
     }

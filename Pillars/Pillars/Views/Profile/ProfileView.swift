@@ -14,14 +14,18 @@ struct ProfileView: View {
     @EnvironmentObject var firebaseManager: FirebaseManager
     @State private var showingSignOutAlert = false
     @State private var showingRevokeApiKeyAlert = false
+    @State private var showingDeleteAllDataAlert = false
     @State private var isApiKeyLoading = false
     @State private var isApiKeyMutating = false
+    @State private var isDeletingAllData = false
     @State private var hasApiKey = false
     @State private var apiKeyValue: String?
     @State private var apiKeyPrefix: String?
     @State private var apiKeyCreatedAt: String?
     @State private var apiKeyLastUsedAt: String?
     @State private var apiKeyErrorMessage: String?
+    @State private var deleteAllDataErrorMessage: String?
+    @State private var deleteAllDataSuccessMessage: String?
     @State private var didCopyApiKey = false
     @State private var didCopyOpenClawSetup = false
     
@@ -238,6 +242,35 @@ struct ProfileView: View {
                     } label: {
                         Label("Reset Onboarding", systemImage: "arrow.counterclockwise")
                     }
+
+                    Button(role: .destructive) {
+                        showingDeleteAllDataAlert = true
+                    } label: {
+                        Label("Delete All User Data", systemImage: "trash.fill")
+                    }
+                    .disabled(isDeletingAllData || firebaseManager.currentUser == nil)
+
+                    if isDeletingAllData {
+                        HStack(spacing: 10) {
+                            ProgressView()
+                                .controlSize(.small)
+                            Text("Deleting user data...")
+                                .font(.system(size: 13))
+                                .foregroundColor(.secondary)
+                        }
+                    }
+
+                    if let deleteAllDataSuccessMessage {
+                        Text(deleteAllDataSuccessMessage)
+                            .font(.system(size: 12))
+                            .foregroundColor(.secondary)
+                    }
+
+                    if let deleteAllDataErrorMessage {
+                        Text(deleteAllDataErrorMessage)
+                            .font(.system(size: 12))
+                            .foregroundColor(.red)
+                    }
                 }
                 #endif
                 
@@ -304,6 +337,16 @@ struct ProfileView: View {
             }
         } message: {
             Text("This immediately disables the current key. Any agent using it will stop working.")
+        }
+        .alert("Delete All User Data", isPresented: $showingDeleteAllDataAlert) {
+            Button("Cancel", role: .cancel) { }
+            Button("Delete Everything", role: .destructive) {
+                Task {
+                    await deleteAllUserData()
+                }
+            }
+        } message: {
+            Text("This will permanently delete all Firestore data for this account (pillars, todos, habits, points, block types, and profile data).")
         }
         .task(id: firebaseManager.currentUser?.uid) {
             await refreshApiKeyState()
@@ -389,6 +432,46 @@ struct ProfileView: View {
             APIKeyStore.delete(userId: userId)
         } catch {
             apiKeyErrorMessage = error.localizedDescription
+        }
+    }
+
+    private func deleteAllUserData() async {
+        guard let userId = firebaseManager.currentUser?.uid else {
+            deleteAllDataErrorMessage = "You must be signed in to delete user data."
+            return
+        }
+
+        isDeletingAllData = true
+        deleteAllDataErrorMessage = nil
+        deleteAllDataSuccessMessage = nil
+        defer { isDeletingAllData = false }
+
+        do {
+            // Best effort: revoke remote API key so reset leaves no active credentials.
+            try? await deleteApiKey()
+
+            let summary = try await firebaseManager.deleteAllUserDataForCurrentUser()
+            APIKeyStore.delete(userId: userId)
+            hasApiKey = false
+            apiKeyValue = nil
+            apiKeyPrefix = nil
+            apiKeyCreatedAt = nil
+            apiKeyLastUsedAt = nil
+            apiKeyErrorMessage = nil
+            didCopyApiKey = false
+            didCopyOpenClawSetup = false
+
+            let parts = summary.deletedCounts.keys.sorted().compactMap { key -> String? in
+                guard let count = summary.deletedCounts[key], count > 0 else { return nil }
+                return "\(key): \(count)"
+            }
+            if parts.isEmpty {
+                deleteAllDataSuccessMessage = "User data reset complete."
+            } else {
+                deleteAllDataSuccessMessage = "Deleted \(summary.totalDeleted) docs (\(parts.joined(separator: ", ")))."
+            }
+        } catch {
+            deleteAllDataErrorMessage = "Failed to delete user data: \(error.localizedDescription)"
         }
     }
 

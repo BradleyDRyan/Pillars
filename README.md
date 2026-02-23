@@ -93,3 +93,13 @@ open Pillars/Pillars.xcodeproj
 - [Codex CLI features](https://developers.openai.com/codex/cli/features)
 - [AGENTS.md guidance](https://developers.openai.com/codex/guides/agents-md)
 - [Introducing Codex](https://openai.com/index/introducing-codex/)
+
+## Design Lab (React + Dial Kit)
+A standalone visual sandbox for rapid UI iteration lives at `/Users/bradley/Documents/Pillars/design-lab`.
+
+Run locally:
+```bash
+cd /Users/bradley/Documents/Pillars/design-lab
+npm install
+npm run dev
+```

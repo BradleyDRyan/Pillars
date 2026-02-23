@@ -32,6 +32,14 @@ Use this skill when the user asks you to read or modify their Pillars app data.
   - `GET|POST|PUT|DELETE /api/pillars*`
   - `GET|POST|PUT|DELETE /api/principles*`
   - `GET|POST|PUT|DELETE /api/insights*`
+- Pillar templates:
+  - `GET /api/pillar-templates?includeInactive=true|false`
+  - `GET /api/pillar-templates/:pillarType`
+  - Write routes under `/api/pillar-templates/*` require Firebase admin claim or internal service secret and are not generally available to user API keys.
+- Pillar visuals:
+  - `GET /api/pillar-visuals` (token catalog for icons/colors)
+  - Write routes under `/api/pillar-visuals/*` require Firebase admin claim or internal service secret and are not generally available to user API keys.
+  - Visual catalogs are token-only (`id`, `label`, `order`, `isActive`, icon `defaultColorToken`). Clients render token values locally.
 - Block Types:
   - `GET /api/block-types`
   - `GET /api/block-types/:id`
@@ -58,7 +66,7 @@ Use this skill when the user asks you to read or modify their Pillars app data.
   - Supports: `days`, `fromDate`, `toDate`, `include=todos,habits,pillars,principles,insights` (unknown include tokens are ignored), `resolve=blockInheritance` (also `resolve=true|1|yes|on`), `todoStatus=active|completed|all`, `todoArchived=exclude|include|only`
 - Todos:
   - `GET /api/todos` (supports `?status=active|completed|all`, `?dueDate=YYYY-MM-DD|none`, `?archived=exclude|include|only`, `?sectionId=morning|afternoon|evening`, `?parentId=none|any|all|<todoId>`, `?pillarId=<id>|none`, `?q=<search>`, `?includeSubtasks=true|false`, `?flat=true|false`; legacy aliases `search` and `includeArchived` still work)
-  - `POST /api/todos` (supports optional `schedule: { date, sectionId, order }`; response includes `{ todo, scheduled }`)
+  - `POST /api/todos` (supports optional `schedule: { date, sectionId, order }`, optional `rubricItemId`, and optional `autoClassify:boolean`; response includes `{ todo, scheduled }`)
   - `GET /api/todos/:id`
   - `PUT /api/todos/:id`
   - `PATCH /api/todos/:id`
@@ -69,7 +77,7 @@ Use this skill when the user asks you to read or modify their Pillars app data.
   - `DELETE /api/todos/:id`
 - Habits:
   - `GET /api/habits` (supports `?status=active|inactive|all`, `?archived=exclude|include|only`, `?q=<search>`, `?sectionId=morning|afternoon|evening`, `?dayOfWeek=sunday|monday|tuesday|wednesday|thursday|friday|saturday`, `?pillarId=<id>|none`; legacy aliases `active`, `search`, and `includeArchived` still work)
-  - `POST /api/habits`
+  - `POST /api/habits` (supports optional `rubricItemId` and optional `autoClassify:boolean`)
   - `GET /api/habits/:id`
   - `PUT /api/habits/:id`
   - `PATCH /api/habits/:id`
@@ -78,6 +86,13 @@ Use this skill when the user asks you to read or modify their Pillars app data.
   - `DELETE /api/habits/:id`
   - `GET /api/habits/scheduled/:date`
   - `PUT /api/habits/:id/logs/:date`
+- Pillar rubrics:
+  - `GET /api/pillars/:id/rubric`
+  - `POST /api/pillars/:id/rubric`
+  - `PUT /api/pillars/:id/rubric/:rubricItemId`
+  - `DELETE /api/pillars/:id/rubric/:rubricItemId`
+- Point events:
+  - `POST /api/point-events` supports explicit `allocations`, explicit `rubricItemId`, or reason-driven auto-classification when both are omitted.
 
 ## Block System v1 Notes
 

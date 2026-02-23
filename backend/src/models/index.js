@@ -25,6 +25,7 @@ const AdminMessage = require('./AdminMessage');
 const Room = require('./Room');
 const RoomMessage = require('./RoomMessage');
 const AgentDraft = require('./AgentDraft');
+const PillarTemplate = require('./PillarTemplate');
 
 module.exports = {
   User,
@@ -40,5 +41,6 @@ module.exports = {
   AdminMessage,
   Room,
   RoomMessage,
-  AgentDraft
+  AgentDraft,
+  PillarTemplate
 };

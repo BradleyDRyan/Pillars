@@ -3,6 +3,8 @@ const { db } = require('../config/firebase');
 const { flexibleAuth } = require('../middleware/serviceAuth');
 const { resolveValidatedPillarId } = require('../utils/pillarValidation');
 const { resolveEventSource, writeUserEventSafe } = require('../services/events');
+const { resolveRubricSelection } = require('../utils/rubrics');
+const { classifyAgainstRubric } = require('../services/classification');
 
 const router = express.Router();
 router.use(flexibleAuth);
@@ -162,6 +164,24 @@ function isTodoArchived(todo) {
 
 function hasOwn(obj, key) {
   return Object.prototype.hasOwnProperty.call(obj || {}, key);
+}
+
+function shouldAutoClassifyFromCreate({ source, autoClassify }) {
+  if (autoClassify === true) {
+    return true;
+  }
+  if (typeof source !== 'string') {
+    return false;
+  }
+  return source.trim().toLowerCase() === 'clawdbot';
+}
+
+function buildClassificationText(...parts) {
+  return parts
+    .filter(part => typeof part === 'string')
+    .map(part => part.trim())
+    .filter(Boolean)
+    .join('\n');
 }
 
 function hasTodoDueDate(todo) {
@@ -324,6 +344,31 @@ function normalizeTodoPayload(body, options = {}) {
     }
   } else if (!partial) {
     normalized.bountyPillarId = null;
+  }
+
+  if (hasOwn(body, 'rubricItemId')) {
+    if (body.rubricItemId === null) {
+      normalized.rubricItemId = null;
+    } else if (typeof body.rubricItemId !== 'string') {
+      return { error: 'rubricItemId must be a string or null' };
+    } else {
+      const trimmed = body.rubricItemId.trim();
+      if (!trimmed) {
+        return { error: 'rubricItemId must be a non-empty string or null' };
+      }
+      normalized.rubricItemId = trimmed;
+    }
+  } else if (!partial) {
+    normalized.rubricItemId = null;
+  }
+
+  if (!partial && hasOwn(body, 'autoClassify')) {
+    if (typeof body.autoClassify !== 'boolean') {
+      return { error: 'autoClassify must be a boolean' };
+    }
+    normalized.autoClassify = body.autoClassify;
+  } else if (!partial) {
+    normalized.autoClassify = false;
   }
 
   const hasDueDate = Object.prototype.hasOwnProperty.call(body || {}, 'dueDate');
@@ -926,9 +971,66 @@ router.post('/', async (req, res) => {
       }
     }
 
+    let rubricSelection = null;
+    if (normalized.data.rubricItemId) {
+      try {
+        rubricSelection = await resolveRubricSelection({
+          db,
+          userId,
+          pillarId: validatedPillarId ?? null,
+          rubricItemId: normalized.data.rubricItemId
+        });
+      } catch (error) {
+        return res.status(error?.status || 400).json({ error: error.message });
+      }
+
+      validatedPillarId = rubricSelection.pillarId;
+      validatedBountyPillarId = rubricSelection.pillarId;
+    } else if (shouldAutoClassifyFromCreate({
+      source: req.body?.source,
+      autoClassify: normalized.data.autoClassify
+    })) {
+      if (!validatedPillarId) {
+        return res.status(400).json({
+          error: 'pillarId is required for auto-classification'
+        });
+      }
+
+      const classificationText = buildClassificationText(
+        normalized.data.content,
+        normalized.data.description
+      );
+
+      let classified;
+      try {
+        classified = await classifyAgainstRubric({
+          db,
+          userId,
+          text: classificationText,
+          pillarId: validatedPillarId
+        });
+      } catch (error) {
+        return res.status(error?.status || 500).json({ error: error.message });
+      }
+
+      rubricSelection = {
+        pillarId: classified.pillarId,
+        rubricItem: classified.rubricItem
+      };
+      validatedPillarId = classified.pillarId;
+      validatedBountyPillarId = classified.pillarId;
+    }
+
     const bountyResult = await normalizeBountyForTodoCreate({
       userId,
-      body: req.body || {},
+      body: rubricSelection
+        ? {
+          bountyAllocations: [{
+            pillarId: rubricSelection.pillarId,
+            points: rubricSelection.rubricItem.points
+          }]
+        }
+        : (req.body || {}),
       defaultPillarId: validatedBountyPillarId ?? validatedPillarId ?? null
     });
     if (bountyResult.error) {
@@ -956,6 +1058,9 @@ router.post('/', async (req, res) => {
       bountyPoints: bountyResult.allocations && bountyResult.allocations.length === 1 ? bountyResult.allocations[0].points : (normalized.data.bountyPoints ?? null),
       bountyAllocations: bountyResult.allocations || null,
       bountyPillarId: validatedBountyPillarId,
+      rubricItemId: rubricSelection
+        ? rubricSelection.rubricItem.id
+        : (normalized.data.rubricItemId ?? null),
       bountyPaidAt: null
     };
 
@@ -1410,9 +1515,42 @@ const updateTodoHandler = async (req, res) => {
       }
     }
 
+    let rubricSelection = null;
+    if (Object.prototype.hasOwnProperty.call(normalized.data, 'rubricItemId')) {
+      if (normalized.data.rubricItemId === null) {
+        payload.rubricItemId = null;
+      } else {
+        const pillarIdForRubric = Object.prototype.hasOwnProperty.call(payload, 'pillarId')
+          ? (payload.pillarId ?? null)
+          : (existing.pillarId ?? null);
+
+        try {
+          rubricSelection = await resolveRubricSelection({
+            db,
+            userId,
+            pillarId: pillarIdForRubric,
+            rubricItemId: normalized.data.rubricItemId
+          });
+        } catch (error) {
+          return res.status(error?.status || 400).json({ error: error.message });
+        }
+
+        payload.rubricItemId = rubricSelection.rubricItem.id;
+        payload.pillarId = rubricSelection.pillarId;
+        payload.bountyPillarId = rubricSelection.pillarId;
+      }
+    }
+
     const bountyUpdate = await normalizeBountyForTodoUpdate({
       userId,
-      body: req.body || {},
+      body: rubricSelection
+        ? {
+          bountyAllocations: [{
+            pillarId: rubricSelection.pillarId,
+            points: rubricSelection.rubricItem.points
+          }]
+        }
+        : (req.body || {}),
       defaultPillarId: payload.pillarId ?? existing.pillarId ?? null
     });
     if (bountyUpdate.error) {

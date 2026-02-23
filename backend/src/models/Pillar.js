@@ -1,4 +1,5 @@
 const { firestore } = require('../config/firebase');
+const { normalizeRubricItems } = require('../utils/rubrics');
 
 const VALID_PILLAR_ICONS = [
   'heart',
@@ -55,8 +56,8 @@ const VALID_PILLAR_ICONS = [
   'mountain'
 ];
 
-const validPillarIconSet = new Set(VALID_PILLAR_ICONS);
 const VALID_PILLAR_ICON_VALUES = Object.freeze([...VALID_PILLAR_ICONS]);
+const ICON_TOKEN_REGEX = /^[a-z][a-z0-9_.-]{1,63}$/;
 
 function normalizePillarIcon(icon) {
   if (typeof icon !== 'string') {
@@ -68,10 +69,9 @@ function normalizePillarIcon(icon) {
     return null;
   }
   const normalized = trimmed.toLowerCase();
-  if (validPillarIconSet.has(normalized)) {
+  if (ICON_TOKEN_REGEX.test(normalized)) {
     return normalized;
   }
-
   return null;
 }
 
@@ -86,12 +86,18 @@ class Pillar {
     this.id = data.id || null;
     this.userId = data.userId || null;
     this.name = data.name || '';
+    this.pillarType = typeof data.pillarType === 'string' ? data.pillarType : null;
     this.description = data.description || '';
     this.color = data.color || '#000000';
+    this.colorToken = typeof data.colorToken === 'string' ? data.colorToken : null;
+    this.customColorHex = typeof data.customColorHex === 'string' ? data.customColorHex : null;
     /** @type {string|null} Icon identifier (enum-backed, e.g., heart, house, ... ) */
     this.icon = normalizePillarIcon(data.icon);
     this.isDefault = data.isDefault || false;
     this.isArchived = data.isArchived || false;
+    this.rubricItems = Array.isArray(data.rubricItems)
+      ? normalizeRubricItems(data.rubricItems, { fallbackItems: [] }).value || []
+      : [];
     this.settings = data.settings || {};
     this.stats = data.stats || {
       conversationCount: 0,
@@ -117,11 +123,15 @@ class Pillar {
     const docRef = await this.collection().add({
       userId: pillar.userId,
       name: pillar.name,
+      pillarType: pillar.pillarType,
       description: pillar.description,
       color: pillar.color,
+      colorToken: pillar.colorToken,
+      customColorHex: pillar.customColorHex,
       icon: pillar.icon,
       isDefault: pillar.isDefault,
       isArchived: pillar.isArchived,
+      rubricItems: pillar.rubricItems,
       settings: pillar.settings,
       stats: pillar.stats,
       createdAt: pillar.createdAt,
@@ -177,6 +187,9 @@ class Pillar {
       name: 'Personal',
       description: 'Your personal pillar',
       color: '#6366f1',
+      colorToken: 'indigo',
+      pillarType: 'custom',
+      rubricItems: [],
       isDefault: true
     });
   }
@@ -246,11 +259,15 @@ class Pillar {
     if (this.id) {
       await Pillar.collection().doc(this.id).update({
         name: this.name,
+        pillarType: this.pillarType,
         description: this.description,
         color: this.color,
+        colorToken: this.colorToken,
+        customColorHex: this.customColorHex,
         icon: this.icon,
         isDefault: this.isDefault,
         isArchived: this.isArchived,
+        rubricItems: this.rubricItems,
         settings: this.settings,
         stats: this.stats,
         updatedAt: this.updatedAt,

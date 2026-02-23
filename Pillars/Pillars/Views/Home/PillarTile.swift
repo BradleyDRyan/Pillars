@@ -9,6 +9,7 @@ import SwiftUI
 
 struct PillarTile: View {
     let pillar: Pillar
+    @EnvironmentObject var viewModel: PillarsViewModel
     
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -28,17 +29,9 @@ struct PillarTile: View {
     
     @ViewBuilder
     private var pillarIcon: some View {
-        if let icon = pillar.icon {
-            // SF Symbol icon
-            Image(systemName: icon.systemName)
-                .font(.system(size: 17, weight: .medium))
-                .foregroundColor(pillar.colorValue)
-        } else {
-            // Fallback icon
-            Image(systemName: PillarIcon.default.systemName)
-                .font(.system(size: 17, weight: .medium))
-                .foregroundColor(pillar.colorValue)
-        }
+        Image(systemName: viewModel.iconSystemName(forToken: pillar.iconToken))
+            .font(.system(size: 17, weight: .medium))
+            .foregroundColor(pillar.colorValue)
     }
 }
 
@@ -94,4 +87,5 @@ struct PillarTile: View {
     }
     .padding()
     .background(Color(UIColor.secondarySystemBackground))
+    .environmentObject(PillarsViewModel())
 }

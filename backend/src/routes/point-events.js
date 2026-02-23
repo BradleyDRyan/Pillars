@@ -2,6 +2,11 @@ const express = require('express');
 const { db } = require('../config/firebase');
 const { flexibleAuth } = require('../middleware/serviceAuth');
 const { resolveValidatedPillarId, createInvalidPillarIdError } = require('../utils/pillarValidation');
+const { resolveRubricSelection } = require('../utils/rubrics');
+const {
+  classifyAgainstRubric,
+  classifyAcrossPillars
+} = require('../services/classification');
 
 const router = express.Router();
 router.use(flexibleAuth);
@@ -222,7 +227,72 @@ router.post('/', async (req, res) => {
       return res.status(400).json({ error: refResult.error });
     }
 
-    const allocationResult = await normalizeAllocations(body?.allocations, { userId });
+    if (Object.prototype.hasOwnProperty.call(body || {}, 'pillarId')
+      && body.pillarId !== null
+      && body.pillarId !== undefined
+      && (typeof body.pillarId !== 'string' || !body.pillarId.trim())) {
+      return res.status(400).json({ error: 'pillarId must be a non-empty string or null' });
+    }
+
+    let allocationsInput = body?.allocations;
+    let resolvedRubricItemId = null;
+    if (Object.prototype.hasOwnProperty.call(body || {}, 'rubricItemId') && body.rubricItemId !== null) {
+      if (typeof body.rubricItemId !== 'string' || !body.rubricItemId.trim()) {
+        return res.status(400).json({ error: 'rubricItemId must be a non-empty string or null' });
+      }
+
+      const rubricPillarId = typeof body?.pillarId === 'string' && body.pillarId.trim()
+        ? body.pillarId.trim()
+        : null;
+
+      let rubricSelection;
+      try {
+        rubricSelection = await resolveRubricSelection({
+          db,
+          userId,
+          pillarId: rubricPillarId,
+          rubricItemId: body.rubricItemId.trim()
+        });
+      } catch (error) {
+        return res.status(error?.status || 400).json({ error: error.message });
+      }
+
+      resolvedRubricItemId = rubricSelection.rubricItem.id;
+      allocationsInput = [{
+        pillarId: rubricSelection.pillarId,
+        points: rubricSelection.rubricItem.points
+      }];
+    } else if (allocationsInput === undefined || allocationsInput === null) {
+      const classificationPillarId = typeof body?.pillarId === 'string' && body.pillarId.trim()
+        ? body.pillarId.trim()
+        : null;
+
+      let classified;
+      try {
+        classified = classificationPillarId
+          ? await classifyAgainstRubric({
+            db,
+            userId,
+            text: reasonResult.value,
+            pillarId: classificationPillarId
+          })
+          : await classifyAcrossPillars({
+            db,
+            userId,
+            text: reasonResult.value
+          });
+      } catch (error) {
+        return res.status(error?.status || 500).json({ error: error.message });
+      }
+
+      resolvedRubricItemId = classified.rubricItem.id;
+      allocationsInput = [{
+        pillarId: classified.pillarId,
+        points: classified.rubricItem.points
+      }];
+    }
+
+    const allocationResult = await normalizeAllocations(allocationsInput, { userId });
     if (allocationResult.error) {
       return res.status(400).json({ error: allocationResult.error });
     }
@@ -249,6 +319,7 @@ router.post('/', async (req, res) => {
       allocations: allocationResult.value,
       pillarIds: allocationResult.pillarIds,
       totalPoints: allocationResult.totalPoints,
+      rubricItemId: resolvedRubricItemId,
       createdAt: now,
       updatedAt: now,
       voidedAt: null
