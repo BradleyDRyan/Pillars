@@ -3,6 +3,7 @@ const { getRubricItems } = require('../utils/rubrics');
 
 const CLASSIFICATION_MODEL = process.env.CLAUDE_MODEL || 'claude-sonnet-4-5';
 const MAX_TEXT_LENGTH = 1200;
+const AUTO_CLASSIFICATION_MAX_MATCHES = 3;
 
 function createClassificationError(message, status = 400, code = 'classification_error') {
   const error = new Error(message);
@@ -50,9 +51,9 @@ function isExactPhraseMatch(text, phrase) {
   return normalizedText.includes(normalizedPhrase);
 }
 
-function parseModelClassification(content) {
+function jsonCandidatesFromContent(content) {
   if (typeof content !== 'string' || !content.trim()) {
-    return null;
+    return [];
   }
 
   const fenced = content.match(/```(?:json)?\s*([\s\S]*?)```/i);
@@ -67,13 +68,24 @@ function parseModelClassification(content) {
     candidates.push(objectMatch[0]);
   }
 
-  for (const candidate of candidates) {
-    const trimmed = candidate.trim();
-    if (!trimmed) {
-      continue;
-    }
+  const arrayMatch = content.match(/\[[\s\S]*\]/);
+  if (arrayMatch?.[0]) {
+    candidates.push(arrayMatch[0]);
+  }
+
+  return candidates
+    .map(value => value.trim())
+    .filter(Boolean);
+}
+
+function parseModelClassification(content) {
+  if (typeof content !== 'string' || !content.trim()) {
+    return null;
+  }
+
+  for (const candidate of jsonCandidatesFromContent(content)) {
     try {
-      const parsed = JSON.parse(trimmed);
+      const parsed = JSON.parse(candidate);
       if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
         continue;
       }
@@ -100,13 +112,76 @@ function parseModelClassification(content) {
   return null;
 }
 
+function parseModelMultiClassification(content) {
+  if (typeof content !== 'string' || !content.trim()) {
+    return null;
+  }
+
+  for (const candidate of jsonCandidatesFromContent(content)) {
+    try {
+      const parsed = JSON.parse(candidate);
+      let rawMatches = null;
+      if (Array.isArray(parsed)) {
+        rawMatches = parsed;
+      } else if (parsed && typeof parsed === 'object') {
+        if (Array.isArray(parsed.matches)) {
+          rawMatches = parsed.matches;
+        } else if (Array.isArray(parsed.items)) {
+          rawMatches = parsed.items;
+        } else if (Array.isArray(parsed.results)) {
+          rawMatches = parsed.results;
+        } else if (Array.isArray(parsed.classifications)) {
+          rawMatches = parsed.classifications;
+        } else if (parsed.rubric_item_id || parsed.rubricItemId) {
+          rawMatches = [parsed];
+        }
+      }
+
+      if (!Array.isArray(rawMatches)) {
+        continue;
+      }
+
+      const normalized = rawMatches
+        .map(item => {
+          if (!item || typeof item !== 'object') {
+            return null;
+          }
+          const rubricItemIdRaw = typeof item.rubric_item_id === 'string'
+            ? item.rubric_item_id
+            : (typeof item.rubricItemId === 'string' ? item.rubricItemId : '');
+          const pillarIdRaw = typeof item.pillar_id === 'string'
+            ? item.pillar_id
+            : (typeof item.pillarId === 'string' ? item.pillarId : '');
+          const rubricItemId = rubricItemIdRaw.trim();
+          if (!rubricItemId) {
+            return null;
+          }
+          const pillarId = pillarIdRaw.trim();
+          return {
+            rubricItemId,
+            pillarId: pillarId || null
+          };
+        })
+        .filter(Boolean);
+
+      if (normalized.length > 0) {
+        return normalized;
+      }
+    } catch (_error) {
+      // Try next candidate.
+    }
+  }
+
+  return null;
+}
+
 function rubricItemSortId(candidate) {
   const rubricId = typeof candidate?.rubricItem?.id === 'string' ? candidate.rubricItem.id : '';
   const pillarId = typeof candidate?.pillarId === 'string' ? candidate.pillarId : '';
   return `${rubricId}::${pillarId}`;
 }
 
-function chooseByHeuristic(candidates, text) {
+function rankByHeuristic(candidates, text) {
   const normalizedText = normalizeForMatch(text);
   const textTokens = new Set(tokenize(text));
   const scored = candidates.map(candidate => {
@@ -154,23 +229,7 @@ function chooseByHeuristic(candidates, text) {
     };
   });
 
-  const maxScore = scored.reduce((current, item) => Math.max(current, item.score), 0);
-  if (maxScore === 0) {
-    const fallbackPool = [...scored].sort((left, right) => {
-      if (left.points !== right.points) {
-        return right.points - left.points;
-      }
-      const leftRubricId = left.candidate.rubricItem.id;
-      const rightRubricId = right.candidate.rubricItem.id;
-      if (leftRubricId !== rightRubricId) {
-        return leftRubricId.localeCompare(rightRubricId);
-      }
-      return (left.candidate.pillarId || '').localeCompare(right.candidate.pillarId || '');
-    });
-    return fallbackPool[0]?.candidate || null;
-  }
-
-  const ordered = [...scored].sort((left, right) => {
+  return [...scored].sort((left, right) => {
     if (left.score !== right.score) {
       return right.score - left.score;
     }
@@ -187,8 +246,30 @@ function chooseByHeuristic(candidates, text) {
     }
     return (left.candidate.pillarId || '').localeCompare(right.candidate.pillarId || '');
   });
+}
 
-  return ordered[0]?.candidate || null;
+function chooseByHeuristic(candidates, text) {
+  const ranked = rankByHeuristic(candidates, text);
+  if (!ranked.length) {
+    return null;
+  }
+
+  const maxScore = ranked[0].score;
+  if (maxScore === 0) {
+    return [...ranked].sort((left, right) => {
+      if (left.points !== right.points) {
+        return right.points - left.points;
+      }
+      const leftRubricId = left.candidate.rubricItem.id;
+      const rightRubricId = right.candidate.rubricItem.id;
+      if (leftRubricId !== rightRubricId) {
+        return leftRubricId.localeCompare(rightRubricId);
+      }
+      return (left.candidate.pillarId || '').localeCompare(right.candidate.pillarId || '');
+    })[0]?.candidate || null;
+  }
+
+  return ranked[0].candidate;
 }
 
 function resolveCandidateFromModelSelection(candidates, parsedModel) {
@@ -217,6 +298,33 @@ function resolveCandidateFromModelSelection(candidates, parsedModel) {
     const rightKey = rubricItemSortId(right);
     return leftKey.localeCompare(rightKey);
   })[0];
+}
+
+function resolveCandidatesFromModelSelection(candidates, parsedModels, maxMatches) {
+  if (!Array.isArray(parsedModels) || !parsedModels.length) {
+    return [];
+  }
+
+  const dedup = new Set();
+  const resolved = [];
+
+  for (const parsedModel of parsedModels) {
+    const candidate = resolveCandidateFromModelSelection(candidates, parsedModel);
+    if (!candidate) {
+      continue;
+    }
+    const key = `${candidate.pillarId}:${candidate.rubricItem.id}`;
+    if (dedup.has(key)) {
+      continue;
+    }
+    dedup.add(key);
+    resolved.push(candidate);
+    if (resolved.length >= maxMatches) {
+      break;
+    }
+  }
+
+  return resolved;
 }
 
 function formatCandidatesForPrompt(candidates, includePillar) {
@@ -284,6 +392,20 @@ function buildClassificationResponse(candidate, { method, fallbackUsed }) {
   };
 }
 
+function buildMultiClassificationResponse(candidates, { method, fallbackUsed }) {
+  return {
+    matches: candidates.map((candidate, index) => ({
+      rank: index + 1,
+      pillarId: candidate.pillarId,
+      rubricItem: candidate.rubricItem,
+      bounty: candidate.rubricItem.points
+    })),
+    method,
+    modelUsed: CLASSIFICATION_MODEL,
+    fallbackUsed
+  };
+}
+
 function toCandidate(pillarId, rubricItem) {
   return {
     pillarId,
@@ -343,6 +465,89 @@ async function runClassification({ text, candidates, includePillar }) {
   });
 }
 
+async function selectCandidatesWithModelMulti({ text, candidates, maxMatches }) {
+  const systemPrompt = [
+    'You classify a user activity against an existing rubric.',
+    `Pick up to ${maxMatches} best rubric matches.`,
+    'Never invent ids, labels, points, or options.',
+    'Return strict JSON only using this shape:',
+    '{"matches":[{"rubric_item_id":"<id>","pillar_id":"<pillarId>"}]}',
+    'Do not include extra fields.'
+  ].join('\n');
+
+  const userPrompt = [
+    `Activity text:\n${text}`,
+    '',
+    'Rubric options:',
+    formatCandidatesForPrompt(candidates, true),
+    '',
+    'Return JSON now.'
+  ].join('\n');
+
+  const response = await chatCompletion([
+    { role: 'system', content: systemPrompt },
+    { role: 'user', content: userPrompt }
+  ], {
+    model: CLASSIFICATION_MODEL,
+    temperature: 0,
+    maxTokens: 320
+  });
+
+  const parsed = parseModelMultiClassification(response?.content || '');
+  return resolveCandidatesFromModelSelection(candidates, parsed, maxMatches);
+}
+
+async function runClassificationMulti({ text, candidates, maxMatches }) {
+  const normalizedMaxMatches = Number.isInteger(maxMatches)
+    ? Math.max(1, Math.min(AUTO_CLASSIFICATION_MAX_MATCHES, maxMatches))
+    : AUTO_CLASSIFICATION_MAX_MATCHES;
+
+  try {
+    const aiChoices = await selectCandidatesWithModelMulti({
+      text,
+      candidates,
+      maxMatches: normalizedMaxMatches
+    });
+    if (aiChoices.length > 0) {
+      return buildMultiClassificationResponse(aiChoices, {
+        method: 'ai',
+        fallbackUsed: false
+      });
+    }
+  } catch (_error) {
+    // Explicitly fallback to deterministic ranking if AI is unavailable or fails.
+  }
+
+  const ranked = rankByHeuristic(candidates, text);
+  if (!ranked.length) {
+    throw createClassificationError('Unable to classify activity', 409, 'no_rubric_match');
+  }
+
+  const selected = [ranked[0]];
+  const topScore = ranked[0].score;
+
+  for (const entry of ranked.slice(1)) {
+    if (selected.length >= normalizedMaxMatches) {
+      break;
+    }
+    if (entry.score <= 0) {
+      break;
+    }
+    if (topScore > 0 && entry.score < topScore * 0.6) {
+      break;
+    }
+    selected.push(entry);
+  }
+
+  return buildMultiClassificationResponse(
+    selected.map(entry => entry.candidate),
+    {
+      method: 'heuristic',
+      fallbackUsed: true
+    }
+  );
+}
+
 async function classifyAgainstRubric({ db, userId, text, pillarId }) {
   const normalizedText = normalizeClassificationText(text);
   if (!normalizedText) {
@@ -400,8 +605,44 @@ async function classifyAcrossPillars({ db, userId, text }) {
   });
 }
 
+async function classifyAcrossPillarsMulti({ db, userId, text, maxMatches = AUTO_CLASSIFICATION_MAX_MATCHES }) {
+  const normalizedText = normalizeClassificationText(text);
+  if (!normalizedText) {
+    throw createClassificationError('text is required for classification', 400, 'missing_text');
+  }
+
+  const pillarsSnapshot = await db.collection('pillars')
+    .where('userId', '==', userId)
+    .get();
+
+  const candidates = [];
+  for (const doc of pillarsSnapshot.docs) {
+    const pillarData = doc.data() || {};
+    const rubricItems = getRubricItems(pillarData);
+    for (const rubricItem of rubricItems) {
+      if (!rubricItem || typeof rubricItem.id !== 'string') {
+        continue;
+      }
+      candidates.push(toCandidate(doc.id, rubricItem));
+    }
+  }
+
+  requireNonEmptyCandidates(
+    candidates,
+    'No rubric items found. Add rubric items to at least one pillar before using classification.'
+  );
+
+  return runClassificationMulti({
+    text: normalizedText,
+    candidates,
+    maxMatches
+  });
+}
+
 module.exports = {
   createClassificationError,
   classifyAgainstRubric,
-  classifyAcrossPillars
+  classifyAcrossPillars,
+  classifyAcrossPillarsMulti,
+  rankByHeuristic
 };

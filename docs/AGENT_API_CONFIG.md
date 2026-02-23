@@ -101,10 +101,10 @@ Use this for external agents (not local dev).
       "todoStatus": "todoStatus supports active|completed|all (default active)"
     },
     "todos": {
-      "list": "GET /api/todos (filters: status=active|completed|all; dueDate=YYYY-MM-DD|none; archived=exclude|include|only; q=<search>; sectionId=morning|afternoon|evening; parentId=none|any|all|<todoId>; pillarId=<id>|none; includeSubtasks=true|false; flat=true|false; legacy aliases: search, includeArchived)",
-      "create": "POST /api/todos (optional pillarId, optional rubricItemId, optional autoClassify:boolean, optional schedule:{date,sectionId,order}; response includes {todo,scheduled})",
+      "list": "GET /api/todos (filters: status=active|completed|all; dueDate=YYYY-MM-DD|none; archived=exclude|include|only; q=<search>; sectionId=morning|afternoon|evening; parentId=none|any|all|<todoId>; pillarId=<id>|none where pillarId matches any bounty allocation; includeSubtasks=true|false; flat=true|false; legacy aliases: search, includeArchived)",
+      "create": "POST /api/todos (assignment-driven: assignment.mode=auto|manual, manual requires assignment.pillarIds; optional schedule:{date,sectionId,order}; response includes {todo,scheduled,classificationSummary})",
       "get": "GET /api/todos/:id",
-      "update": "PUT /api/todos/:id (optional pillarId, optional rubricItemId)",
+      "update": "PUT /api/todos/:id and PATCH /api/todos/:id (supports assignment.mode=auto|manual for retag/reclassify; response may include classificationSummary)",
       "delete": "DELETE /api/todos/:id",
       "close": "POST /api/todos/:id/close (todo status mutation; bounty payout side effects are trigger-driven)",
       "reopen": "POST /api/todos/:id/reopen (todo status mutation; bounty reversal side effects are trigger-driven)",
@@ -181,7 +181,7 @@ Use this for external agents (not local dev).
 
 ## Pillar Tagging Contract
 
-- `pillarId` is optional and nullable on `todo`, `habit`, and Day-native `block` payloads.
+- `pillarId` is optional/nullable on habits and Day-native blocks; todos are allocation-first for pillar semantics.
 - `rubricItemId` is optional on `todo` and `habit` mutations.
 - For `POST /api/pillars`, when `rubricItems` is omitted, `pillarType` is required.
 - `pillarType=custom` creates with an empty rubric; non-custom types copy active defaults from `/api/pillar-templates`.

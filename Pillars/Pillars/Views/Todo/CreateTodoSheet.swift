@@ -9,16 +9,24 @@ import SwiftUI
 
 struct CreateTodoSheet: View {
     let pillars: [Pillar]
-    let onCreate: (String, String?, String?) -> Void
+    let onCreate: (String, String?, TodoAssignmentSelection) -> Void
 
     @Environment(\.dismiss) private var dismiss
     @State private var title = ""
-    @State private var selectedPillarId: String?
+    @State private var assignment: TodoAssignmentSelection = .auto
     @State private var isScheduled = false
     @State private var selectedDate = Date()
 
     private var normalizedTitle: String {
         title.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private var canCreate: Bool {
+        guard !normalizedTitle.isEmpty else { return false }
+        if assignment.mode == .manual && assignment.pillarIds.isEmpty {
+            return false
+        }
+        return true
     }
 
     var body: some View {
@@ -31,15 +39,29 @@ struct CreateTodoSheet: View {
                         .s2MyDayInputSurface()
                 }
 
-                fieldGroup("Pillar") {
-                    Picker("Pillar", selection: $selectedPillarId) {
-                        Text("No Pillar").tag(String?.none)
+                fieldGroup("Assignment") {
+                    VStack(spacing: S2.Spacing.xs) {
+                        assignmentRow(
+                            title: "Auto",
+                            subtitle: "Let classifier pick the best pillar matches.",
+                            isSelected: assignment.mode == .auto,
+                            color: S2.MyDay.Colors.interactiveTint
+                        ) {
+                            assignment = .auto
+                        }
+
                         ForEach(pillars) { pillar in
-                            Text(pillar.name).tag(Optional(pillar.id))
+                            let isSelected = assignment.mode == .manual && assignment.pillarIds.contains(pillar.id)
+                            assignmentRow(
+                                title: pillar.name,
+                                subtitle: nil,
+                                isSelected: isSelected,
+                                color: pillar.colorValue
+                            ) {
+                                toggleManualSelection(pillar.id)
+                            }
                         }
                     }
-                    .pickerStyle(.menu)
-                    .font(S2.MyDay.Typography.fieldValue)
                 }
 
                 fieldGroup("Schedule") {
@@ -81,13 +103,13 @@ struct CreateTodoSheet: View {
                         onCreate(
                             normalizedTitle,
                             isScheduled ? dueDateString(from: selectedDate) : nil,
-                            selectedPillarId
+                            normalizedAssignment()
                         )
                         dismiss()
                     }
-                    .disabled(normalizedTitle.isEmpty)
+                    .disabled(!canCreate)
                     .foregroundColor(
-                        normalizedTitle.isEmpty
+                        !canCreate
                             ? S2.MyDay.Colors.subtitleText
                             : S2.MyDay.Colors.interactiveTint
                     )
@@ -105,6 +127,71 @@ struct CreateTodoSheet: View {
 
             content()
         }
+    }
+
+    private func toggleManualSelection(_ pillarId: String) {
+        let normalized = pillarId.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !normalized.isEmpty else { return }
+
+        var selected = assignment.pillarIds
+        if let index = selected.firstIndex(of: normalized) {
+            selected.remove(at: index)
+        } else {
+            selected.append(normalized)
+        }
+
+        if selected.isEmpty {
+            assignment = .auto
+        } else {
+            assignment = .manual(selected)
+        }
+    }
+
+    private func normalizedAssignment() -> TodoAssignmentSelection {
+        if assignment.mode == .manual && !assignment.pillarIds.isEmpty {
+            return .manual(assignment.pillarIds)
+        }
+        return .auto
+    }
+
+    private func assignmentRow(
+        title: String,
+        subtitle: String?,
+        isSelected: Bool,
+        color: Color,
+        action: @escaping () -> Void
+    ) -> some View {
+        Button(action: action) {
+            HStack(spacing: S2.Spacing.sm) {
+                Circle()
+                    .fill(color)
+                    .frame(width: 10, height: 10)
+
+                VStack(alignment: .leading, spacing: S2.Spacing.xs) {
+                    Text(title)
+                        .font(S2.MyDay.Typography.fieldValue)
+                        .foregroundColor(S2.MyDay.Colors.titleText)
+                    if let subtitle {
+                        Text(subtitle)
+                            .font(S2.MyDay.Typography.fieldLabel)
+                            .foregroundColor(S2.MyDay.Colors.subtitleText)
+                    }
+                }
+
+                Spacer()
+
+                if isSelected {
+                    Image(systemName: "checkmark")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundColor(S2.MyDay.Colors.interactiveTint)
+                }
+            }
+            .padding(.horizontal, S2.Spacing.sm)
+            .padding(.vertical, S2.Spacing.sm)
+            .background(S2.MyDay.Colors.sectionBackground)
+            .clipShape(RoundedRectangle(cornerRadius: S2.CornerRadius.sm, style: .continuous))
+        }
+        .buttonStyle(.plain)
     }
 
     private func dueDateString(from date: Date) -> String {

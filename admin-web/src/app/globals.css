@@ -22,7 +22,9 @@
   --accent-green: #25b159;
   --error: #d31130;
 
-  --bg-root: var(--surface-grouped);
+  --bg-root: #f5f5f5;
+  --border-light: rgba(0, 0, 0, 0.05);
+  --bg-border: var(--border-light);
   --bg: lch(99% 0 282.863);
   --bg-surface: #ffffff;
   --ink: var(--on-surface-primary);
@@ -202,10 +204,28 @@ body {
 .admin-shell__content {
   min-width: 0;
   flex: 1;
-  border-top-left-radius: 8px;
-  border-bottom-left-radius: 8px;
+  margin: 4px;
+  border-radius: 8px;
+  border: 1px solid var(--border-light);
+  height: calc(100vh - 8px);
   background: var(--bg);
-  box-shadow: 2px 4px 0 0.05px rgba(0, 0, 0, 0.05);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(0, 0, 0, 0.14) transparent;
+}
+
+.admin-shell__content::-webkit-scrollbar {
+  width: 6px;
+}
+
+.admin-shell__content::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.14);
+  border-radius: 999px;
+}
+
+.admin-shell__content::-webkit-scrollbar-track {
+  background: transparent;
 }
 
 .admin-page-view__header {

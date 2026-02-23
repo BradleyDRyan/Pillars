@@ -3,8 +3,10 @@ const { db } = require('../config/firebase');
 const { flexibleAuth } = require('../middleware/serviceAuth');
 const { resolveValidatedPillarId } = require('../utils/pillarValidation');
 const { resolveEventSource, writeUserEventSafe } = require('../services/events');
-const { resolveRubricSelection } = require('../utils/rubrics');
-const { classifyAgainstRubric } = require('../services/classification');
+const {
+  classifyAgainstRubric,
+  classifyAcrossPillarsMulti
+} = require('../services/classification');
 
 const router = express.Router();
 router.use(flexibleAuth);
@@ -12,12 +14,13 @@ router.use(flexibleAuth);
 const VALID_SECTIONS = new Set(['morning', 'afternoon', 'evening']);
 const VALID_STATUS = new Set(['active', 'completed']);
 const VALID_ARCHIVE_VISIBILITY = new Set(['exclude', 'include', 'only']);
+const VALID_ASSIGNMENT_MODES = new Set(['auto', 'manual']);
 const MAX_CONTENT_LENGTH = 500;
 const MAX_DESCRIPTION_LENGTH = 2000;
-const TODO_BOUNTY_MAX_ALLOCATIONS = 3;
 const TODO_BOUNTY_MIN_POINTS = 1;
 const TODO_BOUNTY_MAX_POINTS = 100;
 const TODO_BOUNTY_TOTAL_MAX = 150;
+const TODO_AUTO_CLASSIFICATION_MAX_MATCHES = 3;
 
 function nowTs() {
   return Date.now() / 1000;
@@ -31,9 +34,6 @@ async function normalizeBountyForTodoCreate({ userId, body, defaultPillarId }) {
   if (Array.isArray(body.bountyAllocations)) {
     if (body.bountyAllocations.length < 1) {
       return { error: 'bountyAllocations must include at least one entry' };
-    }
-    if (body.bountyAllocations.length > TODO_BOUNTY_MAX_ALLOCATIONS) {
-      return { error: `bountyAllocations must include at most ${TODO_BOUNTY_MAX_ALLOCATIONS} entries` };
     }
 
     const dedup = new Set();
@@ -166,14 +166,72 @@ function hasOwn(obj, key) {
   return Object.prototype.hasOwnProperty.call(obj || {}, key);
 }
 
-function shouldAutoClassifyFromCreate({ source, autoClassify }) {
-  if (autoClassify === true) {
-    return true;
+function normalizeAssignment(rawAssignment, { partial = false } = {}) {
+  if (rawAssignment === undefined) {
+    if (partial) {
+      return { provided: false };
+    }
+    return {
+      provided: true,
+      value: {
+        mode: 'auto',
+        pillarIds: []
+      }
+    };
   }
-  if (typeof source !== 'string') {
-    return false;
+
+  if (!rawAssignment || typeof rawAssignment !== 'object' || Array.isArray(rawAssignment)) {
+    return { error: 'assignment must be an object' };
   }
-  return source.trim().toLowerCase() === 'clawdbot';
+
+  const rawMode = typeof rawAssignment.mode === 'string'
+    ? rawAssignment.mode.trim().toLowerCase()
+    : '';
+  if (!VALID_ASSIGNMENT_MODES.has(rawMode)) {
+    return { error: 'assignment.mode must be auto or manual' };
+  }
+
+  if (rawMode === 'auto') {
+    return {
+      provided: true,
+      value: {
+        mode: 'auto',
+        pillarIds: []
+      }
+    };
+  }
+
+  if (!Array.isArray(rawAssignment.pillarIds)) {
+    return { error: 'assignment.pillarIds must be an array when assignment.mode=manual' };
+  }
+
+  const dedup = new Set();
+  const pillarIds = [];
+  for (const rawId of rawAssignment.pillarIds) {
+    if (typeof rawId !== 'string') {
+      return { error: 'assignment.pillarIds must contain only strings' };
+    }
+    const trimmed = rawId.trim();
+    if (!trimmed) {
+      continue;
+    }
+    if (!dedup.has(trimmed)) {
+      dedup.add(trimmed);
+      pillarIds.push(trimmed);
+    }
+  }
+
+  if (!pillarIds.length) {
+    return { error: 'assignment.pillarIds must include at least one pillar for manual mode' };
+  }
+
+  return {
+    provided: true,
+    value: {
+      mode: 'manual',
+      pillarIds
+    }
+  };
 }
 
 function buildClassificationText(...parts) {
@@ -182,6 +240,222 @@ function buildClassificationText(...parts) {
     .map(part => part.trim())
     .filter(Boolean)
     .join('\n');
+}
+
+function normalizeTodoAllocations(rawAllocations) {
+  if (!Array.isArray(rawAllocations)) {
+    return [];
+  }
+  return rawAllocations
+    .filter(item => item && typeof item === 'object')
+    .map(item => ({
+      pillarId: typeof item.pillarId === 'string' ? item.pillarId : null,
+      points: Number(item.points)
+    }))
+    .filter(item => typeof item.pillarId === 'string' && Number.isInteger(item.points) && item.points > 0);
+}
+
+function hasAllocations(todo) {
+  return normalizeTodoAllocations(todo?.bountyAllocations).length > 0;
+}
+
+function hasAllocationForPillar(todo, pillarId) {
+  return normalizeTodoAllocations(todo?.bountyAllocations).some(item => item.pillarId === pillarId);
+}
+
+function allocationTotalPoints(rawAllocations) {
+  return normalizeTodoAllocations(rawAllocations)
+    .reduce((sum, item) => sum + item.points, 0);
+}
+
+function coerceTotalPoints(total) {
+  if (!Number.isInteger(total) || total < TODO_BOUNTY_MIN_POINTS) {
+    return null;
+  }
+  return total;
+}
+
+function normalizeAllocationPoints(rawPoints) {
+  const points = Number(rawPoints);
+  if (!Number.isInteger(points) || points < TODO_BOUNTY_MIN_POINTS) {
+    return null;
+  }
+  return Math.min(TODO_BOUNTY_MAX_POINTS, points);
+}
+
+function collapseAllocationEntriesByPillar(entries) {
+  const map = new Map();
+  for (const entry of entries) {
+    if (!entry || typeof entry !== 'object') {
+      continue;
+    }
+    const pillarId = typeof entry.pillarId === 'string' ? entry.pillarId.trim() : '';
+    const points = Number(entry.points);
+    const rank = Number.isFinite(entry.rank) ? Number(entry.rank) : Number.MAX_SAFE_INTEGER;
+    const normalizedPoints = normalizeAllocationPoints(points);
+    if (!pillarId || !normalizedPoints) {
+      continue;
+    }
+
+    const existing = map.get(pillarId);
+    if (!existing) {
+      map.set(pillarId, { pillarId, points: normalizedPoints, rank });
+      continue;
+    }
+    if (normalizedPoints > existing.points || (normalizedPoints === existing.points && rank < existing.rank)) {
+      map.set(pillarId, { pillarId, points: normalizedPoints, rank });
+    }
+  }
+  return [...map.values()].sort((left, right) => {
+    if (left.rank !== right.rank) {
+      return left.rank - right.rank;
+    }
+    if (left.points !== right.points) {
+      return right.points - left.points;
+    }
+    return left.pillarId.localeCompare(right.pillarId);
+  });
+}
+
+function trimAllocationEntries(entries, totalCap = TODO_BOUNTY_TOTAL_MAX) {
+  const kept = [...entries];
+  let total = kept.reduce((sum, entry) => sum + entry.points, 0);
+  if (total <= totalCap) {
+    return { kept, trimmedPillarIds: [], total };
+  }
+
+  const removalOrder = [...kept].sort((left, right) => {
+    if (left.points !== right.points) {
+      return left.points - right.points;
+    }
+    if (left.rank !== right.rank) {
+      return right.rank - left.rank;
+    }
+    return left.pillarId.localeCompare(right.pillarId);
+  });
+
+  const trimmedPillarIds = [];
+  for (const candidate of removalOrder) {
+    if (total <= totalCap) {
+      break;
+    }
+    const index = kept.findIndex(item => item.pillarId === candidate.pillarId);
+    if (index < 0) {
+      continue;
+    }
+    total -= kept[index].points;
+    kept.splice(index, 1);
+    trimmedPillarIds.push(candidate.pillarId);
+  }
+
+  return {
+    kept: kept.sort((left, right) => {
+      if (left.rank !== right.rank) {
+        return left.rank - right.rank;
+      }
+      if (left.points !== right.points) {
+        return right.points - left.points;
+      }
+      return left.pillarId.localeCompare(right.pillarId);
+    }),
+    trimmedPillarIds,
+    total
+  };
+}
+
+async function classifyTodoAssignment({
+  userId,
+  content,
+  description,
+  assignment
+}) {
+  const classificationText = buildClassificationText(content, description);
+
+  if (assignment.mode === 'manual') {
+    const validatedPillarIds = [];
+    for (const pillarId of assignment.pillarIds) {
+      try {
+        const validated = await resolveValidatedPillarId({ db, userId, pillarId });
+        if (validated) {
+          validatedPillarIds.push(validated);
+        }
+      } catch (error) {
+        if (isInvalidPillarIdError(error)) {
+          throw createValidationError('Invalid assignment pillarId', 400);
+        }
+        throw error;
+      }
+    }
+
+    if (!validatedPillarIds.length) {
+      throw createValidationError('assignment.pillarIds must include at least one valid pillar', 400);
+    }
+
+    const perPillar = await Promise.all(
+      validatedPillarIds.map(async (pillarId, index) => {
+        const classified = await classifyAgainstRubric({
+          db,
+          userId,
+          text: classificationText,
+          pillarId
+        });
+        return {
+          pillarId: classified.pillarId,
+          points: Number(classified.bounty) || Number(classified.rubricItem?.points) || 0,
+          rank: index + 1
+        };
+      })
+    );
+
+    const collapsed = collapseAllocationEntriesByPillar(perPillar);
+    const matchedPillarIds = collapsed.map(item => item.pillarId);
+    const trimmed = trimAllocationEntries(collapsed);
+    return {
+      assignmentMode: 'manual',
+      method: 'manual',
+      matchedPillarIds,
+      trimmedPillarIds: trimmed.trimmedPillarIds,
+      allocations: trimmed.kept.map(item => ({
+        pillarId: item.pillarId,
+        points: item.points
+      })),
+      totalPoints: coerceTotalPoints(trimmed.total)
+    };
+  }
+
+  const multi = await classifyAcrossPillarsMulti({
+    db,
+    userId,
+    text: classificationText,
+    maxMatches: TODO_AUTO_CLASSIFICATION_MAX_MATCHES
+  });
+  const collapsed = collapseAllocationEntriesByPillar(
+    (multi.matches || []).map(match => ({
+      pillarId: match.pillarId,
+      points: Number(match.bounty) || Number(match.rubricItem?.points) || 0,
+      rank: Number(match.rank) || Number.MAX_SAFE_INTEGER
+    }))
+  );
+  const matchedPillarIds = collapsed.map(item => item.pillarId);
+  const trimmed = trimAllocationEntries(collapsed);
+
+  return {
+    assignmentMode: 'auto',
+    method: multi.method || 'ai',
+    matchedPillarIds,
+    trimmedPillarIds: trimmed.trimmedPillarIds,
+    allocations: trimmed.kept.map(item => ({
+      pillarId: item.pillarId,
+      points: item.points
+    })),
+    totalPoints: coerceTotalPoints(trimmed.total)
+  };
+}
+
+function createValidationError(message, status = 400) {
+  const error = new Error(message);
+  error.status = status;
+  return error;
 }
 
 function hasTodoDueDate(todo) {
@@ -296,6 +570,19 @@ function normalizeTodoSchedule(rawSchedule) {
 function normalizeTodoPayload(body, options = {}) {
   const partial = options.partial === true;
   const normalized = {};
+
+  const assignmentResult = normalizeAssignment(body?.assignment, { partial });
+  if (assignmentResult.error) {
+    return { error: assignmentResult.error };
+  }
+  if (assignmentResult.provided) {
+    normalized.assignment = assignmentResult.value;
+  } else if (!partial) {
+    normalized.assignment = {
+      mode: 'auto',
+      pillarIds: []
+    };
+  }
 
   const hasContent = Object.prototype.hasOwnProperty.call(body || {}, 'content');
   if (hasContent) {
@@ -493,10 +780,10 @@ function applyTodoFilters(todos, filters) {
     if (typeof filters.parentIdValue === 'string' && todo.parentId !== filters.parentIdValue) {
       return false;
     }
-    if (filters.pillarFilter === 'none' && todo.pillarId) {
+    if (filters.pillarFilter === 'none' && hasAllocations(todo)) {
       return false;
     }
-    if (typeof filters.pillarValue === 'string' && todo.pillarId !== filters.pillarValue) {
+    if (typeof filters.pillarValue === 'string' && !hasAllocationForPillar(todo, filters.pillarValue)) {
       return false;
     }
     if (filters.search) {
@@ -530,9 +817,17 @@ function sortTodos(todos) {
 
 function toResponseTodo(todo) {
   const { bountyReason: _ignoredBountyReason, ...rest } = todo || {};
+  const allocations = normalizeTodoAllocations(rest?.bountyAllocations);
+  const computedTotal = allocationTotalPoints(allocations);
+  const bountyPoints = Number.isInteger(rest?.bountyPoints)
+    ? rest.bountyPoints
+    : (computedTotal > 0 ? computedTotal : null);
   return {
     ...rest,
-    pillarId: typeof rest?.pillarId === 'string' ? rest.pillarId : null,
+    pillarId: null,
+    bountyPoints,
+    bountyAllocations: allocations.length ? allocations : null,
+    assignmentMode: typeof rest?.assignmentMode === 'string' ? rest.assignmentMode : null,
     archivedAt: typeof rest?.archivedAt === 'number' ? rest.archivedAt : null
   };
 }
@@ -941,100 +1236,19 @@ router.post('/', async (req, res) => {
       }
     }
 
-    let validatedPillarId;
+    let assignmentResult;
     try {
-      validatedPillarId = await resolveValidatedPillarId({
-        db,
+      assignmentResult = await classifyTodoAssignment({
         userId,
-        pillarId: normalized.data.pillarId
+        content: normalized.data.content,
+        description: normalized.data.description,
+        assignment: normalized.data.assignment
       });
     } catch (error) {
-      if (isInvalidPillarIdError(error)) {
-        return res.status(400).json({ error: 'Invalid pillarId' });
+      if (error?.status) {
+        return res.status(error.status).json({ error: error.message });
       }
-      throw error;
-    }
-
-    let validatedBountyPillarId = null;
-    if (normalized.data.bountyPillarId) {
-      try {
-        validatedBountyPillarId = await resolveValidatedPillarId({
-          db,
-          userId,
-          pillarId: normalized.data.bountyPillarId
-        });
-      } catch (error) {
-        if (isInvalidPillarIdError(error)) {
-          return res.status(400).json({ error: 'Invalid bountyPillarId' });
-        }
-        throw error;
-      }
-    }
-
-    let rubricSelection = null;
-    if (normalized.data.rubricItemId) {
-      try {
-        rubricSelection = await resolveRubricSelection({
-          db,
-          userId,
-          pillarId: validatedPillarId ?? null,
-          rubricItemId: normalized.data.rubricItemId
-        });
-      } catch (error) {
-        return res.status(error?.status || 400).json({ error: error.message });
-      }
-
-      validatedPillarId = rubricSelection.pillarId;
-      validatedBountyPillarId = rubricSelection.pillarId;
-    } else if (shouldAutoClassifyFromCreate({
-      source: req.body?.source,
-      autoClassify: normalized.data.autoClassify
-    })) {
-      if (!validatedPillarId) {
-        return res.status(400).json({
-          error: 'pillarId is required for auto-classification'
-        });
-      }
-
-      const classificationText = buildClassificationText(
-        normalized.data.content,
-        normalized.data.description
-      );
-
-      let classified;
-      try {
-        classified = await classifyAgainstRubric({
-          db,
-          userId,
-          text: classificationText,
-          pillarId: validatedPillarId
-        });
-      } catch (error) {
-        return res.status(error?.status || 500).json({ error: error.message });
-      }
-
-      rubricSelection = {
-        pillarId: classified.pillarId,
-        rubricItem: classified.rubricItem
-      };
-      validatedPillarId = classified.pillarId;
-      validatedBountyPillarId = classified.pillarId;
-    }
-
-    const bountyResult = await normalizeBountyForTodoCreate({
-      userId,
-      body: rubricSelection
-        ? {
-          bountyAllocations: [{
-            pillarId: rubricSelection.pillarId,
-            points: rubricSelection.rubricItem.points
-          }]
-        }
-        : (req.body || {}),
-      defaultPillarId: validatedBountyPillarId ?? validatedPillarId ?? null
-    });
-    if (bountyResult.error) {
-      return res.status(400).json({ error: bountyResult.error });
+      return res.status(500).json({ error: error.message || 'Failed to classify todo assignment' });
     }
 
     const now = nowTs();
@@ -1046,7 +1260,7 @@ router.post('/', async (req, res) => {
       dueDate: normalized.data.dueDate,
       sectionId: normalized.data.sectionId,
       priority: normalized.data.priority,
-      pillarId: validatedPillarId ?? null,
+      pillarId: null,
       parentId: normalized.data.parentId,
       status: normalized.data.status,
       labels: normalized.data.labels,
@@ -1055,12 +1269,11 @@ router.post('/', async (req, res) => {
       updatedAt: now,
       completedAt: normalized.data.status === 'completed' ? now : null,
       archivedAt: null,
-      bountyPoints: bountyResult.allocations && bountyResult.allocations.length === 1 ? bountyResult.allocations[0].points : (normalized.data.bountyPoints ?? null),
-      bountyAllocations: bountyResult.allocations || null,
-      bountyPillarId: validatedBountyPillarId,
-      rubricItemId: rubricSelection
-        ? rubricSelection.rubricItem.id
-        : (normalized.data.rubricItemId ?? null),
+      assignmentMode: assignmentResult.assignmentMode,
+      bountyPoints: assignmentResult.totalPoints,
+      bountyAllocations: assignmentResult.allocations.length ? assignmentResult.allocations : null,
+      bountyPillarId: null,
+      rubricItemId: null,
       bountyPaidAt: null
     };
 
@@ -1078,7 +1291,7 @@ router.post('/', async (req, res) => {
         dueDate: payload.dueDate,
         sectionId: payload.sectionId,
         priority: payload.priority,
-        pillarId: payload.pillarId,
+        pillarId: null,
         parentId: todoRef.id,
         status: 'active',
         labels: [],
@@ -1112,12 +1325,18 @@ router.post('/', async (req, res) => {
       ...toResponseTodo(payload),
       subtasks: createdSubtasks.map(toResponseTodo)
     };
+    const classificationSummary = {
+      matchedPillarIds: assignmentResult.matchedPillarIds,
+      trimmedPillarIds: assignmentResult.trimmedPillarIds,
+      method: assignmentResult.method
+    };
     const scheduled = buildTodoScheduledProjection(todoResponse);
 
     // Return ergonomic response while keeping legacy top-level todo fields.
     return res.status(201).json({
       ...todoResponse,
       todo: todoResponse,
+      classificationSummary,
       scheduled
     });
   } catch (error) {
@@ -1481,90 +1700,68 @@ const updateTodoHandler = async (req, res) => {
       updatedAt: now
     };
 
-    if (Object.prototype.hasOwnProperty.call(normalized.data, 'pillarId')) {
+    let classificationSummary = null;
+    if (Object.prototype.hasOwnProperty.call(normalized.data, 'assignment')) {
+      let assignmentResult;
       try {
-        payload.pillarId = await resolveValidatedPillarId({
-          db,
+        assignmentResult = await classifyTodoAssignment({
           userId,
-          pillarId: normalized.data.pillarId
+          content: normalized.data.content || existing.content || '',
+          description: Object.prototype.hasOwnProperty.call(normalized.data, 'description')
+            ? (normalized.data.description || '')
+            : (existing.description || ''),
+          assignment: normalized.data.assignment
         });
       } catch (error) {
-        if (isInvalidPillarIdError(error)) {
-          return res.status(400).json({ error: 'Invalid pillarId' });
+        if (error?.status) {
+          return res.status(error.status).json({ error: error.message });
         }
-        throw error;
+        return res.status(500).json({ error: error.message || 'Failed to classify todo assignment' });
       }
-    }
 
-    if (Object.prototype.hasOwnProperty.call(normalized.data, 'bountyPillarId')) {
-      if (normalized.data.bountyPillarId === null) {
-        payload.bountyPillarId = null;
-      } else {
-        try {
-          payload.bountyPillarId = await resolveValidatedPillarId({
-            db,
-            userId,
-            pillarId: normalized.data.bountyPillarId
-          });
-        } catch (error) {
-          if (isInvalidPillarIdError(error)) {
-            return res.status(400).json({ error: 'Invalid bountyPillarId' });
-          }
-          throw error;
-        }
-      }
-    }
-
-    let rubricSelection = null;
-    if (Object.prototype.hasOwnProperty.call(normalized.data, 'rubricItemId')) {
-      if (normalized.data.rubricItemId === null) {
-        payload.rubricItemId = null;
-      } else {
-        const pillarIdForRubric = Object.prototype.hasOwnProperty.call(payload, 'pillarId')
-          ? (payload.pillarId ?? null)
-          : (existing.pillarId ?? null);
-
-        try {
-          rubricSelection = await resolveRubricSelection({
-            db,
-            userId,
-            pillarId: pillarIdForRubric,
-            rubricItemId: normalized.data.rubricItemId
-          });
-        } catch (error) {
-          return res.status(error?.status || 400).json({ error: error.message });
-        }
-
-        payload.rubricItemId = rubricSelection.rubricItem.id;
-        payload.pillarId = rubricSelection.pillarId;
-        payload.bountyPillarId = rubricSelection.pillarId;
-      }
-    }
-
-    const bountyUpdate = await normalizeBountyForTodoUpdate({
-      userId,
-      body: rubricSelection
-        ? {
-          bountyAllocations: [{
-            pillarId: rubricSelection.pillarId,
-            points: rubricSelection.rubricItem.points
-          }]
-        }
-        : (req.body || {}),
-      defaultPillarId: payload.pillarId ?? existing.pillarId ?? null
-    });
-    if (bountyUpdate.error) {
-      return res.status(400).json({ error: bountyUpdate.error });
-    }
-    if (bountyUpdate.provided) {
-      if (bountyUpdate.clear) {
-        payload.bountyAllocations = null;
-        payload.bountyPoints = null;
-      } else if (bountyUpdate.allocations) {
-        payload.bountyAllocations = bountyUpdate.allocations;
-        payload.bountyPoints = bountyUpdate.allocations.length === 1 ? bountyUpdate.allocations[0].points : null;
-      }
+      payload.assignmentMode = assignmentResult.assignmentMode;
+      payload.pillarId = null;
+      payload.bountyPillarId = null;
+      payload.rubricItemId = null;
+      payload.bountyAllocations = assignmentResult.allocations.length ? assignmentResult.allocations : null;
+      payload.bountyPoints = assignmentResult.totalPoints;
       payload.bountyPaidAt = null;
+      classificationSummary = {
+        matchedPillarIds: assignmentResult.matchedPillarIds,
+        trimmedPillarIds: assignmentResult.trimmedPillarIds,
+        method: assignmentResult.method
+      };
+    } else {
+      if (Object.prototype.hasOwnProperty.call(normalized.data, 'pillarId')) {
+        payload.pillarId = null;
+      }
+
+      if (Object.prototype.hasOwnProperty.call(normalized.data, 'bountyPillarId')) {
+        payload.bountyPillarId = null;
+      }
+
+      if (Object.prototype.hasOwnProperty.call(normalized.data, 'rubricItemId')) {
+        payload.rubricItemId = null;
+      }
+
+      const bountyUpdate = await normalizeBountyForTodoUpdate({
+        userId,
+        body: req.body || {},
+        defaultPillarId: null
+      });
+      if (bountyUpdate.error) {
+        return res.status(400).json({ error: bountyUpdate.error });
+      }
+      if (bountyUpdate.provided) {
+        if (bountyUpdate.clear) {
+          payload.bountyAllocations = null;
+          payload.bountyPoints = null;
+        } else if (bountyUpdate.allocations) {
+          payload.bountyAllocations = bountyUpdate.allocations;
+          payload.bountyPoints = coerceTotalPoints(bountyUpdate.totalPoints);
+        }
+        payload.bountyPaidAt = null;
+      }
     }
 
     if (Object.prototype.hasOwnProperty.call(normalized.data, 'status')) {
@@ -1599,11 +1796,15 @@ const updateTodoHandler = async (req, res) => {
     });
     const todoResponse = toResponseTodo(updated || existing);
     const scheduled = buildTodoScheduledProjection(todoResponse);
-    return res.json({
+    const response = {
       ...todoResponse,
       todo: todoResponse,
       scheduled
-    });
+    };
+    if (classificationSummary) {
+      response.classificationSummary = classificationSummary;
+    }
+    return res.json(response);
   } catch (error) {
     console.error(`[todos] ${req.method} /:id error:`, error);
     return res.status(500).json({ error: error.message });

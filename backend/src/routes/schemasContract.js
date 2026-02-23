@@ -247,6 +247,16 @@ function buildTodoSchema() {
           date: { type: 'string', format: 'date' },
           blockId: { type: 'string' }
         }
+      },
+      classificationSummary: {
+        type: 'object',
+        nullable: true,
+        additionalProperties: false,
+        properties: {
+          matchedPillarIds: { type: 'array', items: { type: 'string' } },
+          trimmedPillarIds: { type: 'array', items: { type: 'string' } },
+          method: { type: 'string' }
+        }
       }
     }
   };
@@ -278,7 +288,7 @@ function buildTodoSchema() {
       },
       pillarId: {
         type: 'string',
-        description: 'Use "none" to filter todos with no pillar assignment. Omit for all pillars.'
+        description: 'Use "none" to filter todos with no bounty allocations. Otherwise matches todos where any allocation pillarId equals the value.'
       },
       archived: {
         type: 'string',
@@ -342,6 +352,14 @@ function buildTodoSchema() {
         status: { type: 'string', enum: TODO_STATUS_ENUM },
         order: { type: 'integer' },
         schedule: todoScheduleSchema,
+        assignment: {
+          type: 'object',
+          additionalProperties: false,
+          properties: {
+            mode: { type: 'string', enum: ['auto', 'manual'] },
+            pillarIds: { type: 'array', items: { type: 'string' } }
+          }
+        },
         labels: { type: 'array', items: { type: 'string' } },
         pillarId: { type: 'string', nullable: true },
         bountyPoints: { type: 'integer', min: 1, max: 150, nullable: true },
@@ -353,13 +371,12 @@ function buildTodoSchema() {
         },
         autoClassify: {
           type: 'boolean',
-          description: 'When true, backend classifies the todo text against the selected pillar rubric when rubricItemId is not provided.'
+          description: 'Deprecated for todo assignment. Use assignment.mode=auto|manual.'
         },
         bountyAllocations: {
           type: 'array',
           nullable: true,
           minItems: 1,
-          maxItems: 3,
           items: {
             type: 'object',
             required: ['pillarId', 'points'],
@@ -387,6 +404,14 @@ function buildTodoSchema() {
         status: { type: 'string', enum: TODO_STATUS_ENUM },
         order: { type: 'integer' },
         schedule: todoScheduleSchema,
+        assignment: {
+          type: 'object',
+          additionalProperties: false,
+          properties: {
+            mode: { type: 'string', enum: ['auto', 'manual'] },
+            pillarIds: { type: 'array', items: { type: 'string' } }
+          }
+        },
         labels: { type: 'array', items: { type: 'string' } },
         pillarId: { type: 'string', nullable: true },
         bountyPoints: { type: 'integer', min: 1, max: 150, nullable: true },
@@ -400,7 +425,6 @@ function buildTodoSchema() {
           type: 'array',
           nullable: true,
           minItems: 1,
-          maxItems: 3,
           items: {
             type: 'object',
             required: ['pillarId', 'points'],

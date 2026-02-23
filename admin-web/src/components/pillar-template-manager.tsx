@@ -7,7 +7,7 @@ import type { PillarTemplateRecord } from "@/lib/pillar-templates";
 import { PageView, PageViewHeader, PageViewContent } from "@/components/design-system";
 import { PillarTemplateForm, type PillarTemplateFormState } from "@/components/pillar-template-form";
 import { TemplateRubricEditor } from "@/components/template-rubric-editor";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { ChevronLeft } from "lucide-react";
 import { getTemplateIcon } from "@/lib/pillar-template-icons";
 
@@ -20,6 +20,19 @@ const EMPTY_CREATE_FORM: PillarTemplateFormState = {
   order: "100",
   isActive: true
 };
+
+function normalizeTemplateType(value: string | null | undefined) {
+  return value?.trim().toLowerCase() ?? "";
+}
+
+function findTemplateByPathType(templates: PillarTemplateRecord[], pathType: string | null | undefined) {
+  const normalized = normalizeTemplateType(pathType);
+  if (!normalized) return null;
+
+  return (
+    templates.find((template) => template.pillarType.toLowerCase() === normalized) || null
+  );
+}
 
 function toEditForm(template: PillarTemplateRecord): PillarTemplateFormState {
   return {
@@ -45,6 +58,7 @@ export function PillarTemplateManager({
   detailsOnly = false
 }: PillarTemplateManagerProps) {
   const router = useRouter();
+  const pathname = usePathname();
   const [templates, setTemplates] = useState<PillarTemplateRecord[]>([]);
   const [selectedType, setSelectedType] = useState<string | null>(selectedTypeFromPath || null);
   const [loading, setLoading] = useState(true);
@@ -54,9 +68,34 @@ export function PillarTemplateManager({
   const [createForm, setCreateForm] = useState<PillarTemplateFormState>(EMPTY_CREATE_FORM);
   const [editForm, setEditForm] = useState<PillarTemplateFormState | null>(null);
 
+  const selectedTemplateFromPath = useMemo(
+    () => (detailsOnly ? findTemplateByPathType(templates, selectedTypeFromPath) : null),
+    [templates, selectedTypeFromPath, detailsOnly]
+  );
+  const activeTemplateType = useMemo(() => {
+    if (!pathname) {
+      return null;
+    }
+
+    const match = pathname.match(/^\/pillars\/templates\/([^/?#]+)/);
+    if (!match) {
+      return null;
+    }
+
+    return normalizeTemplateType(match[1]);
+  }, [pathname]);
+
+  const selectedTemplateType = useMemo(
+    () => normalizeTemplateType(selectedType),
+    [selectedType]
+  );
   const selectedTemplate = useMemo(
-    () => templates.find(item => item.pillarType === selectedType) || null,
-    [templates, selectedType]
+    () => (
+      detailsOnly
+        ? selectedTemplateFromPath
+        : templates.find(item => item.pillarType === selectedType) || null
+    ),
+    [detailsOnly, selectedTemplateFromPath, templates, selectedType]
   );
 
   async function loadTemplates() {
@@ -72,15 +111,6 @@ export function PillarTemplateManager({
         return a.name.localeCompare(b.name);
       });
       setTemplates(sorted);
-
-      if (selectedTypeFromPath && sorted.some(item => item.pillarType === selectedTypeFromPath)) {
-        setSelectedType(selectedTypeFromPath);
-      } else if (!selectedType && sorted.length > 0) {
-        setSelectedType(sorted[0].pillarType);
-      }
-      if (selectedType && !sorted.some(item => item.pillarType === selectedType)) {
-        setSelectedType(sorted[0]?.pillarType || null);
-      }
     } catch (loadError) {
       setError(loadError instanceof Error ? loadError.message : "Failed to load templates.");
     } finally {
@@ -92,6 +122,25 @@ export function PillarTemplateManager({
     loadTemplates();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  useEffect(() => {
+    if (detailsOnly) {
+      if (!selectedTemplateFromPath && selectedTypeFromPath) {
+        setSelectedType(selectedTypeFromPath);
+      }
+      return;
+    }
+
+    if (listOnly) {
+      return;
+    }
+
+    if (!selectedType && templates.length > 0) {
+      setSelectedType(templates[0]?.pillarType || null);
+    }
+  }, [templates, selectedType, selectedTemplateFromPath, selectedTypeFromPath, detailsOnly, listOnly]);
+
+  const detailTitle = selectedTemplate?.name || selectedTypeFromPath || "Template";
 
   useEffect(() => {
     if (!selectedTemplate) {
@@ -112,7 +161,12 @@ export function PillarTemplateManager({
         <PageViewContent>
           <Section title={null} className="mx-[56px] my-6">
             {error ? (
-              <p className="mono mb-3 rounded bg-[var(--bg-elevated)] px-3 py-2 text-xs text-[var(--ink)]">{error}</p>
+              <div className="mb-3 space-y-2">
+                <p className="mono rounded bg-[var(--bg-elevated)] px-3 py-2 text-xs text-[var(--ink)]">{error}</p>
+                <Button buttonType="button" onClick={loadTemplates} className="mono text-xs" disabled={loading}>
+                  Retry
+                </Button>
+              </div>
             ) : null}
             {loading ? <p className="text-sm text-[var(--ink-subtle)]">Loading...</p> : null}
             <ListGroup>
@@ -120,7 +174,7 @@ export function PillarTemplateManager({
                 <ListRow
                   key={template.pillarType}
                   href={`/pillars/templates/${encodeURIComponent(template.pillarType)}`}
-                  active={selectedType === template.pillarType}
+                  active={false}
                   icon={getTemplateIcon(template.icon, { size: 14 })}
                   aria-label={`Open template ${template.name}`}
                 >
@@ -135,11 +189,8 @@ export function PillarTemplateManager({
   }
 
   if (detailsOnly) {
-    const detailTitle = selectedTemplate
-      ? selectedTemplate.name
-      : selectedType
-        ? selectedType
-        : "Template";
+    const resolvedForm = selectedTemplate ? toEditForm(selectedTemplate) : null;
+    const editFormValue = editForm ?? resolvedForm;
 
     return (
       <PageView>
@@ -159,18 +210,23 @@ export function PillarTemplateManager({
         </PageViewHeader>
         <PageViewContent>
           {error ? (
-            <p className="mono mb-4 rounded bg-[var(--bg-elevated)] px-3 py-2 text-xs text-[var(--ink)]">{error}</p>
+            <div className="mb-4 space-y-2">
+              <p className="mono rounded bg-[var(--bg-elevated)] px-3 py-2 text-xs text-[var(--ink)]">{error}</p>
+              <Button buttonType="button" onClick={loadTemplates} className="mono text-xs" disabled={loading}>
+                Retry
+              </Button>
+            </div>
           ) : null}
 
           {loading ? (
             <p className="text-sm text-[var(--ink-subtle)]">Loading...</p>
           ) : (
             <section className="grid gap-4">
-              {selectedTemplate && editForm ? (
+              {selectedTemplate ? (
                 <>
                   <PillarTemplateForm
                     title={selectedTemplate.name}
-                    value={editForm}
+                    value={editFormValue}
                     submitLabel="Save Template"
                     busy={busy}
                     onChange={setEditForm}
@@ -407,6 +463,14 @@ export function PillarTemplateManager({
 
           <div className="grid gap-4 lg:grid-cols-[320px_minmax(0,1fr)]">
           <Section title={null}>
+            {error ? (
+              <div className="mb-4 space-y-2">
+                <p className="mono rounded bg-[var(--bg-elevated)] px-3 py-2 text-xs text-[var(--ink)]">{error}</p>
+                <Button buttonType="button" onClick={loadTemplates} className="mono text-xs" disabled={loading}>
+                  Retry
+                </Button>
+              </div>
+            ) : null}
             {loading ? (
               <p className="text-sm text-[var(--ink-subtle)]">Loading...</p>
             ) : null}
@@ -415,7 +479,7 @@ export function PillarTemplateManager({
                 <ListRow
                   key={template.pillarType}
                   onClick={() => setSelectedType(template.pillarType)}
-                  active={selectedType === template.pillarType}
+                  active={normalizeTemplateType(template.pillarType) === selectedTemplateType || normalizeTemplateType(template.pillarType) === activeTemplateType}
                   icon={getTemplateIcon(template.icon, { size: 14 })}
                   aria-label={`Open template ${template.name}`}
                 >

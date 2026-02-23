@@ -14,7 +14,7 @@ struct TodoView: View {
     @StateObject private var pillarPickerSource = PillarPickerDataSource()
     @State private var loadedUserId: String?
     @State private var settings = TodoViewSettings()
-    @State private var pillarPickerTarget: Todo?
+    @State private var assignmentPickerTarget: Todo?
     @State private var schedulePickerTarget: Todo?
     @State private var showingCreateTodoSheet = false
     @State private var showingSettingsSheet = false
@@ -35,6 +35,7 @@ struct TodoView: View {
                             S2ScreenHeaderView(title: "Todo")
                             createTodoButton
                             settingsRow
+                            infoNotice
 
                             if todoEntries.isEmpty {
                                 emptyState
@@ -74,13 +75,13 @@ struct TodoView: View {
             guard oldValue != newValue else { return }
             reloadTodosForCurrentUser()
         }
-        .sheet(item: $pillarPickerTarget) { target in
-            PillarPickerSheet(
+        .sheet(item: $assignmentPickerTarget) { target in
+            TodoAssignmentSheet(
                 title: "Retag Todo",
                 pillars: pillarPickerSource.pillars,
-                selectedPillarId: target.pillarId
-            ) { selectedPillarId in
-                viewModel.setTodoPillar(todoId: target.id, pillarId: selectedPillarId)
+                initialSelection: target.assignmentSelection
+            ) { selection in
+                viewModel.setTodoAssignment(todoId: target.id, assignment: selection)
             }
         }
         .sheet(item: $schedulePickerTarget) { target in
@@ -92,8 +93,8 @@ struct TodoView: View {
             }
         }
         .sheet(isPresented: $showingCreateTodoSheet) {
-            CreateTodoSheet(pillars: pillarPickerSource.pillars) { title, dueDate, pillarId in
-                viewModel.createTodo(title: title, dueDate: dueDate, pillarId: pillarId)
+            CreateTodoSheet(pillars: pillarPickerSource.pillars) { title, dueDate, assignment in
+                viewModel.createTodo(title: title, dueDate: dueDate, assignment: assignment)
             }
         }
         .sheet(isPresented: $showingSettingsSheet) {
@@ -101,6 +102,32 @@ struct TodoView: View {
                 settings: $settings,
                 pillars: pillarPickerSource.pillars
             )
+        }
+    }
+
+    private var infoNotice: some View {
+        Group {
+            if let info = viewModel.infoMessage, !info.isEmpty {
+                HStack(spacing: S2.Spacing.sm) {
+                    Text(info)
+                        .font(S2.MyDay.Typography.fieldLabel)
+                        .foregroundColor(S2.MyDay.Colors.titleText)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+
+                    Button {
+                        viewModel.clearInfoMessage()
+                    } label: {
+                        Image(systemName: "xmark")
+                            .font(.system(size: 12, weight: .semibold))
+                            .foregroundColor(S2.MyDay.Colors.subtitleText)
+                    }
+                    .buttonStyle(.plain)
+                }
+                .padding(.horizontal, S2.Spacing.sm)
+                .padding(.vertical, S2.Spacing.sm)
+                .background(S2.MyDay.Colors.sectionBackground)
+                .clipShape(RoundedRectangle(cornerRadius: S2.CornerRadius.sm, style: .continuous))
+            }
         }
     }
 
@@ -184,8 +211,8 @@ struct TodoView: View {
                 }
 
                 PillarTagChip(
-                    title: pillarLabel(for: entry.pillarId),
-                    color: pillarColor(for: entry.pillarId)
+                    title: pillarLabel(for: entry),
+                    color: pillarColor(for: entry)
                 )
 
                 Button {
@@ -201,7 +228,7 @@ struct TodoView: View {
                     .buttonStyle(.plain)
 
                 Button {
-                    pillarPickerTarget = entry
+                    assignmentPickerTarget = entry
                 } label: {
                     Image(systemName: "tag")
                         .font(.system(size: 12, weight: .semibold))
@@ -268,9 +295,9 @@ struct TodoView: View {
             case .all:
                 return true
             case .untagged:
-                return item.pillarId == nil
+                return item.allocationPillarIds.isEmpty
             case .pillar(let pillarId):
-                return item.pillarId == pillarId
+                return item.allocationPillarIds.contains(pillarId)
             }
         }
 
@@ -305,7 +332,7 @@ struct TodoView: View {
     }
 
     private func bountyLabel(_ todo: Todo) -> String? {
-        guard let points = todo.bountyPoints, points > 0 else { return nil }
+        guard let points = todo.resolvedBountyPoints, points > 0 else { return nil }
         return "+\(points)"
     }
 
@@ -313,15 +340,20 @@ struct TodoView: View {
         viewModel.setTodoCompletion(todoId: entry.id, isCompleted: !entry.isCompleted)
     }
 
-    private func pillarLabel(for pillarId: String?) -> String {
-        if let name = pillarPickerSource.pillarName(for: pillarId) {
-            return name
+    private func pillarLabel(for todo: Todo) -> String {
+        let pillarIds = todo.allocationPillarIds
+        guard !pillarIds.isEmpty else {
+            return "No Pillar"
         }
-        return pillarId == nil ? "No Pillar" : "Tagged"
+        let names = pillarIds.map { pillarPickerSource.pillarName(for: $0) ?? "Pillar" }
+        return names.joined(separator: " + ")
     }
 
-    private func pillarColor(for pillarId: String?) -> Color {
-        pillarPickerSource.pillar(for: pillarId)?.colorValue ?? S2.MyDay.Colors.subtitleText
+    private func pillarColor(for todo: Todo) -> Color {
+        guard let firstPillarId = todo.allocationPillarIds.first else {
+            return S2.MyDay.Colors.subtitleText
+        }
+        return pillarPickerSource.pillar(for: firstPillarId)?.colorValue ?? S2.MyDay.Colors.subtitleText
     }
 
     private var settingsSummary: String {
@@ -373,6 +405,143 @@ struct TodoView: View {
     private func reloadTodosForCurrentUser() {
         guard let userId = firebaseManager.currentUser?.uid else { return }
         viewModel.loadTodos(userId: userId, includeCompleted: settings.includeCompleted)
+    }
+}
+
+private struct TodoAssignmentSheet: View {
+    let title: String
+    let pillars: [Pillar]
+    let onSave: (TodoAssignmentSelection) -> Void
+
+    @Environment(\.dismiss) private var dismiss
+    @State private var selection: TodoAssignmentSelection
+
+    init(
+        title: String,
+        pillars: [Pillar],
+        initialSelection: TodoAssignmentSelection,
+        onSave: @escaping (TodoAssignmentSelection) -> Void
+    ) {
+        self.title = title
+        self.pillars = pillars
+        self.onSave = onSave
+        _selection = State(initialValue: initialSelection)
+    }
+
+    private var canSave: Bool {
+        if selection.mode == .manual && selection.pillarIds.isEmpty {
+            return false
+        }
+        return true
+    }
+
+    var body: some View {
+        NavigationStack {
+            List {
+                Section("Assignment") {
+                    assignmentRow(
+                        title: "Auto",
+                        subtitle: "Let classifier pick the best pillar matches.",
+                        color: S2.MyDay.Colors.interactiveTint,
+                        isSelected: selection.mode == .auto
+                    ) {
+                        selection = .auto
+                    }
+
+                    ForEach(pillars) { pillar in
+                        let isSelected = selection.mode == .manual && selection.pillarIds.contains(pillar.id)
+                        assignmentRow(
+                            title: pillar.name,
+                            subtitle: nil,
+                            color: pillar.colorValue,
+                            isSelected: isSelected
+                        ) {
+                            toggleManualSelection(pillar.id)
+                        }
+                    }
+                }
+            }
+            .listStyle(.insetGrouped)
+            .navigationTitle(title)
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") {
+                        dismiss()
+                    }
+                    .foregroundColor(S2.MyDay.Colors.subtitleText)
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Save") {
+                        onSave(normalizedSelection())
+                        dismiss()
+                    }
+                    .disabled(!canSave)
+                    .foregroundColor(canSave ? S2.MyDay.Colors.interactiveTint : S2.MyDay.Colors.subtitleText)
+                }
+            }
+        }
+    }
+
+    private func toggleManualSelection(_ pillarId: String) {
+        let normalized = pillarId.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !normalized.isEmpty else { return }
+
+        var selected = selection.pillarIds
+        if let index = selected.firstIndex(of: normalized) {
+            selected.remove(at: index)
+        } else {
+            selected.append(normalized)
+        }
+
+        if selected.isEmpty {
+            selection = .auto
+        } else {
+            selection = .manual(selected)
+        }
+    }
+
+    private func normalizedSelection() -> TodoAssignmentSelection {
+        if selection.mode == .manual && !selection.pillarIds.isEmpty {
+            return .manual(selection.pillarIds)
+        }
+        return .auto
+    }
+
+    private func assignmentRow(
+        title: String,
+        subtitle: String?,
+        color: Color,
+        isSelected: Bool,
+        action: @escaping () -> Void
+    ) -> some View {
+        Button(action: action) {
+            HStack(spacing: S2.Spacing.sm) {
+                Circle()
+                    .fill(color)
+                    .frame(width: 10, height: 10)
+
+                VStack(alignment: .leading, spacing: S2.Spacing.xs) {
+                    Text(title)
+                        .font(S2.MyDay.Typography.fieldValue)
+                        .foregroundColor(S2.MyDay.Colors.titleText)
+                    if let subtitle {
+                        Text(subtitle)
+                            .font(S2.MyDay.Typography.fieldLabel)
+                            .foregroundColor(S2.MyDay.Colors.subtitleText)
+                    }
+                }
+
+                Spacer()
+
+                if isSelected {
+                    Image(systemName: "checkmark")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundColor(S2.MyDay.Colors.interactiveTint)
+                }
+            }
+        }
+        .buttonStyle(.plain)
     }
 }
 

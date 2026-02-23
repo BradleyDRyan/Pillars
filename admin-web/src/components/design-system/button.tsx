@@ -6,6 +6,9 @@ import type { CSSProperties, ComponentPropsWithoutRef } from "react";
 type ButtonVisualType = "default" | "primary" | "tertiary";
 type ButtonClassName = ComponentPropsWithoutRef<typeof BaseUIButton>["className"];
 type NativeButtonType = NonNullable<ComponentPropsWithoutRef<typeof BaseUIButton>["type"]>;
+type ButtonStyle = ComponentPropsWithoutRef<typeof BaseUIButton>["style"];
+type ButtonStyleFn = Extract<NonNullable<ButtonStyle>, (...args: any[]) => any>;
+type ButtonState = Parameters<ButtonStyleFn>[0];
 
 type AdminButtonBaseProps = Omit<
   ComponentPropsWithoutRef<typeof BaseUIButton>,
@@ -89,7 +92,7 @@ export function Button({
 
   const mergedStyle =
     typeof styleOverride === "function"
-      ? (state: unknown) => {
+      ? (state: ButtonState) => {
           const computed = styleOverride(state) || {};
           return { ...baseStyle, ...computed };
         }

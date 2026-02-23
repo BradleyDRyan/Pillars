@@ -146,6 +146,12 @@ export type SchemasResponse = {
   eventTypes: string[];
 };
 
+export type TodoMutationClassificationSummary = {
+  matchedPillarIds: string[];
+  trimmedPillarIds: string[];
+  method?: string;
+};
+
 export type SchemaFetchResult =
   | { ok: true; data: SchemasResponse; sourceUrl: string }
   | { ok: false; error: string; sourceUrl: string };

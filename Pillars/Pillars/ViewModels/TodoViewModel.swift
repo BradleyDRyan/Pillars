@@ -6,7 +6,6 @@
 //
 
 import Foundation
-import FirebaseAuth
 import FirebaseFirestore
 
 @MainActor
@@ -14,9 +13,11 @@ final class TodoViewModel: ObservableObject, BackendRequesting {
     @Published var todos: [Todo] = []
     @Published var isLoading = true
     @Published var errorMessage: String?
+    @Published var infoMessage: String?
 
     private var todoListener: ListenerRegistration?
     private var includeCompleted = false
+    private let api = APIService.shared
 
     func loadTodos(userId: String, includeCompleted: Bool = false) {
         self.includeCompleted = includeCompleted
@@ -72,49 +73,41 @@ final class TodoViewModel: ObservableObject, BackendRequesting {
     func createTodo(
         title: String,
         dueDate: String?,
-        pillarId: String? = nil,
+        assignment: TodoAssignmentSelection,
         section: DaySection.TimeSection = .afternoon
     ) {
         let trimmed = title.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
+        _ = section
 
         Task {
             do {
-                guard let user = Auth.auth().currentUser else { throw BackendError.notAuthenticated }
-                let now = Date().timeIntervalSince1970
-                let todoRef = Firestore.firestore().collection("todos").document()
-                let normalizedPillarId = normalizedPillarIdentifier(pillarId)
-
-                let body: [String: Any] = [
-                    "id": todoRef.documentID,
-                    "userId": user.uid,
-                    "content": trimmed,
-                    "description": "",
-                    "dueDate": dueDate ?? NSNull(),
-                    "sectionId": section.rawValue,
-                    "order": 0,
-                    "status": "active",
-                    "pillarId": normalizedPillarId ?? NSNull(),
-                    "parentId": NSNull(),
-                    "createdAt": now,
-                    "updatedAt": now,
-                    "completedAt": NSNull(),
-                    "archivedAt": NSNull()
-                ]
-                try await todoRef.setData(body)
+                let response = try await api.createTodo(
+                    content: trimmed,
+                    dueDate: dueDate,
+                    assignment: assignment
+                )
+                if let trimmedPillars = response.classificationSummary?.trimmedPillarIds,
+                   !trimmedPillars.isEmpty {
+                    self.infoMessage = "Some pillar matches were trimmed to fit the point cap."
+                }
             } catch {
                 self.errorMessage = "Failed to add todo: \(friendlyErrorMessage(error))"
             }
         }
     }
 
-    func setTodoPillar(todoId: String, pillarId: String?) {
+    func setTodoAssignment(todoId: String, assignment: TodoAssignmentSelection) {
         Task {
             do {
-                try await Firestore.firestore().collection("todos").document(todoId).setData([
-                    "pillarId": normalizedPillarIdentifier(pillarId) ?? NSNull(),
-                    "updatedAt": Date().timeIntervalSince1970
-                ], merge: true)
+                let response = try await api.updateTodoAssignment(
+                    todoId: todoId,
+                    assignment: assignment
+                )
+                if let trimmedPillars = response.classificationSummary?.trimmedPillarIds,
+                   !trimmedPillars.isEmpty {
+                    self.infoMessage = "Some pillar matches were trimmed to fit the point cap."
+                }
             } catch {
                 self.errorMessage = "Failed to retag todo: \(friendlyErrorMessage(error))"
             }
@@ -189,6 +182,10 @@ final class TodoViewModel: ObservableObject, BackendRequesting {
         }
     }
 
+    func clearInfoMessage() {
+        infoMessage = nil
+    }
+
     private func todoItem(from document: QueryDocumentSnapshot) -> Todo? {
         let data = document.data()
         guard let content = data["content"] as? String else { return nil }
@@ -203,7 +200,9 @@ final class TodoViewModel: ObservableObject, BackendRequesting {
             pillarId: data["pillarId"] as? String,
             parentId: data["parentId"] as? String,
             bountyPoints: data["bountyPoints"] as? Int,
+            bountyAllocations: parseBountyAllocations(data["bountyAllocations"]),
             bountyPillarId: data["bountyPillarId"] as? String,
+            assignmentMode: data["assignmentMode"] as? String,
             bountyPaidAt: timestampValue(data["bountyPaidAt"]),
             createdAt: timestampValue(data["createdAt"]),
             updatedAt: timestampValue(data["updatedAt"]),
@@ -256,6 +255,20 @@ final class TodoViewModel: ObservableObject, BackendRequesting {
         }
 
         return entries.isEmpty ? "none" : entries.joined(separator: ",")
+    }
+
+    private func parseBountyAllocations(_ raw: Any?) -> [TodoBountyAllocation]? {
+        guard let allocations = raw as? [[String: Any]], !allocations.isEmpty else {
+            return nil
+        }
+
+        let mapped = allocations.compactMap { allocation -> TodoBountyAllocation? in
+            guard let pillarId = allocation["pillarId"] as? String else { return nil }
+            guard let points = intValue(allocation["points"]), points > 0 else { return nil }
+            return TodoBountyAllocation(pillarId: pillarId, points: points)
+        }
+
+        return mapped.isEmpty ? nil : mapped
     }
 
     private func verifyBountyTrigger(todoId: String, expectPaid: Bool) async {
@@ -311,9 +324,4 @@ final class TodoViewModel: ObservableObject, BackendRequesting {
         print("⚠️ [Todo Bounty] Verification timed out todoId=\(todoId) expectedPaid=\(expectPaid)")
     }
 
-    private func normalizedPillarIdentifier(_ rawPillarId: String?) -> String? {
-        guard let rawPillarId else { return nil }
-        let trimmed = rawPillarId.trimmingCharacters(in: .whitespacesAndNewlines)
-        return trimmed.isEmpty ? nil : trimmed
-    }
 }

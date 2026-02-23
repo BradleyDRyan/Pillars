@@ -58,13 +58,27 @@ app.set('trust proxy', 1);
 
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: 100,
+  max: 1000,
   standardHeaders: true,
   legacyHeaders: false,
-  skip: (req) => process.env.NODE_ENV === 'development',
+  skip: (req) =>
+    process.env.NODE_ENV === 'development' ||
+    req.path.startsWith('/pillar-templates'),
   keyGenerator: (req) => {
     return req.headers['x-forwarded-for']?.split(',')[0] || 
            req.connection.remoteAddress || 
+           'unknown';
+  }
+});
+
+const templateLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 5000,
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: (req) => {
+    return req.headers['x-forwarded-for']?.split(',')[0] ||
+           req.connection.remoteAddress ||
            'unknown';
   }
 });
@@ -79,6 +93,7 @@ if (process.env.NODE_ENV !== 'production') {
 }
 
 app.use('/api', limiter);
+app.use('/api/pillar-templates', templateLimiter);
 
 app.get('/', (req, res) => {
   res.json({ 

@@ -216,19 +216,19 @@ export function PillarColorManager() {
             onChange={(event) => setCreateForm(current => ({ ...current, id: event.target.value }))}
             onBlur={(event) => setCreateForm(current => ({ ...current, id: normalizeToken(event.target.value) }))}
             placeholder="color token (orange)"
-            className="mono rounded-md border border-[var(--line)] bg-[var(--bg)] px-2 py-2 text-sm"
+            className="mono rounded-md border border-[var(--bg-border)] bg-[var(--bg)] px-2 py-2 text-sm"
           />
           <Input
             value={createForm.label}
             onChange={(event) => setCreateForm(current => ({ ...current, label: event.target.value }))}
             placeholder="label"
-            className="rounded-md border border-[var(--line)] bg-[var(--bg)] px-2 py-2 text-sm"
+            className="rounded-md border border-[var(--bg-border)] bg-[var(--bg)] px-2 py-2 text-sm"
           />
           <Input
             value={createForm.order}
             onChange={(event) => setCreateForm(current => ({ ...current, order: event.target.value }))}
             placeholder="order"
-            className="mono rounded-md border border-[var(--line)] bg-[var(--bg)] px-2 py-2 text-sm"
+            className="mono rounded-md border border-[var(--bg-border)] bg-[var(--bg)] px-2 py-2 text-sm"
           />
           <Button
             onClick={createColor}
@@ -273,11 +273,11 @@ export function PillarColorManager() {
             const draft = draftFor(color);
             const isSaving = savingId === color.id;
             return (
-              <article key={color.id} className="rounded-md border border-[var(--line)] bg-[var(--bg)] p-3">
+              <article key={color.id} className="rounded-md border border-[var(--bg-border)] bg-[var(--bg)] p-3">
                 <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
                   <div className="flex items-center gap-2">
                     <span
-                      className="h-5 w-5 rounded border border-[var(--line)]"
+                      className="h-5 w-5 rounded border border-[var(--bg-border)]"
                       style={{ backgroundColor: resolveColorHexForToken(color.id) }}
                     />
                     <p className="mono text-xs text-[var(--ink-subtle)]">{color.id}</p>
@@ -312,7 +312,7 @@ export function PillarColorManager() {
                         }
                       }))
                     }
-                    className="rounded-md border border-[var(--line)] px-2 py-2 text-sm"
+                    className="rounded-md border border-[var(--bg-border)] px-2 py-2 text-sm"
                   />
                   <Input
                     value={draft.order}
@@ -325,7 +325,7 @@ export function PillarColorManager() {
                         }
                       }))
                     }
-                    className="mono rounded-md border border-[var(--line)] px-2 py-2 text-sm"
+                    className="mono rounded-md border border-[var(--bg-border)] px-2 py-2 text-sm"
                   />
                   <label className="inline-flex items-center gap-2 text-sm text-[var(--ink-subtle)]">
                     <input

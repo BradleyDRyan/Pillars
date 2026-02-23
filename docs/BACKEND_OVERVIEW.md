@@ -126,17 +126,22 @@ Day template scheduling:
 - Template-based day generation is disabled; defaults must be pushed explicitly via `POST /api/plan/by-date/:date`.
 
 Pillar-linked primitive contract:
-- `pillarId` is first-class and nullable on `todo`, `habit`, and Day-native `block` payloads.
+- `pillarId` remains nullable on `habit` and Day-native `block` payloads.
+- Todos are allocation-first: assignment and filtering are based on `bountyAllocations` rather than a primary `pillarId`.
 - `POST /api/pillars` requires `pillarType` when `rubricItems` is omitted.
 - `pillarType=custom` creates an empty rubric; non-custom `pillarType` copies active rubric defaults from `pillarTemplates`.
 - Copied template rubric items are a snapshot at creation time (`metadata.templateSource`) and are never back-propagated from later template edits.
 - Pillar visuals are token-only. Backend publishes selectable options (`id`, `label`, ordering, active flags, and icon `defaultColorToken`); clients render token values locally.
-- `rubricItemId` is optional on `todo` and `habit`; when provided, backend resolves pillar + bounty points from the pillar rubric item.
-- On todo/habit create, when `rubricItemId` is omitted, backend auto-classifies only when `source=clawdbot` or `autoClassify=true` (requires `pillarId`).
+- Todo create/update accepts assignment contract:
+- `assignment.mode=auto` (default): backend classifies across all pillar rubrics (up to 3 matches).
+- `assignment.mode=manual` with `assignment.pillarIds`: backend classifies within each selected pillar.
+- Todo bounty allocations are trimmed to total cap (150) by dropping lowest allocations first; response includes `classificationSummary.trimmedPillarIds` when trimming occurs.
+- `rubricItemId` and `pillarId` on todo are legacy/deprecated fields and are not used for multi-pillar assignment behavior.
+- Habits keep existing single-pillar rubric behavior (`rubricItemId` + optional `autoClassify`).
 - `POST /api/point-events` accepts `rubricItemId` (plus optional `pillarId`) as an alternative to explicit allocations, and supports reason-driven classification when both `allocations` and `rubricItemId` are omitted.
 - Validation is strict: provided `pillarId` must belong to the authenticated user, otherwise `400 Invalid pillarId`.
 - Day projection mirrors primitive tags:
-- projected todo block `pillarId` mirrors `todo.pillarId` (`proj_todo_<todoId>`)
+- projected todo block `pillarId` may be null when todo uses multi-allocation assignment (no primary pillar semantics)
 - projected habit block `pillarId` mirrors `habit.pillarId` (`proj_habit_<habitId>`)
 - Filtering:
 - `GET /api/todos` supports:
@@ -146,7 +151,7 @@ Pillar-linked primitive contract:
 - `q=<search>` (content + description + labels, case-insensitive)
 - `sectionId=morning|afternoon|evening`
 - `parentId=none|any|all|<todoId>` (`none` default)
-- `pillarId=<id>|none`
+- `pillarId=<id>|none` where `<id>` matches any todo bounty allocation pillar id and `none` means no allocations
 - `includeSubtasks=true|false` and `flat=true|false`
 - legacy aliases: `search` for `q`, `includeArchived` for `archived`
 - `GET /api/habits` supports:

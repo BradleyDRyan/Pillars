@@ -215,6 +215,56 @@ class APIService: ObservableObject {
         return try await handleResponse(data, response, nil, type: PointEventsResponse.self).items
     }
 
+    // MARK: - Todos
+
+    func createTodo(
+        content: String,
+        dueDate: String?,
+        assignment: TodoAssignmentSelection
+    ) async throws -> TodoMutationResponse {
+        _ = try await getFirebaseToken()
+        guard let url = URL(string: "\(baseURL)/todos") else {
+            throw APIError.invalidURL("\(baseURL)/todos")
+        }
+
+        var payload: [String: Any] = [
+            "content": content,
+            "assignment": [
+                "mode": assignment.mode.rawValue,
+                "pillarIds": assignment.mode == .manual ? assignment.pillarIds : []
+            ]
+        ]
+        if let dueDate {
+            payload["dueDate"] = dueDate
+        }
+
+        let body = try JSONSerialization.data(withJSONObject: payload, options: [])
+        let request = createRequest(url: url, method: "POST", body: body)
+        let (data, response) = try await session.data(for: request)
+        return try await handleResponse(data, response, nil, type: TodoMutationResponse.self)
+    }
+
+    func updateTodoAssignment(
+        todoId: String,
+        assignment: TodoAssignmentSelection
+    ) async throws -> TodoMutationResponse {
+        _ = try await getFirebaseToken()
+        guard let url = URL(string: "\(baseURL)/todos/\(todoId)") else {
+            throw APIError.invalidURL("\(baseURL)/todos/\(todoId)")
+        }
+
+        let payload: [String: Any] = [
+            "assignment": [
+                "mode": assignment.mode.rawValue,
+                "pillarIds": assignment.mode == .manual ? assignment.pillarIds : []
+            ]
+        ]
+        let body = try JSONSerialization.data(withJSONObject: payload, options: [])
+        let request = createRequest(url: url, method: "PATCH", body: body)
+        let (data, response) = try await session.data(for: request)
+        return try await handleResponse(data, response, nil, type: TodoMutationResponse.self)
+    }
+
     // MARK: - Principles
     
     func fetchPrinciples(pillarId: String? = nil) async throws -> [Principle] {
@@ -289,6 +339,11 @@ enum APIError: LocalizedError {
 struct PointEventsResponse: Codable {
     let items: [PointEvent]
     let count: Int
+}
+
+struct TodoMutationResponse: Decodable {
+    let todo: Todo
+    let classificationSummary: TodoClassificationSummary?
 }
 
 private struct PillarSchemasEnvelope: Codable {

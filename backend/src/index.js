@@ -52,7 +52,17 @@ const PORT = process.env.PORT || 4310;
 
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: 100
+  max: 1000,
+  skip: (req) => {
+    const requestPath = req.path || "";
+    const requestUrl = req.originalUrl || "";
+    return requestPath.startsWith('/pillar-templates') || requestUrl.startsWith('/api/pillar-templates');
+  }
+});
+
+const templateLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 100000
 });
 
 app.use(helmet());
@@ -61,6 +71,7 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(morgan('dev'));
 app.use('/api', limiter);
+app.use('/api/pillar-templates', templateLimiter);
 
 app.get('/', (req, res) => {
   res.json({ 

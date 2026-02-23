@@ -66,10 +66,10 @@ Use this skill when the user asks you to read or modify their Pillars app data.
   - Supports: `days`, `fromDate`, `toDate`, `include=todos,habits,pillars,principles,insights` (unknown include tokens are ignored), `resolve=blockInheritance` (also `resolve=true|1|yes|on`), `todoStatus=active|completed|all`, `todoArchived=exclude|include|only`
 - Todos:
   - `GET /api/todos` (supports `?status=active|completed|all`, `?dueDate=YYYY-MM-DD|none`, `?archived=exclude|include|only`, `?sectionId=morning|afternoon|evening`, `?parentId=none|any|all|<todoId>`, `?pillarId=<id>|none`, `?q=<search>`, `?includeSubtasks=true|false`, `?flat=true|false`; legacy aliases `search` and `includeArchived` still work)
-  - `POST /api/todos` (supports optional `schedule: { date, sectionId, order }`, optional `rubricItemId`, and optional `autoClassify:boolean`; response includes `{ todo, scheduled }`)
+  - `POST /api/todos` (assignment-first: `assignment.mode=auto|manual`, manual requires `assignment.pillarIds`; optional `schedule: { date, sectionId, order }`; response includes `{ todo, scheduled, classificationSummary }`)
   - `GET /api/todos/:id`
-  - `PUT /api/todos/:id`
-  - `PATCH /api/todos/:id`
+  - `PUT /api/todos/:id` (supports assignment update / reclassification)
+  - `PATCH /api/todos/:id` (supports assignment update / reclassification)
   - `POST /api/todos/:id/close`
   - `POST /api/todos/:id/reopen`
   - `POST /api/todos/:id/archive`

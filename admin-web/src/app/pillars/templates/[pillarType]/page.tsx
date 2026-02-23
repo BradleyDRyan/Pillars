@@ -1,15 +1,16 @@
 import { PillarTemplateManager } from "@/components/pillar-template-manager";
 
 type Params = {
-  pillarType: string;
+  pillarType?: string;
 };
 
 type Props = {
-  params: Params;
+  params: Promise<Params>;
 };
 
 export const dynamic = "force-dynamic";
 
-export default function PillarTemplateDetailPage({ params }: Props) {
-  return <PillarTemplateManager selectedType={params.pillarType} detailsOnly />;
+export default async function PillarTemplateDetailPage({ params }: Props) {
+  const { pillarType } = await params;
+  return <PillarTemplateManager selectedType={pillarType || null} detailsOnly />;
 }

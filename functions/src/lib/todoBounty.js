@@ -3,7 +3,6 @@ const TODO_BOUNTY_MIN_POINTS = 1;
 const TODO_BOUNTY_MAX_ALLOCATION_POINTS = 100;
 const TODO_BOUNTY_MAX_SINGLE_POINTS = 150;
 const TODO_BOUNTY_TOTAL_MAX = 150;
-const TODO_BOUNTY_MAX_ALLOCATIONS = 3;
 const TODO_EVENT_LABEL_MAX_LENGTH = 300;
 
 function nowTs() {
@@ -97,9 +96,6 @@ function normalizeAllocationInput(todo) {
 
     if (raw.length < 1) {
       return { error: 'bountyAllocations must include at least one entry' };
-    }
-    if (raw.length > TODO_BOUNTY_MAX_ALLOCATIONS) {
-      return { error: `bountyAllocations must include at most ${TODO_BOUNTY_MAX_ALLOCATIONS} entries` };
     }
 
     const dedup = new Set();
