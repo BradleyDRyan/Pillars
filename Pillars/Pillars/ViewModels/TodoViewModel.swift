@@ -14,9 +14,16 @@ final class TodoViewModel: ObservableObject, BackendRequesting {
     @Published var isLoading = true
     @Published var errorMessage: String?
     @Published var infoMessage: String?
+    @Published var isClassifyingAssignment = false
+    @Published private(set) var bountyResolvingTodoIds: Set<String> = []
 
     private var todoListener: ListenerRegistration?
     private var includeCompleted = false
+    private var classificationInFlightCount = 0
+    private var serverTodos: [Todo] = []
+    private var optimisticTodosById: [String: Todo] = [:]
+    private var pendingServerTodosById: [String: Todo] = [:]
+    private var debugPillarNamesById: [String: String] = [:]
     private let api = APIService.shared
 
     func loadTodos(userId: String, includeCompleted: Bool = false) {
@@ -25,6 +32,9 @@ final class TodoViewModel: ObservableObject, BackendRequesting {
         todoListener = nil
         isLoading = true
         errorMessage = nil
+        Task { @MainActor in
+            await refreshDebugPillarNames(userId: userId)
+        }
 
         todoListener = Firestore.firestore()
             .collection("todos")
@@ -57,7 +67,12 @@ final class TodoViewModel: ObservableObject, BackendRequesting {
                             return lhs.id < rhs.id
                         } ?? []
 
-                    self.todos = items
+                    self.serverTodos = items
+                    let serverIds = Set(items.map(\.id))
+                    if !serverIds.isEmpty {
+                        self.pendingServerTodosById = self.pendingServerTodosById.filter { !serverIds.contains($0.key) }
+                    }
+                    self.rebuildTodos()
                     self.errorMessage = nil
                     self.isLoading = false
                 }
@@ -67,6 +82,11 @@ final class TodoViewModel: ObservableObject, BackendRequesting {
     func stopListening() {
         todoListener?.remove()
         todoListener = nil
+        serverTodos = []
+        optimisticTodosById = [:]
+        pendingServerTodosById = [:]
+        debugPillarNamesById = [:]
+        bountyResolvingTodoIds = []
         todos = []
     }
 
@@ -78,38 +98,194 @@ final class TodoViewModel: ObservableObject, BackendRequesting {
     ) {
         let trimmed = title.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
-        _ = section
+        let now = Date().timeIntervalSince1970
+        let optimisticId = "local_\(UUID().uuidString)"
+        let optimisticTodo = Todo(
+            id: optimisticId,
+            content: trimmed,
+            description: nil,
+            dueDate: dueDate,
+            sectionId: section.rawValue,
+            status: "active",
+            pillarId: nil,
+            parentId: nil,
+            bountyPoints: nil,
+            bountyAllocations: nil,
+            bountyPillarId: nil,
+            assignmentMode: assignment.mode.rawValue,
+            bountyPaidAt: nil,
+            createdAt: now,
+            updatedAt: now,
+            completedAt: nil,
+            archivedAt: nil
+        )
+        optimisticTodosById[optimisticId] = optimisticTodo
+        bountyResolvingTodoIds.insert(optimisticId)
+        rebuildTodos()
 
-        Task {
+        Task { @MainActor in
+            beginClassificationWork()
+            defer { endClassificationWork() }
             do {
+                print(
+                    "🧠 [Todo Classifier] create start mode=\(assignment.mode.rawValue) "
+                    + "pillars=\(debugPillarListSummary(assignment.pillarIds)) "
+                    + "text=\"\(debugTextPreview(trimmed))\""
+                )
                 let response = try await api.createTodo(
                     content: trimmed,
                     dueDate: dueDate,
                     assignment: assignment
                 )
+                await ensureDebugPillarNames(
+                    for: (response.classificationSummary?.matchedPillarIds ?? [])
+                        + (response.classificationSummary?.trimmedPillarIds ?? [])
+                        + (response.todo.bountyAllocations?.map(\.pillarId) ?? [])
+                )
+                print(
+                    "✅ [Todo Classifier] create done method=\(response.classificationSummary?.method ?? "unknown") "
+                    + "model=\(response.classificationSummary?.modelUsed ?? "n/a") "
+                    + "fallback=\(response.classificationSummary?.fallbackUsed ?? false) "
+                    + "matched=\(debugPillarListSummary(response.classificationSummary?.matchedPillarIds ?? [])) "
+                    + "trimmed=\(debugPillarListSummary(response.classificationSummary?.trimmedPillarIds ?? [])) "
+                    + "allocations=\(debugAllocationSummary(response.todo.bountyAllocations)) "
+                    + "points=\(response.todo.resolvedBountyPoints ?? 0) "
+                    + "assignmentMode=\(response.todo.assignmentMode ?? "n/a")"
+                )
+                if let summary = response.classificationSummary {
+                    if let rationale = summary.modelRationale,
+                       !rationale.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                        print("🧠 [Todo Classifier] create rationale=\(rationale)")
+                    }
+                    if let systemPrompt = summary.modelSystemPrompt,
+                       !systemPrompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                        print("🧠 [Todo Classifier] create model_system_prompt=\n\(systemPrompt)")
+                    }
+                    if let userPrompt = summary.modelUserPrompt,
+                       !userPrompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                        print("🧠 [Todo Classifier] create model_user_prompt=\n\(userPrompt)")
+                    }
+                    if let rawResponse = summary.modelResponseRaw,
+                       !rawResponse.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                        print("🧠 [Todo Classifier] create model_raw_response=\n\(rawResponse)")
+                    }
+                }
+                self.optimisticTodosById.removeValue(forKey: optimisticId)
+                self.bountyResolvingTodoIds.remove(optimisticId)
+                self.pendingServerTodosById[response.todo.id] = response.todo
+                self.rebuildTodos()
                 if let trimmedPillars = response.classificationSummary?.trimmedPillarIds,
                    !trimmedPillars.isEmpty {
                     self.infoMessage = "Some pillar matches were trimmed to fit the point cap."
                 }
             } catch {
+                print("❌ [Todo Classifier] create failed: \(friendlyErrorMessage(error))")
+                self.optimisticTodosById.removeValue(forKey: optimisticId)
+                self.bountyResolvingTodoIds.remove(optimisticId)
+                self.rebuildTodos()
                 self.errorMessage = "Failed to add todo: \(friendlyErrorMessage(error))"
             }
         }
     }
 
     func setTodoAssignment(todoId: String, assignment: TodoAssignmentSelection) {
-        Task {
+        bountyResolvingTodoIds.insert(todoId)
+        Task { @MainActor in
+            beginClassificationWork()
+            defer { endClassificationWork() }
             do {
+                print(
+                    "🧠 [Todo Classifier] retag start todoId=\(todoId) mode=\(assignment.mode.rawValue) "
+                    + "pillars=\(debugPillarListSummary(assignment.pillarIds))"
+                )
                 let response = try await api.updateTodoAssignment(
                     todoId: todoId,
                     assignment: assignment
                 )
+                await ensureDebugPillarNames(
+                    for: (response.classificationSummary?.matchedPillarIds ?? [])
+                        + (response.classificationSummary?.trimmedPillarIds ?? [])
+                        + (response.todo.bountyAllocations?.map(\.pillarId) ?? [])
+                )
+                print(
+                    "✅ [Todo Classifier] retag done todoId=\(todoId) method=\(response.classificationSummary?.method ?? "unknown") "
+                    + "model=\(response.classificationSummary?.modelUsed ?? "n/a") "
+                    + "fallback=\(response.classificationSummary?.fallbackUsed ?? false) "
+                    + "matched=\(debugPillarListSummary(response.classificationSummary?.matchedPillarIds ?? [])) "
+                    + "trimmed=\(debugPillarListSummary(response.classificationSummary?.trimmedPillarIds ?? [])) "
+                    + "allocations=\(debugAllocationSummary(response.todo.bountyAllocations)) "
+                    + "points=\(response.todo.resolvedBountyPoints ?? 0) "
+                    + "assignmentMode=\(response.todo.assignmentMode ?? "n/a")"
+                )
+                if let summary = response.classificationSummary {
+                    if let rationale = summary.modelRationale,
+                       !rationale.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                        print("🧠 [Todo Classifier] retag rationale=\(rationale)")
+                    }
+                    if let systemPrompt = summary.modelSystemPrompt,
+                       !systemPrompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                        print("🧠 [Todo Classifier] retag model_system_prompt=\n\(systemPrompt)")
+                    }
+                    if let userPrompt = summary.modelUserPrompt,
+                       !userPrompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                        print("🧠 [Todo Classifier] retag model_user_prompt=\n\(userPrompt)")
+                    }
+                    if let rawResponse = summary.modelResponseRaw,
+                       !rawResponse.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                        print("🧠 [Todo Classifier] retag model_raw_response=\n\(rawResponse)")
+                    }
+                }
+                self.pendingServerTodosById[response.todo.id] = response.todo
+                self.bountyResolvingTodoIds.remove(todoId)
+                self.rebuildTodos()
                 if let trimmedPillars = response.classificationSummary?.trimmedPillarIds,
                    !trimmedPillars.isEmpty {
                     self.infoMessage = "Some pillar matches were trimmed to fit the point cap."
                 }
             } catch {
+                print("❌ [Todo Classifier] retag failed todoId=\(todoId): \(friendlyErrorMessage(error))")
+                self.bountyResolvingTodoIds.remove(todoId)
+                self.rebuildTodos()
                 self.errorMessage = "Failed to retag todo: \(friendlyErrorMessage(error))"
+            }
+        }
+    }
+
+    func setTodoBountyAllocations(todoId: String, allocations: [TodoBountyAllocation]) {
+        let normalized = allocations.compactMap { allocation -> TodoBountyAllocation? in
+            let pillarId = allocation.pillarId.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !pillarId.isEmpty else { return nil }
+            let points = max(0, min(100, allocation.points))
+            guard points > 0 else { return nil }
+            return TodoBountyAllocation(pillarId: pillarId, points: points)
+        }
+
+        bountyResolvingTodoIds.insert(todoId)
+        Task { @MainActor in
+            do {
+                let summary = normalized
+                    .sorted { $0.pillarId < $1.pillarId }
+                    .map { "\(debugPillarLabel(for: $0.pillarId)):\($0.points)" }
+                    .joined(separator: ", ")
+                print("🧮 [Todo Points] update start todoId=\(todoId) allocations=\(summary.isEmpty ? "none" : summary)")
+                let response = try await api.updateTodoBountyAllocations(
+                    todoId: todoId,
+                    allocations: normalized
+                )
+                await ensureDebugPillarNames(for: response.todo.bountyAllocations?.map(\.pillarId) ?? [])
+                print(
+                    "✅ [Todo Points] update done todoId=\(todoId) "
+                    + "allocations=\(debugAllocationSummary(response.todo.bountyAllocations)) "
+                    + "points=\(response.todo.resolvedBountyPoints ?? 0)"
+                )
+                self.pendingServerTodosById[response.todo.id] = response.todo
+                self.bountyResolvingTodoIds.remove(todoId)
+                self.rebuildTodos()
+            } catch {
+                print("❌ [Todo Points] update failed todoId=\(todoId): \(friendlyErrorMessage(error))")
+                self.bountyResolvingTodoIds.remove(todoId)
+                self.rebuildTodos()
+                self.errorMessage = "Failed to update todo points: \(friendlyErrorMessage(error))"
             }
         }
     }
@@ -168,6 +344,22 @@ final class TodoViewModel: ObservableObject, BackendRequesting {
         }
     }
 
+    func setTodoContent(todoId: String, content: String) {
+        let trimmed = content.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+
+        Task {
+            do {
+                try await Firestore.firestore().collection("todos").document(todoId).setData([
+                    "content": trimmed,
+                    "updatedAt": Date().timeIntervalSince1970
+                ], merge: true)
+            } catch {
+                self.errorMessage = "Failed to update todo: \(friendlyErrorMessage(error))"
+            }
+        }
+    }
+
     func deleteTodo(todoId: String) {
         Task {
             do {
@@ -184,6 +376,38 @@ final class TodoViewModel: ObservableObject, BackendRequesting {
 
     func clearInfoMessage() {
         infoMessage = nil
+    }
+
+    func isBountyResolving(todoId: String) -> Bool {
+        bountyResolvingTodoIds.contains(todoId)
+    }
+
+    private func beginClassificationWork() {
+        classificationInFlightCount += 1
+        isClassifyingAssignment = classificationInFlightCount > 0
+    }
+
+    private func endClassificationWork() {
+        classificationInFlightCount = max(0, classificationInFlightCount - 1)
+        isClassifyingAssignment = classificationInFlightCount > 0
+    }
+
+    private func rebuildTodos() {
+        var mergedById: [String: Todo] = [:]
+
+        for todo in serverTodos {
+            mergedById[todo.id] = todo
+        }
+
+        for (todoId, todo) in pendingServerTodosById where mergedById[todoId] == nil {
+            mergedById[todoId] = todo
+        }
+
+        for (todoId, todo) in optimisticTodosById {
+            mergedById[todoId] = todo
+        }
+
+        todos = Array(mergedById.values)
     }
 
     private func todoItem(from document: QueryDocumentSnapshot) -> Todo? {
@@ -269,6 +493,80 @@ final class TodoViewModel: ObservableObject, BackendRequesting {
         }
 
         return mapped.isEmpty ? nil : mapped
+    }
+
+    private func refreshDebugPillarNames(userId: String) async {
+        do {
+            let snapshot = try await Firestore.firestore()
+                .collection("pillars")
+                .whereField("userId", isEqualTo: userId)
+                .getDocuments()
+
+            var mapping: [String: String] = [:]
+            for document in snapshot.documents {
+                let rawName = (document.data()["name"] as? String)?
+                    .trimmingCharacters(in: .whitespacesAndNewlines)
+                let name = (rawName?.isEmpty == false) ? rawName! : document.documentID
+                mapping[document.documentID] = name
+            }
+            debugPillarNamesById = mapping
+            print("🧭 [Todo Classifier] debug pillar map loaded count=\(mapping.count)")
+        } catch {
+            print("⚠️ [Todo Classifier] failed to load debug pillar map: \(friendlyErrorMessage(error))")
+        }
+    }
+
+    private func ensureDebugPillarNames(for ids: [String]) async {
+        let missing = Set(ids.filter { debugPillarNamesById[$0] == nil && !$0.isEmpty })
+        guard !missing.isEmpty else { return }
+
+        for pillarId in missing {
+            do {
+                let document = try await Firestore.firestore().collection("pillars").document(pillarId).getDocument()
+                if let data = document.data(),
+                   let rawName = data["name"] as? String {
+                    let trimmed = rawName.trimmingCharacters(in: .whitespacesAndNewlines)
+                    debugPillarNamesById[pillarId] = trimmed.isEmpty ? pillarId : trimmed
+                } else {
+                    debugPillarNamesById[pillarId] = pillarId
+                }
+            } catch {
+                debugPillarNamesById[pillarId] = pillarId
+                print("⚠️ [Todo Classifier] failed to resolve pillar name for id=\(pillarId): \(friendlyErrorMessage(error))")
+            }
+        }
+    }
+
+    private func debugTextPreview(_ text: String, limit: Int = 120) -> String {
+        let compact = text
+            .replacingOccurrences(of: "\n", with: " ")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        guard compact.count > limit else { return compact }
+        let index = compact.index(compact.startIndex, offsetBy: limit)
+        return "\(compact[..<index])..."
+    }
+
+    private func debugPillarLabel(for pillarId: String) -> String {
+        guard !pillarId.isEmpty else { return "(empty)" }
+        if let name = debugPillarNamesById[pillarId], !name.isEmpty {
+            return "\(name){\(pillarId)}"
+        }
+        return pillarId
+    }
+
+    private func debugPillarListSummary(_ pillarIds: [String]) -> String {
+        let labels = pillarIds.map { debugPillarLabel(for: $0) }
+        return labels.isEmpty ? "[]" : "[\(labels.joined(separator: ", "))]"
+    }
+
+    private func debugAllocationSummary(_ allocations: [TodoBountyAllocation]?) -> String {
+        guard let allocations, !allocations.isEmpty else {
+            return "none"
+        }
+        let entries = allocations.map { allocation in
+            "\(debugPillarLabel(for: allocation.pillarId)):\(allocation.points)"
+        }
+        return entries.joined(separator: ", ")
     }
 
     private func verifyBountyTrigger(todoId: String, expectPaid: Bool) async {

@@ -31,7 +31,7 @@ const menuItemBaseClassName =
   "admin-nav__item block w-full text-left hover:bg-[var(--bg)]";
 
 export function Menu({ className, ...props }: MenuProps) {
-  return <Toolbar.Root className={cx("grid gap-4", className)} {...props} />;
+  return <Toolbar.Root className={cx("admin-menu grid gap-4", className)} {...props} />;
 }
 
 export function MenuItem({ className, icon, children, ...props }: MenuItemProps) {
@@ -43,14 +43,15 @@ export function MenuItem({ className, icon, children, ...props }: MenuItemProps)
   return (
     <Toolbar.Link
       className={cx(
+        "admin-menu-item",
         menuItemBaseClassName,
-        isActive ? "admin-nav__item--active" : undefined,
+        isActive ? "admin-nav__item--active admin-menu-item--active" : "admin-menu-item--inactive",
         className
       )}
       {...props}
     >
-      {icon ? <span className="admin-nav__item-icon" aria-hidden>{icon}</span> : null}
-      <span>{children}</span>
+      {icon ? <span className="admin-menu-item-icon admin-nav__item-icon" aria-hidden>{icon}</span> : null}
+      <span className="admin-menu-item__label">{children}</span>
     </Toolbar.Link>
   );
 }
@@ -67,7 +68,7 @@ export function MenuSection({
   const panelId = useId();
 
   return (
-    <div>
+    <div className="admin-menu-section__wrapper">
       <button
         type="button"
         onClick={() => setIsOpen((open) => !open)}
@@ -76,13 +77,13 @@ export function MenuSection({
         aria-controls={panelId}
         aria-expanded={isOpen}
         className={cx(
-          "admin-nav__section",
+          "admin-menu-section admin-nav__section",
           className
         )}
         data-state={isOpen ? "open" : "closed"}
       >
-        <span>{label}</span>
-        <span aria-hidden className="admin-nav__section-icon text-[var(--ink-subtle)]">
+        <span className="admin-menu-section__label">{label}</span>
+        <span aria-hidden className="admin-menu-section__icon admin-nav__section-icon text-[var(--ink-subtle)]">
           {icon || <ChevronDown size={12} strokeWidth={2} />}
         </span>
       </button>
@@ -95,7 +96,11 @@ export function MenuSection({
             animate={{ height: "auto", opacity: 1 }}
             exit={{ height: 0, opacity: 0 }}
             transition={{ duration: 0.16, ease: "easeInOut" }}
-            className={cx("grid", "admin-nav__section-panel", panelClassName)}
+            className={cx(
+              "admin-menu-section__panel grid",
+              "admin-nav__section-panel",
+              panelClassName
+            )}
             style={{ overflow: "hidden" }}
           >
             {children}

@@ -1,9 +1,7 @@
 "use client";
 
-import { Button } from "@base-ui/react/button";
-import { Checkbox } from "@base-ui/react/checkbox";
-import { Input } from "@base-ui/react/input";
-import { Section } from "@/components/design-system";
+import { Button, Input, Section, Select, Checkbox, Stack } from "@/components/design-system";
+import { TemplateIconToken, templateColorTokens } from "@/lib/pillar-template-icons";
 
 export type PillarTemplateFormState = {
   pillarType: string;
@@ -21,6 +19,8 @@ type Props = {
   submitLabel: string;
   busy?: boolean;
   showTypeField?: boolean;
+  hideSubmit?: boolean;
+  iconOptions?: readonly string[];
   onChange: (next: PillarTemplateFormState) => void;
   onSubmit: () => void;
 };
@@ -42,92 +42,110 @@ export function PillarTemplateForm({
   submitLabel,
   busy = false,
   showTypeField = false,
+  hideSubmit = false,
+  iconOptions = [],
   onChange,
   onSubmit
 }: Props) {
+  const iconOptionsSet = new Set<string>([
+    ...Object.values(TemplateIconToken),
+    ...iconOptions
+  ]);
+  const sortedIconOptions = Array.from(iconOptionsSet).sort((left, right) => left.localeCompare(right));
+
   return (
-    <Section title={title}>
-      <div className="grid gap-3 md:grid-cols-2">
-        {showTypeField ? (
+      <Section title={title}>
+        <Stack gap={3} className="md:grid-cols-2">
+          {showTypeField ? (
+            <label className="block">
+              <span className="mb-1 block text-xs uppercase tracking-wide text-[var(--ink-subtle)]">pillarType</span>
+              <Input
+                value={value.pillarType}
+                onChange={(event) => onChange(updateField(value, "pillarType", event.target.value))}
+                placeholder="mental_fitness"
+              />
+            </label>
+          ) : null}
+
           <label className="block">
-            <span className="mb-1 block text-xs uppercase tracking-wide text-[var(--ink-subtle)]">pillarType</span>
+            <span className="mb-1 block text-xs uppercase tracking-wide text-[var(--ink-subtle)]">name</span>
             <Input
-              value={value.pillarType}
-              onChange={(event) => onChange(updateField(value, "pillarType", event.target.value))}
-              placeholder="mental_fitness"
-              className="mono w-full rounded-md border border-[var(--line-strong)] bg-[var(--bg-surface)] px-3 py-2 text-sm outline-none ring-[var(--accent)] focus:ring-2"
+              value={value.name}
+              onChange={(event) => onChange(updateField(value, "name", event.target.value))}
             />
           </label>
+
+          <label className="block md:col-span-2">
+            <span className="mb-1 block text-xs uppercase tracking-wide text-[var(--ink-subtle)]">description</span>
+            <Input
+              value={value.description}
+              onChange={(event) => onChange(updateField(value, "description", event.target.value))}
+            />
+          </label>
+
+          <label className="block">
+            <span className="mb-1 block text-xs uppercase tracking-wide text-[var(--ink-subtle)]">icon</span>
+            <Select
+              value={value.icon}
+              onChange={(event) => onChange(updateField(value, "icon", event.target.value))}
+              className="mono"
+            >
+              <option value="">Default</option>
+              {sortedIconOptions.map((token) => (
+                <option key={token} value={token}>
+                  {token}
+                </option>
+              ))}
+            </Select>
+          </label>
+
+          <label className="block">
+            <span className="mb-1 block text-xs uppercase tracking-wide text-[var(--ink-subtle)]">color token</span>
+            <Select
+              value={value.colorToken}
+              onChange={(event) => onChange(updateField(value, "colorToken", event.target.value))}
+              className="mono"
+            >
+              <option value="">Default</option>
+              {templateColorTokens.map((token) => (
+                <option key={token} value={token}>
+                  {token}
+                </option>
+              ))}
+            </Select>
+          </label>
+
+          <label className="block">
+            <span className="mb-1 block text-xs uppercase tracking-wide text-[var(--ink-subtle)]">order</span>
+            <Input
+              value={value.order}
+              onChange={(event) => onChange(updateField(value, "order", event.target.value))}
+              className="mono"
+            />
+          </label>
+
+          <label className="flex items-center gap-2 pt-6">
+            <Checkbox.Root
+              checked={value.isActive}
+              onCheckedChange={(isChecked) => onChange(updateField(value, "isActive", isChecked === true))}
+            >
+              <Checkbox.Indicator>✓</Checkbox.Indicator>
+            </Checkbox.Root>
+            <span className="text-sm text-[var(--ink-subtle)]">Active template</span>
+          </label>
+        </Stack>
+
+        {!hideSubmit ? (
+          <Stack gap={2} className="mt-4">
+            <Button
+              buttonType="button"
+              onClick={onSubmit}
+              disabled={busy}
+            >
+              {busy ? "Saving..." : submitLabel}
+            </Button>
+          </Stack>
         ) : null}
-
-        <label className="block">
-          <span className="mb-1 block text-xs uppercase tracking-wide text-[var(--ink-subtle)]">name</span>
-          <Input
-            value={value.name}
-            onChange={(event) => onChange(updateField(value, "name", event.target.value))}
-            className="w-full rounded-md border border-[var(--line-strong)] bg-[var(--bg-surface)] px-3 py-2 text-sm outline-none ring-[var(--accent)] focus:ring-2"
-          />
-        </label>
-
-        <label className="block md:col-span-2">
-          <span className="mb-1 block text-xs uppercase tracking-wide text-[var(--ink-subtle)]">description</span>
-          <Input
-            value={value.description}
-            onChange={(event) => onChange(updateField(value, "description", event.target.value))}
-            className="w-full rounded-md border border-[var(--line-strong)] bg-[var(--bg-surface)] px-3 py-2 text-sm outline-none ring-[var(--accent)] focus:ring-2"
-          />
-        </label>
-
-        <label className="block">
-          <span className="mb-1 block text-xs uppercase tracking-wide text-[var(--ink-subtle)]">icon</span>
-          <Input
-            value={value.icon}
-            onChange={(event) => onChange(updateField(value, "icon", event.target.value))}
-            placeholder="heart"
-            className="mono w-full rounded-md border border-[var(--line-strong)] bg-[var(--bg-surface)] px-3 py-2 text-sm outline-none ring-[var(--accent)] focus:ring-2"
-          />
-        </label>
-
-        <label className="block">
-          <span className="mb-1 block text-xs uppercase tracking-wide text-[var(--ink-subtle)]">colorToken</span>
-          <Input
-            value={value.colorToken}
-            onChange={(event) => onChange(updateField(value, "colorToken", event.target.value))}
-            placeholder="green"
-            className="mono w-full rounded-md border border-[var(--line-strong)] bg-[var(--bg-surface)] px-3 py-2 text-sm outline-none ring-[var(--accent)] focus:ring-2"
-          />
-        </label>
-
-        <label className="block">
-          <span className="mb-1 block text-xs uppercase tracking-wide text-[var(--ink-subtle)]">order</span>
-          <Input
-            value={value.order}
-            onChange={(event) => onChange(updateField(value, "order", event.target.value))}
-            className="mono w-full rounded-md border border-[var(--line-strong)] bg-[var(--bg-surface)] px-3 py-2 text-sm outline-none ring-[var(--accent)] focus:ring-2"
-          />
-        </label>
-
-        <label className="flex items-center gap-2 pt-6">
-          <Checkbox.Root
-            checked={value.isActive}
-            onCheckedChange={(isChecked) => onChange(updateField(value, "isActive", isChecked))}
-            className="inline-flex h-4 w-4 items-center justify-center rounded border border-[var(--line-strong)] bg-[var(--bg-surface)]"
-          >
-            <Checkbox.Indicator className="text-xs font-semibold text-[var(--accent)]">✓</Checkbox.Indicator>
-          </Checkbox.Root>
-          <span className="text-sm text-[var(--ink-subtle)]">Active template</span>
-        </label>
-      </div>
-
-      <div className="mt-4">
-        <Button
-          onClick={onSubmit}
-          disabled={busy}
-          className="mono cursor-pointer rounded-md border border-[var(--accent)] bg-[var(--accent-soft)] px-3 py-2 text-xs text-[var(--accent)] hover:bg-[var(--bg-elevated)] disabled:cursor-not-allowed disabled:opacity-60"
-        >
-          {busy ? "Saving..." : submitLabel}
-        </Button>
-      </div>
-    </Section>
+      </Section>
   );
 }

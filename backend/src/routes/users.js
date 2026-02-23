@@ -16,6 +16,46 @@ function getApiKeyPrefix(apiKey) {
   return apiKey.slice(0, 12);
 }
 
+function normalizeFactsPayload(rawFacts) {
+  if (rawFacts === undefined) {
+    return { provided: false };
+  }
+  if (rawFacts === null) {
+    return { provided: true, value: null };
+  }
+  const rawList = Array.isArray(rawFacts)
+    ? rawFacts
+    : (typeof rawFacts === 'string' ? rawFacts.split(/\r?\n/) : null);
+
+  if (!rawList) {
+    return { error: 'facts must be a string or array of strings' };
+  }
+
+  const normalized = [];
+  const dedup = new Set();
+  for (const item of rawList) {
+    if (typeof item !== 'string') {
+      return { error: 'facts must contain only strings' };
+    }
+    const value = item.trim().replace(/\s+/g, ' ');
+    if (!value) {
+      continue;
+    }
+    const capped = value.slice(0, 200);
+    const dedupKey = capped.toLowerCase();
+    if (dedup.has(dedupKey)) {
+      continue;
+    }
+    dedup.add(dedupKey);
+    normalized.push(capped);
+    if (normalized.length >= 25) {
+      break;
+    }
+  }
+
+  return { provided: true, value: normalized };
+}
+
 router.get('/profile', verifyToken, async (req, res) => {
   try {
     const userRecord = await auth.getUser(req.user.uid);
@@ -47,7 +87,7 @@ router.get('/profile', verifyToken, async (req, res) => {
 
 router.put('/profile', verifyToken, async (req, res) => {
   try {
-    const { displayName, photoURL, phoneNumber, additionalData } = req.body;
+    const { displayName, photoURL, phoneNumber, additionalData, facts } = req.body;
     
     const updateData = {};
     if (displayName !== undefined) updateData.displayName = displayName;
@@ -58,14 +98,23 @@ router.put('/profile', verifyToken, async (req, res) => {
       await auth.updateUser(req.user.uid, updateData);
     }
     
-    if (additionalData) {
-      await firestore.collection('users').doc(req.user.uid).set(
-        {
-          ...additionalData,
-          updatedAt: new Date().toISOString()
-        },
-        { merge: true }
-      );
+    const normalizedFacts = normalizeFactsPayload(facts);
+    if (normalizedFacts.error) {
+      return res.status(400).json({ error: normalizedFacts.error });
+    }
+
+    if (additionalData || normalizedFacts.provided) {
+      const profilePayload = {
+        updatedAt: new Date().toISOString()
+      };
+      if (additionalData && typeof additionalData === 'object' && !Array.isArray(additionalData)) {
+        Object.assign(profilePayload, additionalData);
+      }
+      if (normalizedFacts.provided) {
+        profilePayload.facts = normalizedFacts.value;
+      }
+
+      await firestore.collection('users').doc(req.user.uid).set(profilePayload, { merge: true });
     }
     
     res.json({ success: true, message: 'Profile updated successfully' });

@@ -12,12 +12,13 @@ function cx(...classes: Array<string | undefined>) {
 }
 
 const inputBaseClassName =
-  "admin-input block w-full h-[30px] min-h-[30px] px-3 text-[13px] leading-[1.7] bg-[var(--bg)] text-[var(--ink)] outline-none transition-[background-color,border-color,box-shadow,color] duration-150 ease-out" +
-  " placeholder:text-[var(--ink-subtle)] hover:bg-[var(--bg)] focus:bg-[var(--bg-root)] focus:ring-2 focus:ring-[var(--bg-root)] disabled:cursor-not-allowed disabled:bg-[var(--surface-grouped)] disabled:text-[var(--ink-subtle)]";
+  "admin-input admin-input__field block w-full h-[30px] min-h-[30px] px-3 text-[13px] leading-[1.7] bg-[var(--input-background)] border border-[var(--input-border)] text-[var(--ink)] outline-none transition-[background-color,border-color,box-shadow,color] duration-150 ease-out" +
+  " placeholder:text-[var(--ink-tertiary)] hover:bg-[var(--input-background)] focus:bg-[var(--bg-root)] focus:ring-2 focus:ring-[var(--bg-root)] disabled:cursor-not-allowed disabled:bg-[var(--surface-grouped)] disabled:text-[var(--ink-subtle)]";
 
 const inputStyle = {
   borderRadius: "4px",
-  border: "0",
+  borderWidth: "var(--input-border-width)",
+  borderColor: "var(--input-border)",
   boxShadow: "none"
 };
 

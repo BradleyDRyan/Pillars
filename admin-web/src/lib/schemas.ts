@@ -150,6 +150,12 @@ export type TodoMutationClassificationSummary = {
   matchedPillarIds: string[];
   trimmedPillarIds: string[];
   method?: string;
+  fallbackUsed?: boolean;
+  modelUsed?: string | null;
+  modelRationale?: string | null;
+  modelSystemPrompt?: string | null;
+  modelUserPrompt?: string | null;
+  modelResponseRaw?: string | null;
 };
 
 export type SchemaFetchResult =

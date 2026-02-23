@@ -37,6 +37,12 @@ struct TodoClassificationSummary: Codable, Hashable {
     let matchedPillarIds: [String]
     let trimmedPillarIds: [String]
     let method: String?
+    let fallbackUsed: Bool?
+    let modelUsed: String?
+    let modelRationale: String?
+    let modelSystemPrompt: String?
+    let modelUserPrompt: String?
+    let modelResponseRaw: String?
 }
 
 struct Todo: Decodable, Identifiable {

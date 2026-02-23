@@ -37,15 +37,15 @@ export default function ListPage() {
           <section className="surface p-4">
             <p className="text-sm font-semibold">List Item variants</p>
             <p className="mt-1 text-xs text-[var(--ink-subtle)]">
-              Use link and button variants for navigation versus inline actions.
+              Use linked rows to represent active and inactive states.
             </p>
             <div className="mt-3 w-full max-w-sm">
               <ListGroup>
                 <ListItem href="/pillars/templates/marriage" active>
                   Active link row
                 </ListItem>
-                <ListItem onClick={() => {}}>
-                  Button action row
+                <ListItem href="/pillars/templates/physical">
+                  Inactive link row
                 </ListItem>
               </ListGroup>
             </div>

@@ -14,8 +14,7 @@ struct TodoView: View {
     @StateObject private var pillarPickerSource = PillarPickerDataSource()
     @State private var loadedUserId: String?
     @State private var settings = TodoViewSettings()
-    @State private var assignmentPickerTarget: Todo?
-    @State private var schedulePickerTarget: Todo?
+    @State private var editorTarget: Todo?
     @State private var showingCreateTodoSheet = false
     @State private var showingSettingsSheet = false
 
@@ -36,6 +35,7 @@ struct TodoView: View {
                             createTodoButton
                             settingsRow
                             infoNotice
+                            classificationNotice
 
                             if todoEntries.isEmpty {
                                 emptyState
@@ -75,21 +75,28 @@ struct TodoView: View {
             guard oldValue != newValue else { return }
             reloadTodosForCurrentUser()
         }
-        .sheet(item: $assignmentPickerTarget) { target in
-            TodoAssignmentSheet(
-                title: "Retag Todo",
-                pillars: pillarPickerSource.pillars,
-                initialSelection: target.assignmentSelection
-            ) { selection in
-                viewModel.setTodoAssignment(todoId: target.id, assignment: selection)
-            }
-        }
-        .sheet(item: $schedulePickerTarget) { target in
-            TodoScheduleSheet(
-                title: "Schedule Todo",
-                initialDueDate: target.dueDate
-            ) { dueDate in
-                viewModel.setTodoDueDate(todoId: target.id, dueDate: dueDate)
+        .sheet(item: $editorTarget) { target in
+            TodoEditorSheet(
+                todo: target,
+                pillars: pillarPickerSource.pillars
+            ) { title, dueDate, allocations, shouldDelete in
+                if shouldDelete {
+                    viewModel.deleteTodo(todoId: target.id)
+                    return
+                }
+
+                let normalizedTitle = title.trimmingCharacters(in: .whitespacesAndNewlines)
+                if !normalizedTitle.isEmpty && normalizedTitle != target.content {
+                    viewModel.setTodoContent(todoId: target.id, content: normalizedTitle)
+                }
+
+                if dueDate != target.dueDate {
+                    viewModel.setTodoDueDate(todoId: target.id, dueDate: dueDate)
+                }
+
+                if !bountyAllocationsEqual(allocations, target.bountyAllocations ?? []) {
+                    viewModel.setTodoBountyAllocations(todoId: target.id, allocations: allocations)
+                }
             }
         }
         .sheet(isPresented: $showingCreateTodoSheet) {
@@ -122,6 +129,26 @@ struct TodoView: View {
                             .foregroundColor(S2.MyDay.Colors.subtitleText)
                     }
                     .buttonStyle(.plain)
+                }
+                .padding(.horizontal, S2.Spacing.sm)
+                .padding(.vertical, S2.Spacing.sm)
+                .background(S2.MyDay.Colors.sectionBackground)
+                .clipShape(RoundedRectangle(cornerRadius: S2.CornerRadius.sm, style: .continuous))
+            }
+        }
+    }
+
+    private var classificationNotice: some View {
+        Group {
+            if viewModel.isClassifyingAssignment {
+                HStack(spacing: S2.Spacing.sm) {
+                    ProgressView()
+                        .tint(S2.MyDay.Colors.interactiveTint)
+
+                    Text("Classifying todo and assigning points…")
+                        .font(S2.MyDay.Typography.fieldLabel)
+                        .foregroundColor(S2.MyDay.Colors.titleText)
+                        .frame(maxWidth: .infinity, alignment: .leading)
                 }
                 .padding(.horizontal, S2.Spacing.sm)
                 .padding(.vertical, S2.Spacing.sm)
@@ -182,72 +209,82 @@ struct TodoView: View {
     private func todoRow(_ entry: Todo) -> some View {
         let completed = entry.isCompleted
 
-        return ListRow(swipeDelete: { viewModel.deleteTodo(todoId: entry.id) }) {
-            EmptyView()
+        return ListRow(
+            swipeDelete: { viewModel.deleteTodo(todoId: entry.id) },
+            titleSubtitleSpacing: 0
+        ) {
+            Button {
+                toggleTodo(entry)
+            } label: {
+                Image(systemName: completed ? "checkmark.circle.fill" : "circle")
+                    .font(.system(size: S2.MyDay.Icon.actionSize, weight: .semibold))
+                    .foregroundColor(
+                        completed
+                            ? S2.MyDay.Colors.interactiveTint
+                            : S2.MyDay.Colors.subtitleText
+                    )
+            }
+            .buttonStyle(.plain)
         } title: {
-            Text(entry.content)
-                .font(S2.MyDay.Typography.fieldValue)
-                .foregroundColor(completed ? S2.MyDay.Colors.subtitleText : S2.MyDay.Colors.titleText)
-                .strikethrough(completed, color: S2.MyDay.Colors.subtitleText)
-                .frame(maxWidth: .infinity, alignment: .leading)
+            rowTapTarget(entry) {
+                Text(entry.content)
+                    .font(S2.MyDay.Typography.fieldValue)
+                    .foregroundColor(completed ? S2.MyDay.Colors.subtitleText : S2.MyDay.Colors.titleText)
+                    .strikethrough(completed, color: S2.MyDay.Colors.subtitleText)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
         } subtitle: {
-            Text(scheduleLabel(for: entry.dueDate))
-                .font(S2.MyDay.Typography.fieldLabel)
-                .foregroundColor(S2.MyDay.Colors.subtitleText)
+            EmptyView()
         } trailing: {
-            HStack(spacing: S2.Spacing.xs) {
-                if let bounty = bountyLabel(entry) {
-                    HStack(spacing: 6) {
-                        Image(systemName: "sparkles")
-                            .font(.system(size: 12, weight: .semibold))
-                        Text(bounty)
-                            .font(.system(size: 13, weight: .semibold))
+            rowTapTarget(entry) {
+                HStack(spacing: S2.Spacing.xs) {
+                    if viewModel.isBountyResolving(todoId: entry.id) {
+                        HStack(spacing: 6) {
+                            ProgressView()
+                                .controlSize(.small)
+                                .tint(S2.MyDay.Colors.interactiveTint)
+                            Text("Scoring")
+                                .font(.system(size: 13, weight: .semibold))
+                        }
+                        .foregroundColor(S2.MyDay.Colors.titleText)
+                        .padding(.horizontal, S2.Spacing.sm)
+                        .padding(.vertical, S2.Spacing.xs)
+                        .background(S2.MyDay.Colors.sectionBackground.opacity(0.9))
+                        .clipShape(RoundedRectangle(cornerRadius: S2.CornerRadius.md, style: .continuous))
+                    } else if let bounty = bountyLabel(entry) {
+                        HStack(spacing: 6) {
+                            Text(bounty)
+                                .font(.system(size: 13, weight: .semibold))
+                            Image(systemName: pointsIconSystemName(for: entry))
+                                .font(.system(size: 12, weight: .semibold))
+                                .foregroundColor(pointsIconColor(for: entry))
+                        }
+                        .foregroundColor(S2.MyDay.Colors.titleText)
+                        .padding(.horizontal, S2.Spacing.sm)
+                        .padding(.vertical, S2.Spacing.xs)
+                        .background(S2.MyDay.Colors.sectionBackground.opacity(0.9))
+                        .clipShape(RoundedRectangle(cornerRadius: S2.CornerRadius.md, style: .continuous))
+                    } else {
+                        Text("—")
+                            .font(S2.MyDay.Typography.fieldLabel)
+                            .foregroundColor(S2.MyDay.Colors.subtitleText)
+                            .padding(.horizontal, S2.Spacing.sm)
+                            .padding(.vertical, S2.Spacing.xs)
+                            .background(S2.MyDay.Colors.sectionBackground.opacity(0.9))
+                            .clipShape(RoundedRectangle(cornerRadius: S2.CornerRadius.md, style: .continuous))
                     }
-                    .foregroundColor(S2.MyDay.Colors.titleText)
-                    .padding(.horizontal, S2.Spacing.sm)
-                    .padding(.vertical, S2.Spacing.xs)
-                    .background(S2.MyDay.Colors.sectionBackground.opacity(0.9))
-                    .clipShape(RoundedRectangle(cornerRadius: S2.CornerRadius.md, style: .continuous))
                 }
-
-                PillarTagChip(
-                    title: pillarLabel(for: entry),
-                    color: pillarColor(for: entry)
-                )
-
-                Button {
-                    schedulePickerTarget = entry
-                } label: {
-                    Image(systemName: "calendar")
-                        .font(.system(size: 12, weight: .semibold))
-                        .foregroundColor(S2.MyDay.Colors.subtitleText)
-                        .padding(6)
-                        .background(S2.MyDay.Colors.sectionBackground)
-                        .clipShape(Circle())
-                }
-                    .buttonStyle(.plain)
-
-                Button {
-                    assignmentPickerTarget = entry
-                } label: {
-                    Image(systemName: "tag")
-                        .font(.system(size: 12, weight: .semibold))
-                        .foregroundColor(S2.MyDay.Colors.subtitleText)
-                        .padding(6)
-                        .background(S2.MyDay.Colors.sectionBackground)
-                        .clipShape(Circle())
-                }
-                .buttonStyle(.plain)
-
-                S2MyDayDoneIconButton(
-                    isCompleted: completed,
-                    size: .compact,
-                    action: {
-                        toggleTodo(entry)
-                    }
-                )
             }
         }
+    }
+
+    private func rowTapTarget<Content: View>(_ todo: Todo, @ViewBuilder content: () -> Content) -> some View {
+        Button {
+            editorTarget = todo
+        } label: {
+            content()
+        }
+        .buttonStyle(.plain)
     }
 
     private var emptyState: some View {
@@ -324,13 +361,6 @@ struct TodoView: View {
         }
     }
 
-    private func scheduleLabel(for dueDate: String?) -> String {
-        if let dueDate {
-            return "Scheduled \(TodoDateCodec.displayLabel(for: dueDate))"
-        }
-        return "Unscheduled"
-    }
-
     private func bountyLabel(_ todo: Todo) -> String? {
         guard let points = todo.resolvedBountyPoints, points > 0 else { return nil }
         return "+\(points)"
@@ -340,16 +370,31 @@ struct TodoView: View {
         viewModel.setTodoCompletion(todoId: entry.id, isCompleted: !entry.isCompleted)
     }
 
-    private func pillarLabel(for todo: Todo) -> String {
-        let pillarIds = todo.allocationPillarIds
-        guard !pillarIds.isEmpty else {
-            return "No Pillar"
+    private func bountyAllocationsEqual(_ lhs: [TodoBountyAllocation], _ rhs: [TodoBountyAllocation]) -> Bool {
+        func signature(for allocations: [TodoBountyAllocation]) -> [String] {
+            allocations
+                .compactMap { allocation -> String? in
+                    let pillarId = allocation.pillarId.trimmingCharacters(in: .whitespacesAndNewlines)
+                    guard !pillarId.isEmpty else { return nil }
+                    let points = max(0, allocation.points)
+                    guard points > 0 else { return nil }
+                    return "\(pillarId):\(points)"
+                }
+                .sorted()
         }
-        let names = pillarIds.map { pillarPickerSource.pillarName(for: $0) ?? "Pillar" }
-        return names.joined(separator: " + ")
+
+        return signature(for: lhs) == signature(for: rhs)
     }
 
-    private func pillarColor(for todo: Todo) -> Color {
+    private func pointsIconSystemName(for todo: Todo) -> String {
+        guard let firstPillarId = todo.allocationPillarIds.first else {
+            return PillarIconRegistry.fallbackSystemName
+        }
+        let iconToken = pillarPickerSource.pillar(for: firstPillarId)?.iconToken
+        return PillarIconRegistry.systemName(for: iconToken)
+    }
+
+    private func pointsIconColor(for todo: Todo) -> Color {
         guard let firstPillarId = todo.allocationPillarIds.first else {
             return S2.MyDay.Colors.subtitleText
         }
@@ -408,206 +453,181 @@ struct TodoView: View {
     }
 }
 
-private struct TodoAssignmentSheet: View {
-    let title: String
+private struct TodoEditorSheet: View {
+    let todo: Todo
     let pillars: [Pillar]
-    let onSave: (TodoAssignmentSelection) -> Void
+    let onSave: (String, String?, [TodoBountyAllocation], Bool) -> Void
 
     @Environment(\.dismiss) private var dismiss
-    @State private var selection: TodoAssignmentSelection
+    @State private var title: String
+    @State private var pointsByPillarId: [String: Int]
+    @State private var isScheduled: Bool
+    @State private var selectedDate: Date
 
     init(
-        title: String,
+        todo: Todo,
         pillars: [Pillar],
-        initialSelection: TodoAssignmentSelection,
-        onSave: @escaping (TodoAssignmentSelection) -> Void
+        onSave: @escaping (String, String?, [TodoBountyAllocation], Bool) -> Void
     ) {
-        self.title = title
+        self.todo = todo
         self.pillars = pillars
         self.onSave = onSave
-        _selection = State(initialValue: initialSelection)
+        _title = State(initialValue: todo.content)
+        var seededPoints: [String: Int] = [:]
+        for allocation in todo.bountyAllocations ?? [] {
+            let pillarId = allocation.pillarId.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !pillarId.isEmpty else { continue }
+            seededPoints[pillarId] = max(0, min(100, allocation.points))
+        }
+        _pointsByPillarId = State(initialValue: seededPoints)
+        _isScheduled = State(initialValue: todo.dueDate != nil)
+        _selectedDate = State(initialValue: TodoDateCodec.date(from: todo.dueDate) ?? Date())
+    }
+
+    private var normalizedTitle: String {
+        title.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
     private var canSave: Bool {
-        if selection.mode == .manual && selection.pillarIds.isEmpty {
-            return false
+        !normalizedTitle.isEmpty
+    }
+
+    private var normalizedAllocations: [TodoBountyAllocation] {
+        pillars.compactMap { pillar in
+            let points = pointsByPillarId[pillar.id] ?? 0
+            guard points > 0 else { return nil }
+            return TodoBountyAllocation(
+                pillarId: pillar.id,
+                points: max(0, min(100, points))
+            )
         }
-        return true
+    }
+
+    private var totalPoints: Int {
+        normalizedAllocations.reduce(0) { $0 + $1.points }
     }
 
     var body: some View {
         NavigationStack {
             List {
-                Section("Assignment") {
-                    assignmentRow(
-                        title: "Auto",
-                        subtitle: "Let classifier pick the best pillar matches.",
-                        color: S2.MyDay.Colors.interactiveTint,
-                        isSelected: selection.mode == .auto
-                    ) {
-                        selection = .auto
-                    }
+                Section("Title") {
+                    TextField("What needs to get done?", text: $title)
+                        .font(S2.MyDay.Typography.fieldValue)
+                }
 
-                    ForEach(pillars) { pillar in
-                        let isSelected = selection.mode == .manual && selection.pillarIds.contains(pillar.id)
-                        assignmentRow(
-                            title: pillar.name,
-                            subtitle: nil,
-                            color: pillar.colorValue,
-                            isSelected: isSelected
-                        ) {
-                            toggleManualSelection(pillar.id)
+                Section("Points by Pillar") {
+                    if pillars.isEmpty {
+                        Text("No pillars available.")
+                            .font(S2.MyDay.Typography.fieldLabel)
+                            .foregroundColor(S2.MyDay.Colors.subtitleText)
+                    } else {
+                        ForEach(pillars) { pillar in
+                            pointsRow(for: pillar)
                         }
                     }
                 }
+
+                Section("Schedule") {
+                    Toggle(isOn: $isScheduled) {
+                        Text("Schedule for a specific day")
+                            .font(S2.MyDay.Typography.fieldValue)
+                            .foregroundColor(S2.MyDay.Colors.titleText)
+                    }
+                    .tint(S2.MyDay.Colors.interactiveTint)
+
+                    if isScheduled {
+                        DatePicker(
+                            "Date",
+                            selection: $selectedDate,
+                            displayedComponents: .date
+                        )
+                        .datePickerStyle(.graphical)
+                        .tint(S2.MyDay.Colors.interactiveTint)
+                    }
+                }
+
+                Section {
+                    HStack {
+                        Text("Total Points")
+                            .font(S2.MyDay.Typography.fieldLabel)
+                            .foregroundColor(S2.MyDay.Colors.subtitleText)
+                        Spacer()
+                        Text("\(totalPoints)/150")
+                            .font(S2.MyDay.Typography.fieldValue)
+                            .foregroundColor(S2.MyDay.Colors.titleText)
+                    }
+                }
+
+                Section {
+                    Button(role: .destructive) {
+                        onSave(normalizedTitle, resolvedDueDate(), normalizedAllocations, true)
+                        dismiss()
+                    } label: {
+                        Text("Delete Todo")
+                    }
+                }
             }
-            .listStyle(.insetGrouped)
-            .navigationTitle(title)
+            .navigationTitle("Edit Todo")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel") {
                         dismiss()
                     }
-                    .foregroundColor(S2.MyDay.Colors.subtitleText)
                 }
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Save") {
-                        onSave(normalizedSelection())
+                        onSave(normalizedTitle, resolvedDueDate(), normalizedAllocations, false)
                         dismiss()
                     }
                     .disabled(!canSave)
-                    .foregroundColor(canSave ? S2.MyDay.Colors.interactiveTint : S2.MyDay.Colors.subtitleText)
                 }
             }
         }
     }
 
-    private func toggleManualSelection(_ pillarId: String) {
-        let normalized = pillarId.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !normalized.isEmpty else { return }
-
-        var selected = selection.pillarIds
-        if let index = selected.firstIndex(of: normalized) {
-            selected.remove(at: index)
-        } else {
-            selected.append(normalized)
-        }
-
-        if selected.isEmpty {
-            selection = .auto
-        } else {
-            selection = .manual(selected)
-        }
+    private func resolvedDueDate() -> String? {
+        isScheduled ? TodoDateCodec.storageString(from: selectedDate) : nil
     }
 
-    private func normalizedSelection() -> TodoAssignmentSelection {
-        if selection.mode == .manual && !selection.pillarIds.isEmpty {
-            return .manual(selection.pillarIds)
-        }
-        return .auto
-    }
-
-    private func assignmentRow(
-        title: String,
-        subtitle: String?,
-        color: Color,
-        isSelected: Bool,
-        action: @escaping () -> Void
-    ) -> some View {
-        Button(action: action) {
-            HStack(spacing: S2.Spacing.sm) {
-                Circle()
-                    .fill(color)
-                    .frame(width: 10, height: 10)
-
-                VStack(alignment: .leading, spacing: S2.Spacing.xs) {
-                    Text(title)
-                        .font(S2.MyDay.Typography.fieldValue)
-                        .foregroundColor(S2.MyDay.Colors.titleText)
-                    if let subtitle {
-                        Text(subtitle)
-                            .font(S2.MyDay.Typography.fieldLabel)
-                            .foregroundColor(S2.MyDay.Colors.subtitleText)
-                    }
-                }
-
-                Spacer()
-
-                if isSelected {
-                    Image(systemName: "checkmark")
-                        .font(.system(size: 13, weight: .semibold))
-                        .foregroundColor(S2.MyDay.Colors.interactiveTint)
-                }
+    private func pointsBinding(for pillarId: String) -> Binding<Int> {
+        Binding<Int>(
+            get: {
+                pointsByPillarId[pillarId] ?? 0
+            },
+            set: { newValue in
+                pointsByPillarId[pillarId] = max(0, min(100, newValue))
             }
-        }
-        .buttonStyle(.plain)
-    }
-}
-
-private struct TodoScheduleSheet: View {
-    let title: String
-    let initialDueDate: String?
-    let onSave: (String?) -> Void
-
-    @Environment(\.dismiss) private var dismiss
-    @State private var isScheduled: Bool
-    @State private var selectedDate: Date
-
-    init(title: String, initialDueDate: String?, onSave: @escaping (String?) -> Void) {
-        self.title = title
-        self.initialDueDate = initialDueDate
-        self.onSave = onSave
-
-        let parsedDate = TodoDateCodec.date(from: initialDueDate) ?? Date()
-        _isScheduled = State(initialValue: initialDueDate != nil)
-        _selectedDate = State(initialValue: parsedDate)
+        )
     }
 
-    var body: some View {
-        NavigationStack {
-            VStack(alignment: .leading, spacing: S2.Spacing.md) {
-                Toggle(isOn: $isScheduled) {
-                    Text("Schedule for a specific day")
-                        .font(S2.MyDay.Typography.fieldValue)
-                        .foregroundColor(S2.MyDay.Colors.titleText)
-                }
-                .tint(S2.MyDay.Colors.interactiveTint)
+    private func pointsRow(for pillar: Pillar) -> some View {
+        let current = pointsBinding(for: pillar.id).wrappedValue
+        let maxAllowed = max(0, min(100, current + (150 - totalPoints)))
 
-                if isScheduled {
-                    DatePicker(
-                        "Date",
-                        selection: $selectedDate,
-                        displayedComponents: .date
-                    )
-                    .datePickerStyle(.graphical)
-                    .tint(S2.MyDay.Colors.interactiveTint)
-                }
+        return HStack(spacing: S2.Spacing.sm) {
+            Circle()
+                .fill(pillar.colorValue)
+                .frame(width: 10, height: 10)
 
-                Spacer()
-            }
-            .padding(.horizontal, S2.MyDay.Spacing.pageHorizontal)
-            .padding(.vertical, S2.MyDay.Spacing.pageVertical)
-            .background(S2.MyDay.Colors.pageBackground.ignoresSafeArea())
-            .navigationTitle(title)
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") {
-                        dismiss()
-                    }
-                    .foregroundColor(S2.MyDay.Colors.subtitleText)
-                }
+            Text(pillar.name)
+                .font(S2.MyDay.Typography.fieldValue)
+                .foregroundColor(S2.MyDay.Colors.titleText)
 
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Save") {
-                        let dueDate = isScheduled ? TodoDateCodec.storageString(from: selectedDate) : nil
-                        onSave(dueDate)
-                        dismiss()
-                    }
-                    .foregroundColor(S2.MyDay.Colors.interactiveTint)
-                }
-            }
+            Spacer()
+
+            Text("\(pointsBinding(for: pillar.id).wrappedValue) pts")
+                .font(S2.MyDay.Typography.fieldLabel)
+                .foregroundColor(S2.MyDay.Colors.subtitleText)
+
+            Stepper(
+                "",
+                value: pointsBinding(for: pillar.id),
+                in: 0...maxAllowed,
+                step: 5
+            )
+            .labelsHidden()
+            .tint(S2.MyDay.Colors.interactiveTint)
         }
     }
 }

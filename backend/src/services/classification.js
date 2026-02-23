@@ -1,9 +1,66 @@
-const { chatCompletion } = require('./anthropic');
+const { chatCompletion } = require('./openai');
+const { logger } = require('../config/firebase');
 const { getRubricItems } = require('../utils/rubrics');
 
-const CLASSIFICATION_MODEL = process.env.CLAUDE_MODEL || 'claude-sonnet-4-5';
+const CLASSIFICATION_MODEL = process.env.OPENAI_MODEL || 'gpt-4o-mini';
 const MAX_TEXT_LENGTH = 1200;
 const AUTO_CLASSIFICATION_MAX_MATCHES = 3;
+const USER_CONTEXT_MAX_FACT_LENGTH = 120;
+
+function extractModelTextContent(responseMessage) {
+  if (!responseMessage) {
+    return '';
+  }
+
+  if (typeof responseMessage.content === 'string') {
+    return responseMessage.content;
+  }
+
+  if (Array.isArray(responseMessage.content)) {
+    return responseMessage.content
+      .map(part => {
+        if (typeof part === 'string') {
+          return part;
+        }
+        if (part && typeof part.text === 'string') {
+          return part.text;
+        }
+        return '';
+      })
+      .filter(Boolean)
+      .join('\n');
+  }
+
+  return '';
+}
+
+function textPreview(value) {
+  const normalized = normalizeClassificationText(value);
+  if (!normalized) {
+    return '';
+  }
+  return normalized.slice(0, 140);
+}
+
+function summarizeCandidate(candidate) {
+  if (!candidate?.rubricItem) {
+    return null;
+  }
+  return {
+    pillarId: candidate.pillarId || null,
+    pillarName: candidate.pillarName || null,
+    rubricItemId: candidate.rubricItem.id || null,
+    points: Number(candidate.rubricItem.points) || 0,
+    label: candidate.rubricItem.label || null
+  };
+}
+
+function summarizeCandidates(candidates) {
+  if (!Array.isArray(candidates)) {
+    return [];
+  }
+  return candidates.map(summarizeCandidate).filter(Boolean);
+}
 
 function createClassificationError(message, status = 400, code = 'classification_error') {
   const error = new Error(message);
@@ -24,6 +81,154 @@ function normalizeClassificationText(value) {
     return trimmed.slice(0, MAX_TEXT_LENGTH);
   }
   return trimmed;
+}
+
+function normalizeContextString(value, maxLength = USER_CONTEXT_MAX_FACT_LENGTH) {
+  if (typeof value !== 'string') {
+    return null;
+  }
+  const normalized = value.trim().replace(/\s+/g, ' ');
+  if (!normalized) {
+    return null;
+  }
+  if (normalized.length > maxLength) {
+    return `${normalized.slice(0, maxLength)}...`;
+  }
+  return normalized;
+}
+
+function extractFactFromContainers(containers, keys) {
+  for (const container of containers) {
+    if (!container || typeof container !== 'object' || Array.isArray(container)) {
+      continue;
+    }
+    for (const key of keys) {
+      const value = normalizeContextString(container[key]);
+      if (value) {
+        return value;
+      }
+    }
+  }
+  return null;
+}
+
+function formatUserFactsForPrompt(userFacts) {
+  if (!Array.isArray(userFacts) || !userFacts.length) {
+    return null;
+  }
+
+  const lines = userFacts
+    .map(item => normalizeContextString(item, USER_CONTEXT_MAX_FACT_LENGTH + 40))
+    .filter(Boolean)
+    .map(item => `- ${item}`);
+
+  if (!lines.length) {
+    return null;
+  }
+  return lines.join('\n');
+}
+
+function normalizeFactList(rawFacts, { maxFacts = 12 } = {}) {
+  const rawList = Array.isArray(rawFacts)
+    ? rawFacts
+    : (typeof rawFacts === 'string' ? rawFacts.split(/\r?\n/) : null);
+
+  if (!rawList) {
+    return [];
+  }
+
+  const dedup = new Set();
+  const normalized = [];
+  for (const item of rawList) {
+    if (typeof item !== 'string') {
+      continue;
+    }
+    const value = normalizeContextString(item, USER_CONTEXT_MAX_FACT_LENGTH);
+    if (!value) {
+      continue;
+    }
+    const key = value.toLowerCase();
+    if (dedup.has(key)) {
+      continue;
+    }
+    dedup.add(key);
+    normalized.push(value);
+    if (normalized.length >= maxFacts) {
+      break;
+    }
+  }
+
+  return normalized;
+}
+
+async function loadUserContextFacts({ db, userId }) {
+  try {
+    const userDoc = await db.collection('users').doc(userId).get();
+    if (!userDoc.exists) {
+      return [];
+    }
+    const data = userDoc.data() || {};
+    const directFacts = normalizeFactList(data.facts, { maxFacts: 12 });
+    const additionalData = data.additionalData && typeof data.additionalData === 'object' && !Array.isArray(data.additionalData)
+      ? data.additionalData
+      : null;
+    const additionalFacts = normalizeFactList(additionalData?.facts, { maxFacts: 12 });
+    const profileData = data.profileData && typeof data.profileData === 'object' && !Array.isArray(data.profileData)
+      ? data.profileData
+      : null;
+    const profileFacts = normalizeFactList(profileData?.facts, { maxFacts: 12 });
+    const profile = data.profile && typeof data.profile === 'object' && !Array.isArray(data.profile)
+      ? data.profile
+      : null;
+    const persona = data.persona && typeof data.persona === 'object' && !Array.isArray(data.persona)
+      ? data.persona
+      : null;
+
+    const explicitFacts = normalizeFactList(
+      [...directFacts, ...additionalFacts, ...profileFacts],
+      { maxFacts: 12 }
+    );
+    if (explicitFacts.length) {
+      return explicitFacts;
+    }
+
+    const containers = [data, additionalData, profileData, profile, persona];
+
+    const displayName = extractFactFromContainers(containers, ['displayName', 'fullName', 'name']);
+    const spouseName = extractFactFromContainers(containers, [
+      'spouseName',
+      'partnerName',
+      'wifeName',
+      'husbandName',
+      'spouse',
+      'partner'
+    ]);
+    const occupation = extractFactFromContainers(containers, [
+      'occupation',
+      'jobTitle',
+      'role',
+      'profession',
+      'career'
+    ]);
+
+    const facts = [];
+    if (displayName) {
+      facts.push(`User name: ${displayName}`);
+    }
+    if (spouseName) {
+      facts.push(`Spouse or partner name: ${spouseName}`);
+    }
+    if (occupation) {
+      facts.push(`Occupation or role: ${occupation}`);
+    }
+    return facts;
+  } catch (error) {
+    logger.warn(
+      { userId, error: error?.message || String(error) },
+      '[classification] Failed loading user context facts'
+    );
+    return [];
+  }
 }
 
 function normalizeForMatch(value) {
@@ -95,14 +300,21 @@ function parseModelClassification(content) {
       const pillarIdRaw = typeof parsed.pillar_id === 'string'
         ? parsed.pillar_id
         : (typeof parsed.pillarId === 'string' ? parsed.pillarId : '');
+      const rationaleRaw = typeof parsed.rationale === 'string'
+        ? parsed.rationale
+        : (typeof parsed.reasoning === 'string'
+          ? parsed.reasoning
+          : (typeof parsed.explanation === 'string' ? parsed.explanation : ''));
       const rubricItemId = rubricItemIdRaw.trim();
       const pillarId = pillarIdRaw.trim();
+      const rationale = normalizeContextString(rationaleRaw, 700);
       if (!rubricItemId) {
         continue;
       }
       return {
         rubricItemId,
-        pillarId: pillarId || null
+        pillarId: pillarId || null,
+        rationale: rationale || null
       };
     } catch (_error) {
       // Try the next possible JSON candidate.
@@ -121,9 +333,15 @@ function parseModelMultiClassification(content) {
     try {
       const parsed = JSON.parse(candidate);
       let rawMatches = null;
+      let rationaleRaw = '';
       if (Array.isArray(parsed)) {
         rawMatches = parsed;
       } else if (parsed && typeof parsed === 'object') {
+        rationaleRaw = typeof parsed.rationale === 'string'
+          ? parsed.rationale
+          : (typeof parsed.reasoning === 'string'
+            ? parsed.reasoning
+            : (typeof parsed.explanation === 'string' ? parsed.explanation : ''));
         if (Array.isArray(parsed.matches)) {
           rawMatches = parsed.matches;
         } else if (Array.isArray(parsed.items)) {
@@ -165,7 +383,10 @@ function parseModelMultiClassification(content) {
         .filter(Boolean);
 
       if (normalized.length > 0) {
-        return normalized;
+        return {
+          matches: normalized,
+          rationale: normalizeContextString(rationaleRaw, 900) || null
+        };
       }
     } catch (_error) {
       // Try next candidate.
@@ -334,6 +555,9 @@ function formatCandidatesForPrompt(candidates, includePillar) {
       const parts = [];
       if (includePillar) {
         parts.push(`pillar_id="${candidate.pillarId}"`);
+        if (candidate.pillarName) {
+          parts.push(`pillar_name="${candidate.pillarName}"`);
+        }
       }
       parts.push(`rubric_item_id="${rubricItem.id}"`);
       parts.push(`label="${rubricItem.label || ''}"`);
@@ -348,51 +572,101 @@ function formatCandidatesForPrompt(candidates, includePillar) {
     .join('\n');
 }
 
-async function selectCandidateWithModel({ text, candidates, includePillar }) {
+async function selectCandidateWithModel({ text, candidates, includePillar, userFacts }) {
   const systemPrompt = [
     'You classify a user activity against an existing rubric.',
     'Pick exactly one rubric item from the provided options.',
     'Never invent ids, labels, points, or options.',
-    'Respond with strict JSON only: {"rubric_item_id":"<id>"}',
+    'Respond with strict JSON only.',
+    'Include a rationale string explaining why this is the best match.',
     includePillar
-      ? 'If duplicate rubric_item_id values appear across pillars, include pillar_id too: {"rubric_item_id":"<id>","pillar_id":"<pillarId>"}'
-      : 'Do not include any extra fields.'
+      ? 'If duplicate rubric_item_id values appear across pillars, include pillar_id too. Use: {"rubric_item_id":"<id>","pillar_id":"<pillarId>","rationale":"<reason>"}'
+      : 'Use: {"rubric_item_id":"<id>","rationale":"<reason>"}'
   ].join('\n');
 
+  const userContextBlock = formatUserFactsForPrompt(userFacts);
   const userPrompt = [
     `Activity text:\n${text}`,
+    userContextBlock ? `\nUser context:\n${userContextBlock}` : null,
     '',
     'Rubric options:',
     formatCandidatesForPrompt(candidates, includePillar),
     '',
     'Return JSON now.'
-  ].join('\n');
+  ]
+    .filter(Boolean)
+    .join('\n');
 
-  const response = await chatCompletion([
-    { role: 'system', content: systemPrompt },
-    { role: 'user', content: userPrompt }
-  ], {
-    model: CLASSIFICATION_MODEL,
-    temperature: 0,
-    maxTokens: 180
-  });
+  const response = await chatCompletion(
+    [
+      { role: 'system', content: systemPrompt },
+      { role: 'user', content: userPrompt }
+    ],
+    CLASSIFICATION_MODEL,
+    {
+      temperature: 0,
+      max_tokens: 180
+    }
+  );
 
-  const parsed = parseModelClassification(response?.content || '');
-  return resolveCandidateFromModelSelection(candidates, parsed);
+  const rawModelContent = extractModelTextContent(response);
+  const parsed = parseModelClassification(rawModelContent);
+  logger.info(
+    {
+      model: CLASSIFICATION_MODEL,
+      includePillar,
+      textPreview: textPreview(text),
+      modelRequest: {
+        systemPrompt,
+        userPrompt
+      },
+      modelResponse: {
+        raw: rawModelContent,
+        parsed
+      }
+    },
+    '[classification] Single model exchange'
+  );
+
+  return {
+    candidate: resolveCandidateFromModelSelection(candidates, parsed),
+    rationale: parsed?.rationale || null,
+    modelSystemPrompt: systemPrompt,
+    modelUserPrompt: userPrompt,
+    modelResponseRaw: rawModelContent
+  };
 }
 
-function buildClassificationResponse(candidate, { method, fallbackUsed }) {
+function buildClassificationResponse(candidate, {
+  method,
+  fallbackUsed,
+  modelRationale = null,
+  modelSystemPrompt = null,
+  modelUserPrompt = null,
+  modelResponseRaw = null
+}) {
   return {
     pillarId: candidate.pillarId,
     rubricItem: candidate.rubricItem,
     bounty: candidate.rubricItem.points,
     method,
     modelUsed: CLASSIFICATION_MODEL,
-    fallbackUsed
+    fallbackUsed,
+    modelRationale,
+    modelSystemPrompt,
+    modelUserPrompt,
+    modelResponseRaw
   };
 }
 
-function buildMultiClassificationResponse(candidates, { method, fallbackUsed }) {
+function buildMultiClassificationResponse(candidates, {
+  method,
+  fallbackUsed,
+  modelRationale = null,
+  modelSystemPrompt = null,
+  modelUserPrompt = null,
+  modelResponseRaw = null
+}) {
   return {
     matches: candidates.map((candidate, index) => ({
       rank: index + 1,
@@ -402,13 +676,18 @@ function buildMultiClassificationResponse(candidates, { method, fallbackUsed }) 
     })),
     method,
     modelUsed: CLASSIFICATION_MODEL,
-    fallbackUsed
+    fallbackUsed,
+    modelRationale,
+    modelSystemPrompt,
+    modelUserPrompt,
+    modelResponseRaw
   };
 }
 
-function toCandidate(pillarId, rubricItem) {
+function toCandidate(pillarId, rubricItem, pillarName = null) {
   return {
     pillarId,
+    pillarName,
     rubricItem
   };
 }
@@ -441,85 +720,207 @@ async function getOwnedPillar({ db, userId, pillarId }) {
   };
 }
 
-async function runClassification({ text, candidates, includePillar }) {
+async function runClassification({ text, candidates, includePillar, userFacts }) {
+  const logContext = {
+    model: CLASSIFICATION_MODEL,
+    candidateCount: candidates.length,
+    includePillar,
+    userFactCount: Array.isArray(userFacts) ? userFacts.length : 0,
+    textPreview: textPreview(text)
+  };
+  logger.info(logContext, '[classification] Single classification started');
+
+  let aiRationale = null;
+  let aiModelSystemPrompt = null;
+  let aiModelUserPrompt = null;
+  let aiModelResponseRaw = null;
   try {
-    const aiChoice = await selectCandidateWithModel({ text, candidates, includePillar });
-    if (aiChoice) {
-      return buildClassificationResponse(aiChoice, {
+    const aiResult = await selectCandidateWithModel({ text, candidates, includePillar, userFacts });
+    aiRationale = aiResult?.rationale || null;
+    aiModelSystemPrompt = aiResult?.modelSystemPrompt || null;
+    aiModelUserPrompt = aiResult?.modelUserPrompt || null;
+    aiModelResponseRaw = aiResult?.modelResponseRaw || null;
+    if (aiResult?.candidate) {
+      logger.info(
+        {
+          ...logContext,
+          method: 'ai',
+          modelRationale: aiRationale,
+          match: summarizeCandidate(aiResult.candidate)
+        },
+        '[classification] Single classification resolved via AI'
+      );
+      return buildClassificationResponse(aiResult.candidate, {
         method: 'ai',
-        fallbackUsed: false
+        fallbackUsed: false,
+        modelRationale: aiRationale,
+        modelSystemPrompt: aiModelSystemPrompt,
+        modelUserPrompt: aiModelUserPrompt,
+        modelResponseRaw: aiModelResponseRaw
       });
     }
+    logger.warn(
+      { ...logContext, reason: 'ai_returned_no_valid_match', modelRationale: aiRationale },
+      '[classification] Single classification fell back to heuristic'
+    );
   } catch (_error) {
-    // Explicitly fallback to deterministic ranking if AI is unavailable or fails.
+    logger.warn(
+      { ...logContext, error: _error?.message || String(_error) },
+      '[classification] Single classification AI failed; using heuristic fallback'
+    );
   }
 
   const heuristicChoice = chooseByHeuristic(candidates, text);
   if (!heuristicChoice) {
+    logger.warn(logContext, '[classification] Single classification could not find rubric match');
     throw createClassificationError('Unable to classify activity', 409, 'no_rubric_match');
   }
 
+  logger.info(
+    {
+      ...logContext,
+      method: 'heuristic',
+      match: summarizeCandidate(heuristicChoice)
+    },
+    '[classification] Single classification resolved via heuristic'
+  );
+
   return buildClassificationResponse(heuristicChoice, {
     method: 'heuristic',
-    fallbackUsed: true
+    fallbackUsed: true,
+    modelRationale: aiRationale,
+    modelSystemPrompt: aiModelSystemPrompt,
+    modelUserPrompt: aiModelUserPrompt,
+    modelResponseRaw: aiModelResponseRaw
   });
 }
 
-async function selectCandidatesWithModelMulti({ text, candidates, maxMatches }) {
+async function selectCandidatesWithModelMulti({ text, candidates, maxMatches, userFacts }) {
   const systemPrompt = [
     'You classify a user activity against an existing rubric.',
     `Pick up to ${maxMatches} best rubric matches.`,
     'Never invent ids, labels, points, or options.',
-    'Return strict JSON only using this shape:',
-    '{"matches":[{"rubric_item_id":"<id>","pillar_id":"<pillarId>"}]}',
+    'Return strict JSON only.',
+    'Include a rationale string explaining why the matches were selected.',
+    'Use this shape:',
+    '{"matches":[{"rubric_item_id":"<id>","pillar_id":"<pillarId>"}],"rationale":"<reason>"}',
     'Do not include extra fields.'
   ].join('\n');
 
+  const userContextBlock = formatUserFactsForPrompt(userFacts);
   const userPrompt = [
     `Activity text:\n${text}`,
+    userContextBlock ? `\nUser context:\n${userContextBlock}` : null,
     '',
     'Rubric options:',
     formatCandidatesForPrompt(candidates, true),
     '',
     'Return JSON now.'
-  ].join('\n');
+  ]
+    .filter(Boolean)
+    .join('\n');
 
-  const response = await chatCompletion([
-    { role: 'system', content: systemPrompt },
-    { role: 'user', content: userPrompt }
-  ], {
-    model: CLASSIFICATION_MODEL,
-    temperature: 0,
-    maxTokens: 320
-  });
+  const response = await chatCompletion(
+    [
+      { role: 'system', content: systemPrompt },
+      { role: 'user', content: userPrompt }
+    ],
+    CLASSIFICATION_MODEL,
+    {
+      temperature: 0,
+      max_tokens: 320
+    }
+  );
 
-  const parsed = parseModelMultiClassification(response?.content || '');
-  return resolveCandidatesFromModelSelection(candidates, parsed, maxMatches);
+  const rawModelContent = extractModelTextContent(response);
+  const parsed = parseModelMultiClassification(rawModelContent);
+  logger.info(
+    {
+      model: CLASSIFICATION_MODEL,
+      maxMatches,
+      textPreview: textPreview(text),
+      modelRequest: {
+        systemPrompt,
+        userPrompt
+      },
+      modelResponse: {
+        raw: rawModelContent,
+        parsed
+      }
+    },
+    '[classification] Multi model exchange'
+  );
+
+  return {
+    candidates: resolveCandidatesFromModelSelection(candidates, parsed?.matches || [], maxMatches),
+    rationale: parsed?.rationale || null,
+    modelSystemPrompt: systemPrompt,
+    modelUserPrompt: userPrompt,
+    modelResponseRaw: rawModelContent
+  };
 }
 
-async function runClassificationMulti({ text, candidates, maxMatches }) {
+async function runClassificationMulti({ text, candidates, maxMatches, userFacts }) {
   const normalizedMaxMatches = Number.isInteger(maxMatches)
     ? Math.max(1, Math.min(AUTO_CLASSIFICATION_MAX_MATCHES, maxMatches))
     : AUTO_CLASSIFICATION_MAX_MATCHES;
+  const logContext = {
+    model: CLASSIFICATION_MODEL,
+    candidateCount: candidates.length,
+    maxMatches: normalizedMaxMatches,
+    userFactCount: Array.isArray(userFacts) ? userFacts.length : 0,
+    textPreview: textPreview(text)
+  };
+  logger.info(logContext, '[classification] Multi classification started');
 
+  let aiRationale = null;
+  let aiModelSystemPrompt = null;
+  let aiModelUserPrompt = null;
+  let aiModelResponseRaw = null;
   try {
-    const aiChoices = await selectCandidatesWithModelMulti({
+    const aiResult = await selectCandidatesWithModelMulti({
       text,
       candidates,
-      maxMatches: normalizedMaxMatches
+      maxMatches: normalizedMaxMatches,
+      userFacts
     });
-    if (aiChoices.length > 0) {
-      return buildMultiClassificationResponse(aiChoices, {
+    aiRationale = aiResult?.rationale || null;
+    aiModelSystemPrompt = aiResult?.modelSystemPrompt || null;
+    aiModelUserPrompt = aiResult?.modelUserPrompt || null;
+    aiModelResponseRaw = aiResult?.modelResponseRaw || null;
+    if (aiResult?.candidates?.length > 0) {
+      logger.info(
+        {
+          ...logContext,
+          method: 'ai',
+          modelRationale: aiRationale,
+          matches: summarizeCandidates(aiResult.candidates)
+        },
+        '[classification] Multi classification resolved via AI'
+      );
+      return buildMultiClassificationResponse(aiResult.candidates, {
         method: 'ai',
-        fallbackUsed: false
+        fallbackUsed: false,
+        modelRationale: aiRationale,
+        modelSystemPrompt: aiModelSystemPrompt,
+        modelUserPrompt: aiModelUserPrompt,
+        modelResponseRaw: aiModelResponseRaw
       });
     }
+    logger.warn(
+      { ...logContext, reason: 'ai_returned_no_valid_matches', modelRationale: aiRationale },
+      '[classification] Multi classification fell back to heuristic'
+    );
   } catch (_error) {
-    // Explicitly fallback to deterministic ranking if AI is unavailable or fails.
+    logger.warn(
+      { ...logContext, error: _error?.message || String(_error) },
+      '[classification] Multi classification AI failed; using heuristic fallback'
+    );
   }
 
   const ranked = rankByHeuristic(candidates, text);
   if (!ranked.length) {
+    logger.warn(logContext, '[classification] Multi classification could not find rubric match');
     throw createClassificationError('Unable to classify activity', 409, 'no_rubric_match');
   }
 
@@ -539,11 +940,25 @@ async function runClassificationMulti({ text, candidates, maxMatches }) {
     selected.push(entry);
   }
 
+  logger.info(
+    {
+      ...logContext,
+      method: 'heuristic',
+      topScore: ranked[0]?.score || 0,
+      matches: summarizeCandidates(selected.map(entry => entry.candidate))
+    },
+    '[classification] Multi classification resolved via heuristic'
+  );
+
   return buildMultiClassificationResponse(
     selected.map(entry => entry.candidate),
     {
       method: 'heuristic',
-      fallbackUsed: true
+      fallbackUsed: true,
+      modelRationale: aiRationale,
+      modelSystemPrompt: aiModelSystemPrompt,
+      modelUserPrompt: aiModelUserPrompt,
+      modelResponseRaw: aiModelResponseRaw
     }
   );
 }
@@ -555,9 +970,21 @@ async function classifyAgainstRubric({ db, userId, text, pillarId }) {
   }
 
   const pillar = await getOwnedPillar({ db, userId, pillarId });
+  const userFacts = await loadUserContextFacts({ db, userId });
+  const pillarName = normalizeContextString(pillar.pillarData?.name, 80);
   const candidates = getRubricItems(pillar.pillarData)
     .filter(item => item && typeof item.id === 'string')
-    .map(item => toCandidate(pillar.pillarId, item));
+    .map(item => toCandidate(pillar.pillarId, item, pillarName));
+
+  logger.info(
+    {
+      userId,
+      pillarId: pillar.pillarId,
+      rubricItemCount: candidates.length,
+      textPreview: textPreview(normalizedText)
+    },
+    '[classification] Scoped rubric classification requested'
+  );
 
   requireNonEmptyCandidates(
     candidates,
@@ -567,7 +994,8 @@ async function classifyAgainstRubric({ db, userId, text, pillarId }) {
   return runClassification({
     text: normalizedText,
     candidates,
-    includePillar: false
+    includePillar: false,
+    userFacts
   });
 }
 
@@ -580,16 +1008,18 @@ async function classifyAcrossPillars({ db, userId, text }) {
   const pillarsSnapshot = await db.collection('pillars')
     .where('userId', '==', userId)
     .get();
+  const userFacts = await loadUserContextFacts({ db, userId });
 
   const candidates = [];
   for (const doc of pillarsSnapshot.docs) {
     const pillarData = doc.data() || {};
+    const pillarName = normalizeContextString(pillarData?.name, 80);
     const rubricItems = getRubricItems(pillarData);
     for (const rubricItem of rubricItems) {
       if (!rubricItem || typeof rubricItem.id !== 'string') {
         continue;
       }
-      candidates.push(toCandidate(doc.id, rubricItem));
+      candidates.push(toCandidate(doc.id, rubricItem, pillarName));
     }
   }
 
@@ -598,10 +1028,21 @@ async function classifyAcrossPillars({ db, userId, text }) {
     'No rubric items found. Add rubric items to at least one pillar before using classification.'
   );
 
+  logger.info(
+    {
+      userId,
+      pillarCount: pillarsSnapshot.size,
+      candidateCount: candidates.length,
+      textPreview: textPreview(normalizedText)
+    },
+    '[classification] Global single-match classification requested'
+  );
+
   return runClassification({
     text: normalizedText,
     candidates,
-    includePillar: true
+    includePillar: true,
+    userFacts
   });
 }
 
@@ -614,16 +1055,18 @@ async function classifyAcrossPillarsMulti({ db, userId, text, maxMatches = AUTO_
   const pillarsSnapshot = await db.collection('pillars')
     .where('userId', '==', userId)
     .get();
+  const userFacts = await loadUserContextFacts({ db, userId });
 
   const candidates = [];
   for (const doc of pillarsSnapshot.docs) {
     const pillarData = doc.data() || {};
+    const pillarName = normalizeContextString(pillarData?.name, 80);
     const rubricItems = getRubricItems(pillarData);
     for (const rubricItem of rubricItems) {
       if (!rubricItem || typeof rubricItem.id !== 'string') {
         continue;
       }
-      candidates.push(toCandidate(doc.id, rubricItem));
+      candidates.push(toCandidate(doc.id, rubricItem, pillarName));
     }
   }
 
@@ -632,10 +1075,22 @@ async function classifyAcrossPillarsMulti({ db, userId, text, maxMatches = AUTO_
     'No rubric items found. Add rubric items to at least one pillar before using classification.'
   );
 
+  logger.info(
+    {
+      userId,
+      pillarCount: pillarsSnapshot.size,
+      candidateCount: candidates.length,
+      maxMatches,
+      textPreview: textPreview(normalizedText)
+    },
+    '[classification] Global multi-match classification requested'
+  );
+
   return runClassificationMulti({
     text: normalizedText,
     candidates,
-    maxMatches
+    maxMatches,
+    userFacts
   });
 }
 

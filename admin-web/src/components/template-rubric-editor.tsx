@@ -1,7 +1,14 @@
 "use client";
 
-import { Button } from "@base-ui/react/button";
-import { Input } from "@base-ui/react/input";
+import {
+  Button,
+  Input,
+  Section,
+  NoticeText,
+  ListCard,
+  Stack,
+  InlineStack
+} from "@/components/design-system";
 import { useMemo, useState } from "react";
 import type { TemplateRubricItem } from "@/lib/pillar-templates";
 
@@ -119,44 +126,32 @@ export function TemplateRubricEditor({ rubricItems, busy = false, onAdd, onUpdat
   }
 
   return (
-    <section className="surface p-4">
-      <header className="mb-3">
-        <h2 className="text-base font-semibold">Default Rubric Items</h2>
-      </header>
-
-      {error ? (
-        <p className="mono mb-3 rounded bg-[var(--bg-elevated)] px-2 py-2 text-xs text-[var(--ink)]">{error}</p>
-      ) : null}
-
-      <div className="grid gap-2 rounded-md border border-[var(--line)] bg-[var(--bg)] p-3 md:grid-cols-5">
-        <Input
+      <Section title="Default Rubric Items">
+        <Stack gap={2} className="rounded-md border border-[var(--line)] p-3 md:grid-cols-5">
+          <Input
           value={addForm.activityType}
           onChange={(event) => setAddForm(current => ({ ...current, activityType: event.target.value }))}
           placeholder="Activity type"
-          className="rounded-md border border-[var(--line)] px-2 py-2 text-sm"
         />
         <Input
           value={addForm.tier}
           onChange={(event) => setAddForm(current => ({ ...current, tier: event.target.value }))}
           placeholder="Tier"
-          className="rounded-md border border-[var(--line)] px-2 py-2 text-sm"
         />
         <Input
           value={addForm.label}
           onChange={(event) => setAddForm(current => ({ ...current, label: event.target.value }))}
           placeholder="Label (optional)"
-          className="rounded-md border border-[var(--line)] px-2 py-2 text-sm"
         />
         <Input
           value={addForm.points}
           onChange={(event) => setAddForm(current => ({ ...current, points: event.target.value }))}
           placeholder="Points"
-          className="mono rounded-md border border-[var(--line)] px-2 py-2 text-sm"
+          className="mono"
         />
         <Button
           disabled={busy}
           onClick={submitAdd}
-          className="mono cursor-pointer rounded-md border border-[var(--accent)] bg-[var(--accent-soft)] px-3 py-2 text-xs text-[var(--accent)] hover:bg-[var(--bg-elevated)] disabled:cursor-not-allowed disabled:opacity-60"
         >
           Add Item
         </Button>
@@ -164,72 +159,73 @@ export function TemplateRubricEditor({ rubricItems, busy = false, onAdd, onUpdat
           value={addForm.examples}
           onChange={(event) => setAddForm(current => ({ ...current, examples: event.target.value }))}
           placeholder="Examples (optional)"
-          className="rounded-md border border-[var(--line)] px-2 py-2 text-sm md:col-span-5"
+          className="md:col-span-5"
         />
-      </div>
+        </Stack>
 
-      <div className="mt-3 grid gap-2">
-        {sortedItems.map(item => {
-          const draft = draftFor(item);
-          return (
-            <article key={item.id} className="rounded-md border border-[var(--line)] bg-[var(--bg)] p-3">
-              <div className="mb-2 flex items-center justify-between gap-2">
-                <p className="mono text-xs text-[var(--ink-subtle)]">{item.id}</p>
-                <div className="flex items-center gap-2">
-                  <Button
-                    disabled={busy || savingId === item.id}
-                    onClick={() => saveItem(item)}
-                    className="mono cursor-pointer rounded-md border border-[var(--line-strong)] bg-[var(--bg)] px-2 py-1 text-xs text-[var(--ink)] hover:bg-[var(--bg-elevated)] disabled:cursor-not-allowed disabled:opacity-60"
-                  >
-                    Save
-                  </Button>
-                  <Button
-                    disabled={busy || savingId === item.id}
-                    onClick={() => removeItem(item)}
-                    className="mono cursor-pointer rounded-md border border-[var(--line-strong)] bg-[var(--bg-elevated)] px-2 py-1 text-xs text-[var(--ink)] hover:bg-[var(--bg-elevated)] disabled:cursor-not-allowed disabled:opacity-60"
-                  >
-                    Remove
-                  </Button>
+        {error ? (
+          <NoticeText className="mb-3">{error}</NoticeText>
+        ) : null}
+
+        <Stack gap={2} className="mt-3">
+          {sortedItems.map(item => {
+            const draft = draftFor(item);
+            return (
+              <ListCard key={item.id}>
+                <div className="mb-2 flex items-center justify-between gap-2">
+                  <p className="mono text-xs text-[var(--ink-subtle)]">{item.id}</p>
+                  <InlineStack>
+                    <Button
+                      disabled={busy || savingId === item.id}
+                      onClick={() => saveItem(item)}
+                    >
+                      Save
+                    </Button>
+                    <Button
+                      disabled={busy || savingId === item.id}
+                      onClick={() => removeItem(item)}
+                    >
+                      Remove
+                    </Button>
+                  </InlineStack>
                 </div>
-              </div>
 
-              <div className="grid gap-2 md:grid-cols-[2fr_120px]">
-                <Input
-                  value={draft.label}
-                  onChange={(event) =>
-                    setDrafts(current => ({
-                      ...current,
-                      [item.id]: {
-                        ...draft,
-                        label: event.target.value
-                      }
-                    }))
-                  }
-                  className="rounded-md border border-[var(--line)] px-2 py-2 text-sm"
-                />
-                <Input
-                  value={draft.points}
-                  onChange={(event) =>
-                    setDrafts(current => ({
-                      ...current,
-                      [item.id]: {
-                        ...draft,
-                        points: event.target.value
-                      }
-                    }))
-                  }
-                  className="mono rounded-md border border-[var(--line)] px-2 py-2 text-sm"
-                />
-              </div>
+                <div className="grid gap-2 md:grid-cols-[2fr_120px]">
+                  <Input
+                    value={draft.label}
+                    onChange={(event) =>
+                      setDrafts(current => ({
+                        ...current,
+                        [item.id]: {
+                          ...draft,
+                          label: event.target.value
+                        }
+                      }))
+                    }
+                  />
+                  <Input
+                    value={draft.points}
+                    onChange={(event) =>
+                      setDrafts(current => ({
+                        ...current,
+                        [item.id]: {
+                          ...draft,
+                          points: event.target.value
+                        }
+                      }))
+                    }
+                    className="mono"
+                  />
+                </div>
 
-              <p className="mt-2 text-xs text-[var(--ink-subtle)]">
-                {item.activityType} · {item.tier}
-                {item.examples ? ` · ${item.examples}` : ""}
-              </p>
-            </article>
-          );
-        })}
-      </div>
-    </section>
+                <p className="mt-2 text-xs text-[var(--ink-subtle)]">
+                  {item.activityType} · {item.tier}
+                  {item.examples ? ` · ${item.examples}` : ""}
+                </p>
+              </ListCard>
+            );
+          })}
+        </Stack>
+      </Section>
   );
 }

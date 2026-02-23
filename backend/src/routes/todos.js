@@ -1,5 +1,5 @@
 const express = require('express');
-const { db } = require('../config/firebase');
+const { db, logger } = require('../config/firebase');
 const { flexibleAuth } = require('../middleware/serviceAuth');
 const { resolveValidatedPillarId } = require('../utils/pillarValidation');
 const { resolveEventSource, writeUserEventSafe } = require('../services/events');
@@ -24,6 +24,17 @@ const TODO_AUTO_CLASSIFICATION_MAX_MATCHES = 3;
 
 function nowTs() {
   return Date.now() / 1000;
+}
+
+function previewTodoText(content, description = '') {
+  const combined = [content, description]
+    .filter(value => typeof value === 'string' && value.trim())
+    .join(' ')
+    .trim();
+  if (!combined) {
+    return '';
+  }
+  return combined.slice(0, 160);
 }
 
 async function normalizeBountyForTodoCreate({ userId, body, defaultPillarId }) {
@@ -370,6 +381,13 @@ async function classifyTodoAssignment({
   assignment
 }) {
   const classificationText = buildClassificationText(content, description);
+  const baseLogContext = {
+    userId,
+    mode: assignment.mode,
+    requestedPillarCount: Array.isArray(assignment.pillarIds) ? assignment.pillarIds.length : 0,
+    textPreview: previewTodoText(content, description)
+  };
+  logger.info(baseLogContext, '[todos] Todo assignment classification started');
 
   if (assignment.mode === 'manual') {
     const validatedPillarIds = [];
@@ -391,6 +409,11 @@ async function classifyTodoAssignment({
       throw createValidationError('assignment.pillarIds must include at least one valid pillar', 400);
     }
 
+    logger.info(
+      { ...baseLogContext, validatedPillarIds },
+      '[todos] Manual assignment scope validated'
+    );
+
     const perPillar = await Promise.all(
       validatedPillarIds.map(async (pillarId, index) => {
         const classified = await classifyAgainstRubric({
@@ -402,7 +425,11 @@ async function classifyTodoAssignment({
         return {
           pillarId: classified.pillarId,
           points: Number(classified.bounty) || Number(classified.rubricItem?.points) || 0,
-          rank: index + 1
+          rank: index + 1,
+          modelRationale: classified.modelRationale || null,
+          modelSystemPrompt: classified.modelSystemPrompt || null,
+          modelUserPrompt: classified.modelUserPrompt || null,
+          modelResponseRaw: classified.modelResponseRaw || null
         };
       })
     );
@@ -410,9 +437,27 @@ async function classifyTodoAssignment({
     const collapsed = collapseAllocationEntriesByPillar(perPillar);
     const matchedPillarIds = collapsed.map(item => item.pillarId);
     const trimmed = trimAllocationEntries(collapsed);
-    return {
+    const result = {
       assignmentMode: 'manual',
       method: 'manual',
+      fallbackUsed: false,
+      modelUsed: null,
+      modelRationale: perPillar
+        .map(item => item.modelRationale)
+        .filter(Boolean)
+        .join(' | ') || null,
+      modelSystemPrompt: perPillar
+        .map(item => item.modelSystemPrompt)
+        .filter(Boolean)
+        .join('\n\n---\n\n') || null,
+      modelUserPrompt: perPillar
+        .map(item => item.modelUserPrompt)
+        .filter(Boolean)
+        .join('\n\n---\n\n') || null,
+      modelResponseRaw: perPillar
+        .map(item => item.modelResponseRaw)
+        .filter(Boolean)
+        .join('\n\n---\n\n') || null,
       matchedPillarIds,
       trimmedPillarIds: trimmed.trimmedPillarIds,
       allocations: trimmed.kept.map(item => ({
@@ -421,6 +466,20 @@ async function classifyTodoAssignment({
       })),
       totalPoints: coerceTotalPoints(trimmed.total)
     };
+
+    logger.info(
+      {
+        ...baseLogContext,
+        validatedPillarIds,
+        matchedPillarIds: result.matchedPillarIds,
+        trimmedPillarIds: result.trimmedPillarIds,
+        allocations: result.allocations,
+        totalPoints: result.totalPoints
+      },
+      '[todos] Manual assignment classification complete'
+    );
+
+    return result;
   }
 
   const multi = await classifyAcrossPillarsMulti({
@@ -439,9 +498,15 @@ async function classifyTodoAssignment({
   const matchedPillarIds = collapsed.map(item => item.pillarId);
   const trimmed = trimAllocationEntries(collapsed);
 
-  return {
+  const result = {
     assignmentMode: 'auto',
     method: multi.method || 'ai',
+    fallbackUsed: Boolean(multi.fallbackUsed),
+    modelUsed: multi.modelUsed || null,
+    modelRationale: multi.modelRationale || null,
+    modelSystemPrompt: multi.modelSystemPrompt || null,
+    modelUserPrompt: multi.modelUserPrompt || null,
+    modelResponseRaw: multi.modelResponseRaw || null,
     matchedPillarIds,
     trimmedPillarIds: trimmed.trimmedPillarIds,
     allocations: trimmed.kept.map(item => ({
@@ -450,6 +515,30 @@ async function classifyTodoAssignment({
     })),
     totalPoints: coerceTotalPoints(trimmed.total)
   };
+
+  logger.info(
+    {
+      ...baseLogContext,
+      classifierMethod: multi.method || null,
+      classifierFallbackUsed: Boolean(multi.fallbackUsed),
+      classifierModel: multi.modelUsed || null,
+      classifierMatches: Array.isArray(multi.matches)
+        ? multi.matches.map(match => ({
+          rank: match.rank,
+          pillarId: match.pillarId,
+          rubricItemId: match?.rubricItem?.id || null,
+          points: Number(match.bounty) || Number(match?.rubricItem?.points) || 0
+        }))
+        : [],
+      matchedPillarIds: result.matchedPillarIds,
+      trimmedPillarIds: result.trimmedPillarIds,
+      allocations: result.allocations,
+      totalPoints: result.totalPoints
+    },
+    '[todos] Auto assignment classification complete'
+  );
+
+  return result;
 }
 
 function createValidationError(message, status = 400) {
@@ -1229,6 +1318,17 @@ router.post('/', async (req, res) => {
     const todosCollection = db.collection('todos');
     const todoRef = requestedId ? todosCollection.doc(requestedId) : todosCollection.doc();
 
+    logger.info(
+      {
+        userId,
+        todoId: requestedId || todoRef.id,
+        mode: normalized?.data?.assignment?.mode || 'auto',
+        requestedPillarCount: normalized?.data?.assignment?.pillarIds?.length || 0,
+        contentPreview: previewTodoText(normalized?.data?.content, normalized?.data?.description)
+      },
+      '[todos] Create todo request received'
+    );
+
     if (requestedId) {
       const existing = await todoRef.get();
       if (existing.exists) {
@@ -1245,6 +1345,16 @@ router.post('/', async (req, res) => {
         assignment: normalized.data.assignment
       });
     } catch (error) {
+      logger.warn(
+        {
+          userId,
+          todoId: requestedId || todoRef.id,
+          mode: normalized?.data?.assignment?.mode || 'auto',
+          error: error?.message || String(error),
+          status: error?.status || null
+        },
+        '[todos] Create todo assignment classification failed'
+      );
       if (error?.status) {
         return res.status(error.status).json({ error: error.message });
       }
@@ -1328,8 +1438,27 @@ router.post('/', async (req, res) => {
     const classificationSummary = {
       matchedPillarIds: assignmentResult.matchedPillarIds,
       trimmedPillarIds: assignmentResult.trimmedPillarIds,
-      method: assignmentResult.method
+      method: assignmentResult.method,
+      fallbackUsed: assignmentResult.fallbackUsed,
+      modelUsed: assignmentResult.modelUsed,
+      modelRationale: assignmentResult.modelRationale || null,
+      modelSystemPrompt: assignmentResult.modelSystemPrompt || null,
+      modelUserPrompt: assignmentResult.modelUserPrompt || null,
+      modelResponseRaw: assignmentResult.modelResponseRaw || null
     };
+    logger.info(
+      {
+        userId,
+        todoId: payload.id,
+        assignmentMode: assignmentResult.assignmentMode,
+        method: assignmentResult.method,
+        matchedPillarIds: classificationSummary.matchedPillarIds,
+        trimmedPillarIds: classificationSummary.trimmedPillarIds,
+        totalPoints: payload.bountyPoints,
+        modelRationale: classificationSummary.modelRationale
+      },
+      '[todos] Create todo classification summary'
+    );
     const scheduled = buildTodoScheduledProjection(todoResponse);
 
     // Return ergonomic response while keeping legacy top-level todo fields.
@@ -1700,6 +1829,23 @@ const updateTodoHandler = async (req, res) => {
       updatedAt: now
     };
 
+    logger.info(
+      {
+        userId,
+        todoId: req.params.id,
+        hasAssignmentUpdate: Object.prototype.hasOwnProperty.call(normalized.data, 'assignment'),
+        mode: normalized?.data?.assignment?.mode || null,
+        requestedPillarCount: normalized?.data?.assignment?.pillarIds?.length || 0,
+        contentPreview: previewTodoText(
+          normalized.data.content || existing.content || '',
+          Object.prototype.hasOwnProperty.call(normalized.data, 'description')
+            ? (normalized.data.description || '')
+            : (existing.description || '')
+        )
+      },
+      '[todos] Update todo request received'
+    );
+
     let classificationSummary = null;
     if (Object.prototype.hasOwnProperty.call(normalized.data, 'assignment')) {
       let assignmentResult;
@@ -1713,6 +1859,16 @@ const updateTodoHandler = async (req, res) => {
           assignment: normalized.data.assignment
         });
       } catch (error) {
+        logger.warn(
+          {
+            userId,
+            todoId: req.params.id,
+            mode: normalized?.data?.assignment?.mode || null,
+            error: error?.message || String(error),
+            status: error?.status || null
+          },
+          '[todos] Update todo assignment classification failed'
+        );
         if (error?.status) {
           return res.status(error.status).json({ error: error.message });
         }
@@ -1729,8 +1885,27 @@ const updateTodoHandler = async (req, res) => {
       classificationSummary = {
         matchedPillarIds: assignmentResult.matchedPillarIds,
         trimmedPillarIds: assignmentResult.trimmedPillarIds,
-        method: assignmentResult.method
+        method: assignmentResult.method,
+        fallbackUsed: assignmentResult.fallbackUsed,
+        modelUsed: assignmentResult.modelUsed,
+        modelRationale: assignmentResult.modelRationale || null,
+        modelSystemPrompt: assignmentResult.modelSystemPrompt || null,
+        modelUserPrompt: assignmentResult.modelUserPrompt || null,
+        modelResponseRaw: assignmentResult.modelResponseRaw || null
       };
+      logger.info(
+        {
+          userId,
+          todoId: req.params.id,
+          assignmentMode: assignmentResult.assignmentMode,
+          method: assignmentResult.method,
+          matchedPillarIds: classificationSummary.matchedPillarIds,
+          trimmedPillarIds: classificationSummary.trimmedPillarIds,
+          totalPoints: payload.bountyPoints,
+          modelRationale: classificationSummary.modelRationale
+        },
+        '[todos] Update todo classification summary'
+      );
     } else {
       if (Object.prototype.hasOwnProperty.call(normalized.data, 'pillarId')) {
         payload.pillarId = null;

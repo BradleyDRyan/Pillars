@@ -255,7 +255,13 @@ function buildTodoSchema() {
         properties: {
           matchedPillarIds: { type: 'array', items: { type: 'string' } },
           trimmedPillarIds: { type: 'array', items: { type: 'string' } },
-          method: { type: 'string' }
+          method: { type: 'string' },
+          fallbackUsed: { type: 'boolean' },
+          modelUsed: { type: 'string', nullable: true },
+          modelRationale: { type: 'string', nullable: true },
+          modelSystemPrompt: { type: 'string', nullable: true },
+          modelUserPrompt: { type: 'string', nullable: true },
+          modelResponseRaw: { type: 'string', nullable: true }
         }
       }
     }

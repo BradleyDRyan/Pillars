@@ -41,16 +41,16 @@ function mergeButtonClassName(
 }
 
 const buttonBaseClassName =
-  "inline-flex min-h-8 cursor-pointer items-center justify-center px-[14px] py-0 border disabled:cursor-not-allowed disabled:opacity-60";
+  "admin-button inline-flex min-h-8 cursor-pointer items-center justify-center px-[14px] py-0 border disabled:cursor-not-allowed disabled:opacity-60";
 
 const buttonPrimaryClassName =
-  "mono cursor-pointer text-sm bg-[var(--button-primary)] text-[var(--on-button-primary)] hover:bg-[var(--button-primary-hover)]";
+  "admin-button--primary mono cursor-pointer text-sm bg-[var(--button-primary)] text-[var(--on-button-primary)] hover:bg-[var(--button-primary-hover)]";
 
 const buttonTertiaryClassName =
-  "bg-[var(--button-tertiary)] border-transparent shadow-none text-[var(--on-button-tertiary)] text-sm hover:bg-[var(--tertiary-hover)] hover:text-[var(--ink)]";
+  "admin-button--tertiary bg-[var(--button-tertiary)] border-transparent shadow-none text-[var(--on-button-tertiary)] text-sm hover:bg-[var(--tertiary-hover)] hover:text-[var(--ink)]";
 
 const buttonDefaultClassName =
-  "mono cursor-pointer text-sm bg-[var(--button-default)] text-[var(--on-button-default)] hover:bg-[var(--button-default-hover)]";
+  "admin-button--default mono cursor-pointer text-sm bg-[var(--button-default)] text-[var(--on-button-default)] hover:bg-[var(--button-default-hover)]";
 
 export function Button({
   variant = "default",

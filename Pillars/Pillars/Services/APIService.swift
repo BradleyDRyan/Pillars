@@ -265,6 +265,33 @@ class APIService: ObservableObject {
         return try await handleResponse(data, response, nil, type: TodoMutationResponse.self)
     }
 
+    func updateTodoBountyAllocations(
+        todoId: String,
+        allocations: [TodoBountyAllocation]
+    ) async throws -> TodoMutationResponse {
+        _ = try await getFirebaseToken()
+        guard let url = URL(string: "\(baseURL)/todos/\(todoId)") else {
+            throw APIError.invalidURL("\(baseURL)/todos/\(todoId)")
+        }
+
+        let normalized = allocations.compactMap { allocation -> [String: Any]? in
+            let pillarId = allocation.pillarId.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !pillarId.isEmpty else { return nil }
+            return [
+                "pillarId": pillarId,
+                "points": allocation.points
+            ]
+        }
+
+        let payload: [String: Any] = [
+            "bountyAllocations": normalized.isEmpty ? NSNull() : normalized
+        ]
+        let body = try JSONSerialization.data(withJSONObject: payload, options: [])
+        let request = createRequest(url: url, method: "PATCH", body: body)
+        let (data, response) = try await session.data(for: request)
+        return try await handleResponse(data, response, nil, type: TodoMutationResponse.self)
+    }
+
     // MARK: - Principles
     
     func fetchPrinciples(pillarId: String? = nil) async throws -> [Principle] {

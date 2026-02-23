@@ -7,6 +7,7 @@
 
 import SwiftUI
 import FirebaseAuth
+import FirebaseFirestore
 import UIKit
 import Security
 
@@ -28,6 +29,13 @@ struct ProfileView: View {
     @State private var deleteAllDataSuccessMessage: String?
     @State private var didCopyApiKey = false
     @State private var didCopyOpenClawSetup = false
+    @State private var factsText: String = ""
+    @State private var isFactsLoading = false
+    @State private var isFactsSaving = false
+    @State private var factsErrorMessage: String?
+    @State private var factsSuccessMessage: String?
+    @State private var showingFactsEditor = false
+    @State private var factsDraftText: String = ""
     
     var body: some View {
         NavigationStack {
@@ -87,6 +95,56 @@ struct ProfileView: View {
                                 .font(.system(size: 13))
                                 .foregroundColor(.orange)
                         }
+                    }
+                }
+
+                // Facts section
+                Section("Facts") {
+                    Text("One fact per line. These help AI classify todos to the right pillars.")
+                        .font(.system(size: 13))
+                        .foregroundColor(.secondary)
+
+                    if isFactsLoading {
+                        HStack(spacing: 10) {
+                            ProgressView()
+                                .controlSize(.small)
+                            Text("Loading facts…")
+                                .font(.system(size: 13))
+                                .foregroundColor(.secondary)
+                        }
+                    }
+
+                    let factLines = normalizeFactLines(from: factsText)
+                    if !isFactsLoading {
+                        if factLines.isEmpty {
+                            Text("No facts saved yet.")
+                                .font(.system(size: 13))
+                                .foregroundColor(.secondary)
+                        } else {
+                            Text(factLines.joined(separator: "\n"))
+                                .font(.system(size: 14))
+                                .foregroundColor(.primary)
+                        }
+                    }
+
+                    Button {
+                        factsDraftText = factsText
+                        showingFactsEditor = true
+                    } label: {
+                        Label("Edit Facts", systemImage: "square.and.pencil")
+                    }
+                    .disabled(isFactsLoading || firebaseManager.currentUser == nil)
+
+                    if let factsSuccessMessage {
+                        Text(factsSuccessMessage)
+                            .font(.system(size: 12))
+                            .foregroundColor(.secondary)
+                    }
+
+                    if let factsErrorMessage {
+                        Text(factsErrorMessage)
+                            .font(.system(size: 12))
+                            .foregroundColor(.red)
                     }
                 }
 
@@ -350,6 +408,74 @@ struct ProfileView: View {
         }
         .task(id: firebaseManager.currentUser?.uid) {
             await refreshApiKeyState()
+            await refreshFacts()
+        }
+        .sheet(isPresented: $showingFactsEditor) {
+            factsEditorSheet
+        }
+    }
+
+    private var factsEditorSheet: some View {
+        NavigationStack {
+            VStack(alignment: .leading, spacing: 12) {
+                Text("One fact per line.")
+                    .font(.system(size: 13))
+                    .foregroundColor(.secondary)
+
+                ZStack(alignment: .topLeading) {
+                    TextEditor(text: $factsDraftText)
+                        .font(.system(size: 14))
+                        .frame(minHeight: 220)
+                        .textInputAutocapitalization(.sentences)
+                        .disableAutocorrection(false)
+
+                    if factsDraftText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                        Text("""
+                        Bradley is a product designer
+                        Bradley is married to Emme
+                        """)
+                            .font(.system(size: 14))
+                            .foregroundColor(.secondary)
+                            .padding(.horizontal, 5)
+                            .padding(.vertical, 8)
+                    }
+                }
+
+                if isFactsSaving {
+                    HStack(spacing: 10) {
+                        ProgressView()
+                            .controlSize(.small)
+                        Text("Saving facts…")
+                            .font(.system(size: 13))
+                            .foregroundColor(.secondary)
+                    }
+                }
+
+                Spacer()
+            }
+            .padding(16)
+            .navigationTitle("Edit Facts")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") {
+                        showingFactsEditor = false
+                    }
+                    .disabled(isFactsSaving)
+                }
+
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Save") {
+                        Task {
+                            let didSave = await saveFacts(from: factsDraftText)
+                            if didSave {
+                                showingFactsEditor = false
+                            }
+                        }
+                    }
+                    .disabled(isFactsSaving)
+                }
+            }
         }
     }
 
@@ -384,6 +510,105 @@ struct ProfileView: View {
         } catch {
             apiKeyErrorMessage = error.localizedDescription
         }
+    }
+
+    private func refreshFacts() async {
+        guard let userId = firebaseManager.currentUser?.uid else {
+            factsText = ""
+            factsErrorMessage = nil
+            factsSuccessMessage = nil
+            isFactsLoading = false
+            isFactsSaving = false
+            return
+        }
+
+        isFactsLoading = true
+        factsErrorMessage = nil
+        factsSuccessMessage = nil
+        defer { isFactsLoading = false }
+
+        do {
+            let facts = try await fetchProfileFacts(userId: userId)
+            factsText = facts.joined(separator: "\n")
+        } catch {
+            factsErrorMessage = error.localizedDescription
+        }
+    }
+
+    private func saveFacts(from rawText: String) async -> Bool {
+        guard let userId = firebaseManager.currentUser?.uid else {
+            factsErrorMessage = "You must be signed in to save facts."
+            return false
+        }
+
+        isFactsSaving = true
+        factsErrorMessage = nil
+        factsSuccessMessage = nil
+        defer { isFactsSaving = false }
+
+        do {
+            let lines = normalizeFactLines(from: rawText)
+            try await Firestore.firestore()
+                .collection("users")
+                .document(userId)
+                .setData([
+                    "facts": lines,
+                    "updatedAt": FieldValue.serverTimestamp()
+                ], merge: true)
+            factsText = lines.joined(separator: "\n")
+            factsSuccessMessage = lines.isEmpty ? "Facts cleared." : "Facts saved."
+            return true
+        } catch {
+            factsErrorMessage = error.localizedDescription
+            return false
+        }
+    }
+
+    private func fetchProfileFacts(userId: String) async throws -> [String] {
+        let document = try await Firestore.firestore()
+            .collection("users")
+            .document(userId)
+            .getDocument()
+
+        let data = document.data() ?? [:]
+        if let facts = data["facts"] as? [String] {
+            return normalizeFactLines(from: facts.joined(separator: "\n"))
+        }
+        if let facts = data["facts"] as? String {
+            return normalizeFactLines(from: facts)
+        }
+        if let additionalData = data["additionalData"] as? [String: Any] {
+            if let facts = additionalData["facts"] as? [String] {
+                return normalizeFactLines(from: facts.joined(separator: "\n"))
+            }
+            if let facts = additionalData["facts"] as? String {
+                return normalizeFactLines(from: facts)
+            }
+        }
+        return []
+    }
+
+    private func normalizeFactLines(from raw: String) -> [String] {
+        let lines = raw
+            .components(separatedBy: .newlines)
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+            .map { String($0.prefix(200)) }
+
+        var result: [String] = []
+        var dedup = Set<String>()
+        for line in lines {
+            let key = line.lowercased()
+            if dedup.contains(key) {
+                continue
+            }
+            dedup.insert(key)
+            result.append(line)
+            if result.count >= 25 {
+                break
+            }
+        }
+        return result
     }
 
     private func createOrRotateApiKey() async {

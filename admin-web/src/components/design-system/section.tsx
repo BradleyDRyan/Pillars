@@ -4,35 +4,36 @@ type SectionProps = {
   title?: ReactNode | null;
   children: ReactNode;
   className?: string;
-  titleClassName?: string;
   contentClassName?: string;
-} & Omit<ComponentPropsWithoutRef<"section">, "children" | "title">;
+} & Omit<ComponentPropsWithoutRef<"section">, "children">;
 
 function cx(...classes: Array<string | undefined>) {
   return classes.filter(Boolean).join(" ");
 }
 
-const sectionClassName = "bg-[var(--bg-surface)] p-2 -m-2";
-const defaultTitleClassName = "text-base font-semibold";
-
+const sectionClassName = "admin-section bg-[var(--bg-surface)] p-3";
 export function Section({
   title,
   children,
   className,
-  titleClassName,
   contentClassName,
   ...props
 }: SectionProps) {
-  const showTitle = title !== null && title !== undefined && title !== "";
+  const containerClassName = cx(sectionClassName, className);
+  const titleNode = title ? (
+    <h3 className="text-sm font-normal text-[var(--ink)]">{title}</h3>
+  ) : null;
 
   return (
-    <section {...props} className={cx(sectionClassName, className)}>
-      {showTitle ? (
-        <header className="mb-3 flex items-center justify-between">
-          <h2 className={cx(defaultTitleClassName, titleClassName)}>{title}</h2>
-        </header>
-      ) : null}
-      <div className={cx(contentClassName)}>{children}</div>
-    </section>
+    <div className="grid gap-2">
+      {titleNode}
+      <section
+        {...props}
+        className={containerClassName}
+        style={{ borderRadius: "10px", border: "1px solid var(--border-light)" }}
+      >
+        <div className={cx("admin-section__content", contentClassName)}>{children}</div>
+      </section>
+    </div>
   );
 }

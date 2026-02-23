@@ -1,5 +1,5 @@
 import { Plus } from "lucide-react";
-import { Button, PrimaryButton, TertiaryButton, PageView, PageViewContent, PageViewHeader } from "@/components/design-system";
+import { Button, PrimaryButton, TertiaryButton, PageView, PageViewContent, PageViewTitle } from "@/components/design-system";
 
 export const metadata = {
   title: "Design System - Button",
@@ -9,9 +9,9 @@ export const metadata = {
 export default function ButtonPage() {
   return (
     <PageView>
-      <PageViewHeader>
+      <PageViewTitle>
         <h1 className="text-2xl font-semibold tracking-tight">Button</h1>
-      </PageViewHeader>
+      </PageViewTitle>
       <PageViewContent>
         <section className="space-y-4">
           <p className="text-sm text-[var(--ink-subtle)]">
