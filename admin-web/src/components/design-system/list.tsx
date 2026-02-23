@@ -5,7 +5,7 @@ export type ListGroupProps = {
   className?: string;
 } & Omit<ComponentPropsWithoutRef<"div">, "children">;
 
-type BaseListRowProps = {
+type BaseListItemProps = {
   children: ReactNode;
   active?: boolean;
   isActive?: boolean;
@@ -13,20 +13,21 @@ type BaseListRowProps = {
   icon?: ReactNode;
 };
 
-type ListRowLinkProps = BaseListRowProps &
+type ListItemLinkProps = BaseListItemProps &
   Omit<ComponentPropsWithoutRef<"a">, "children" | "className" | "role"> & {
     href: string;
   };
 
-type ListRowButtonProps = BaseListRowProps &
+type ListItemButtonProps = BaseListItemProps &
   Omit<ComponentPropsWithoutRef<"button">, "children" | "type" | "className"> & {
     href?: never;
     buttonType?: "button" | "submit" | "reset";
   };
 
-export type ListRowProps = ListRowLinkProps | ListRowButtonProps;
+export type ListItemProps = ListItemLinkProps | ListItemButtonProps;
+export type ListRowProps = ListItemProps;
 
-function isListRowLink(props: ListRowProps): props is ListRowLinkProps {
+function isListItemLink(props: ListItemProps): props is ListItemLinkProps {
   return "href" in props && Boolean(props.href);
 }
 
@@ -47,14 +48,14 @@ export function ListGroup({ children, className, ...props }: ListGroupProps) {
   );
 }
 
-export function ListRow({
+export function ListItem({
   children,
   active,
   isActive,
   className,
   icon,
   ...props
-}: ListRowProps) {
+}: ListItemProps) {
   const selected = active ?? isActive;
   const rowClassName = cx(
     baseListRowClassName,
@@ -64,7 +65,7 @@ export function ListRow({
     className
   );
 
-  if (isListRowLink(props)) {
+  if (isListItemLink(props)) {
     return (
       <a
         className={rowClassName}
@@ -78,11 +79,11 @@ export function ListRow({
           ) : null}
           <span className="inline-flex min-w-0 flex-1 items-center">{children}</span>
         </span>
-      </a>
-    );
+    </a>
+  );
   }
 
-  const buttonProps = props as ListRowButtonProps;
+  const buttonProps = props as ListItemButtonProps;
   return (
     <button
       type={buttonProps.buttonType ?? "button"}
@@ -99,4 +100,8 @@ export function ListRow({
       </span>
     </button>
   );
+}
+
+export function ListRow(props: ListRowProps) {
+  return <ListItem {...props} />;
 }

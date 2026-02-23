@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { TertiaryButton, Button, ListGroup, ListRow, PrimaryButton, Section } from "@/components/design-system";
+import { TertiaryButton, Button, ListGroup, ListItem, PrimaryButton, Section } from "@/components/design-system";
 import { requestJson } from "@/lib/http-json";
 import type { PillarTemplateRecord } from "@/lib/pillar-templates";
 import { PageView, PageViewHeader, PageViewContent } from "@/components/design-system";
@@ -171,7 +171,7 @@ export function PillarTemplateManager({
             {loading ? <p className="text-sm text-[var(--ink-subtle)]">Loading...</p> : null}
             <ListGroup>
               {templates.map(template => (
-                <ListRow
+                <ListItem
                   key={template.pillarType}
                   href={`/pillars/templates/${encodeURIComponent(template.pillarType)}`}
                   active={false}
@@ -179,7 +179,7 @@ export function PillarTemplateManager({
                   aria-label={`Open template ${template.name}`}
                 >
                   {template.name}
-                </ListRow>
+                </ListItem>
               ))}
             </ListGroup>
           </Section>
@@ -476,7 +476,7 @@ export function PillarTemplateManager({
             ) : null}
             <ListGroup>
               {templates.map(template => (
-                <ListRow
+                <ListItem
                   key={template.pillarType}
                   onClick={() => setSelectedType(template.pillarType)}
                   active={normalizeTemplateType(template.pillarType) === selectedTemplateType || normalizeTemplateType(template.pillarType) === activeTemplateType}
@@ -484,7 +484,7 @@ export function PillarTemplateManager({
                   aria-label={`Open template ${template.name}`}
                 >
                   {template.name}
-                </ListRow>
+                </ListItem>
               ))}
             </ListGroup>
           </Section>

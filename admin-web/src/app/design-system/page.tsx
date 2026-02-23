@@ -2,7 +2,7 @@ import Link from "next/link";
 
 export const metadata = {
   title: "Design System",
-  description: "Pillars admin design system overview."
+  description: "Pillars admin design system index."
 };
 
 export default function DesignSystemPage() {
@@ -27,10 +27,14 @@ export default function DesignSystemPage() {
               <p className="text-sm font-semibold">Input</p>
               <p className="mt-1 text-xs text-[var(--ink-subtle)]">Input behavior and styling guidance.</p>
             </Link>
-            <Link href="/design-system/menu" className="surface p-4">
-              <p className="text-sm font-semibold">Menu</p>
-              <p className="mt-1 text-xs text-[var(--ink-subtle)]">Menu, MenuItem, and MenuSection composition.</p>
-            </Link>
+          <Link href="/design-system/menu" className="surface p-4">
+            <p className="text-sm font-semibold">Menu</p>
+            <p className="mt-1 text-xs text-[var(--ink-subtle)]">Menu, MenuItem, and MenuSection composition.</p>
+          </Link>
+          <Link href="/design-system/list" className="surface p-4">
+            <p className="text-sm font-semibold">List</p>
+            <p className="mt-1 text-xs text-[var(--ink-subtle)]">List Group and List Item primitives.</p>
+          </Link>
           </div>
         </section>
       </main>

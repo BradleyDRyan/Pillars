@@ -2,7 +2,6 @@ import type { Metadata } from "next";
 import { Menu, MenuItem, MenuSection } from "@/components/design-system";
 import {
   Database,
-  LayoutGrid,
   Shapes,
   Pointer,
   Pencil,
@@ -49,14 +48,6 @@ export default function RootLayout({
                   Schemas
                 </MenuItem>
                 <MenuSection className="admin-nav__section" label={<span data-ui="admin-nav-label-design-system">Design System</span>} defaultOpen>
-                  <MenuItem
-                    icon={<LayoutGrid size={14} strokeWidth={2} />}
-                    className="admin-nav__item admin-nav__item--overview"
-                    href="/design-system"
-                    data-ui="admin-nav-design-overview"
-                  >
-                    Overview
-                  </MenuItem>
                   <MenuItem
                     icon={<Shapes size={14} strokeWidth={2} />}
                     className="admin-nav__item admin-nav__item--components"

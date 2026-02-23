@@ -8,7 +8,10 @@ export const metadata = {
 const items = [
   { name: "Button", href: "/design-system/button", description: "Primary button primitive for admin actions." },
   { name: "Input", href: "/design-system/input", description: "Text input primitive with base focus and validation styling." },
-  { name: "Menu", href: "/design-system/menu", description: "Navigation primitives for side menus and nested sections." }
+  { name: "Section", href: "/design-system/section", description: "Surface wrapper with optional heading and content area." },
+  { name: "Menu", href: "/design-system/menu", description: "Navigation primitives for side menus and nested sections." },
+  { name: "List Group", href: "/design-system/list", description: "Container for compact row collections." },
+  { name: "List Item", href: "/design-system/list", description: "Composable row item with link, icon and active states." }
 ];
 
 export default function ComponentsIndexPage() {

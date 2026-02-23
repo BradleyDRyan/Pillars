@@ -19,7 +19,6 @@ export default function MenuPage() {
             <p className="text-sm font-semibold">Example</p>
             <div className="mt-3 w-full max-w-sm">
               <Menu>
-                <MenuItem href="/design-system">Overview</MenuItem>
                 <MenuSection label="Primitives" defaultOpen>
                   <MenuItem href="/design-system/button">Button</MenuItem>
                   <MenuItem href="/design-system/input">Input</MenuItem>
