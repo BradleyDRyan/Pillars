@@ -37,6 +37,11 @@ export type BlockTypeSchema = {
 
 export type SchemasResponse = {
   blockTypes: BlockTypeSchema[];
+  pillarIcons: {
+    endpoint: string;
+    description: string;
+    values: string[];
+  };
   todoSchema: {
     listQuery: JsonObjectSchema;
     readQuery: JsonObjectSchema;

@@ -358,8 +358,23 @@ async function reconcileHabitLogWrite({
 }) {
   const resolvedHabitLogId = normalizeString(habitLogId) || normalizeString(after?.id) || normalizeString(before?.id);
   if (!resolvedHabitLogId) {
-    return { action: 'noop', reason: 'missing-log-id' };
+    return { action: 'noop', reason: 'missing-log-id', pointEventId: null };
   }
+
+  const resolvedHabitId = normalizeString(after?.habitId) || normalizeString(before?.habitId);
+  const resolvedDate = normalizeString(after?.date) || normalizeString(before?.date);
+  const pointEventId = (resolvedHabitId && isValidDateString(resolvedDate))
+    ? buildHabitPointEventId(resolvedHabitId, resolvedDate)
+    : null;
+
+  logger.info('[habit-bounty-trigger] reconcile start', {
+    habitLogId: resolvedHabitLogId,
+    pointEventId,
+    beforeExists: Boolean(before),
+    afterExists: Boolean(after),
+    before: pickRelevantHabitLogFields(before),
+    after: pickRelevantHabitLogFields(after)
+  });
 
   if (!after) {
     const deletedUserId = normalizeString(before?.userId);
@@ -367,7 +382,7 @@ async function reconcileHabitLogWrite({
     const deletedDate = normalizeString(before?.date);
 
     if (!deletedUserId || !deletedHabitId || !isValidDateString(deletedDate)) {
-      return { action: 'noop', reason: 'deleted-missing-fields' };
+      return { action: 'noop', reason: 'deleted-missing-fields', pointEventId };
     }
 
     const voidResult = await voidHabitPointEvent({
@@ -381,12 +396,13 @@ async function reconcileHabitLogWrite({
 
     return {
       action: voidResult.changed ? 'voided' : 'noop',
-      reason: 'deleted'
+      reason: 'deleted',
+      pointEventId
     };
   }
 
   if (!didRelevantHabitLogFieldsChange(before, after)) {
-    return { action: 'noop', reason: 'no-relevant-change' };
+    return { action: 'noop', reason: 'no-relevant-change', pointEventId };
   }
 
   const userId = normalizeString(after.userId);
@@ -395,15 +411,30 @@ async function reconcileHabitLogWrite({
   if (!userId || !habitId || !isValidDateString(date)) {
     logger.warn('[habit-bounty-trigger] skipping log with missing required fields', {
       habitLogId: resolvedHabitLogId,
+      pointEventId,
       userId,
       habitId,
       date
     });
-    return { action: 'noop', reason: 'missing-required-fields' };
+    return { action: 'noop', reason: 'missing-required-fields', pointEventId };
   }
 
   const now = nowSeconds();
-  if (!isCompletedHabitLog(after)) {
+  const isCompleted = isCompletedHabitLog(after);
+  logger.info('[habit-bounty-trigger] completion state evaluated', {
+    habitLogId: resolvedHabitLogId,
+    pointEventId,
+    habitId,
+    userId,
+    date,
+    beforeStatus: normalizeStatus(before?.status),
+    afterStatus: normalizeStatus(after?.status),
+    beforeCompleted: toBooleanOrNull(before?.completed),
+    afterCompleted: toBooleanOrNull(after?.completed),
+    isCompleted
+  });
+
+  if (!isCompleted) {
     const voidResult = await voidHabitPointEvent({
       db,
       habitId,
@@ -413,9 +444,19 @@ async function reconcileHabitLogWrite({
       logger
     });
 
+    logger.info('[habit-bounty-trigger] reconciled non-completed habit log', {
+      habitLogId: resolvedHabitLogId,
+      pointEventId,
+      habitId,
+      userId,
+      date,
+      voidedPointEvent: voidResult.changed
+    });
+
     return {
       action: voidResult.changed ? 'voided' : 'noop',
-      reason: 'not-completed'
+      reason: 'not-completed',
+      pointEventId
     };
   }
 
@@ -423,6 +464,7 @@ async function reconcileHabitLogWrite({
   if (!habitDoc.exists) {
     logger.warn('[habit-bounty-trigger] completed log has no habit', {
       habitLogId: resolvedHabitLogId,
+      pointEventId,
       habitId,
       userId,
       date
@@ -439,7 +481,8 @@ async function reconcileHabitLogWrite({
 
     return {
       action: voidResult.changed ? 'voided' : 'noop',
-      reason: 'habit-missing'
+      reason: 'habit-missing',
+      pointEventId
     };
   }
 
@@ -447,11 +490,12 @@ async function reconcileHabitLogWrite({
   if (normalizeString(habit.userId) !== userId) {
     logger.warn('[habit-bounty-trigger] completed log habit user mismatch', {
       habitLogId: resolvedHabitLogId,
+      pointEventId,
       habitId,
       userId,
       habitUserId: habit.userId
     });
-    return { action: 'noop', reason: 'habit-user-mismatch' };
+    return { action: 'noop', reason: 'habit-user-mismatch', pointEventId };
   }
 
   const payout = await resolveHabitPayout({
@@ -466,9 +510,13 @@ async function reconcileHabitLogWrite({
     if (payout.diagnostic) {
       logger.warn('[habit-bounty-trigger] invalid bounty on completed habit log', {
         habitLogId: resolvedHabitLogId,
+        pointEventId,
         habitId,
         userId,
-        diagnostic: payout.diagnostic
+        diagnostic: payout.diagnostic,
+        habitBountyPoints: habit?.bountyPoints ?? null,
+        habitBountyPillarId: habit?.bountyPillarId ?? null,
+        habitPillarId: habit?.pillarId ?? null
       });
     }
 
@@ -481,11 +529,34 @@ async function reconcileHabitLogWrite({
       logger
     });
 
+    logger.info('[habit-bounty-trigger] reconciled completed habit log without valid bounty', {
+      habitLogId: resolvedHabitLogId,
+      pointEventId,
+      habitId,
+      userId,
+      date,
+      reason: payout.diagnostic || 'no-bounty',
+      voidedPointEvent: voidResult.changed
+    });
+
     return {
       action: voidResult.changed ? 'voided' : 'noop',
-      reason: payout.diagnostic || 'no-bounty'
+      reason: payout.diagnostic || 'no-bounty',
+      pointEventId
     };
   }
+
+  logger.info('[habit-bounty-trigger] payout resolved for completed habit log', {
+    habitLogId: resolvedHabitLogId,
+    pointEventId,
+    habitId,
+    userId,
+    date,
+    totalPoints: payout.totalPoints,
+    pillarIds: payout.pillarIds,
+    allocations: payout.allocations,
+    reason: payout.reason
+  });
 
   const upsertResult = await upsertHabitPointEvent({
     db,
@@ -498,9 +569,19 @@ async function reconcileHabitLogWrite({
     logger
   });
 
+  logger.info('[habit-bounty-trigger] reconciled completed habit log with bounty', {
+    habitLogId: resolvedHabitLogId,
+    pointEventId,
+    habitId,
+    userId,
+    date,
+    upsertedPointEvent: upsertResult.changed
+  });
+
   return {
     action: upsertResult.changed ? 'paid' : 'noop',
-    reason: 'completed-with-bounty'
+    reason: 'completed-with-bounty',
+    pointEventId
   };
 }
 

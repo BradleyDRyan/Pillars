@@ -1201,6 +1201,7 @@ class DayViewModel: ObservableObject, BackendRequesting {
         if let todoId = projectedTodoId(for: block) {
             let rootItem = block.checklistData?.items.first
             let isCompleted = rootItem?.isCompleted ?? false
+            let pointEventId = "pe_todo_\(todoId)"
             let body: [String: Any] = [
                 "content": (rootItem?.title ?? "").trimmingCharacters(in: .whitespacesAndNewlines),
                 "status": isCompleted ? "completed" : "active",
@@ -1211,7 +1212,23 @@ class DayViewModel: ObservableObject, BackendRequesting {
                 "updatedAt": now
             ]
 
-            print("🧪 [Todo Bounty][Day] Request completion update todoId=\(todoId) isCompleted=\(isCompleted)")
+            do {
+                let todoSnapshot = try await Firestore.firestore().collection("todos").document(todoId).getDocument()
+                let todoData = todoSnapshot.data() ?? [:]
+                print(
+                    "🧪 [Todo Bounty][Day] Preflight todoId=\(todoId) expectedPointEventId=\(pointEventId) expectPaid=\(isCompleted) "
+                    + "status=\((todoData["status"] as? String) ?? "nil") "
+                    + "pillarId=\((todoData["pillarId"] as? String) ?? "nil") "
+                    + "bountyPillarId=\((todoData["bountyPillarId"] as? String) ?? "nil") "
+                    + "bountyPoints=\(String(describing: intValue(todoData["bountyPoints"]))) "
+                    + "bountyAllocations=\(allocationsSummary(todoData["bountyAllocations"])) "
+                    + "bountyPaidAt=\(String(describing: timestampValue(todoData["bountyPaidAt"])))"
+                )
+            } catch {
+                print("⚠️ [Todo Bounty][Day] Preflight read failed todoId=\(todoId): \(friendlyErrorMessage(error))")
+            }
+
+            print("🧪 [Todo Bounty][Day] Request completion update todoId=\(todoId) isCompleted=\(isCompleted) expectedPointEventId=\(pointEventId)")
             try await Firestore.firestore().collection("todos").document(todoId).setData(body, merge: true)
             print("✅ [Todo Bounty][Day] Firestore completion write succeeded todoId=\(todoId) isCompleted=\(isCompleted)")
 
@@ -1289,6 +1306,7 @@ class DayViewModel: ObservableObject, BackendRequesting {
     private func verifyBountyTrigger(todoId: String, expectPaid: Bool) async {
         let db = Firestore.firestore()
         let pointEventId = "pe_todo_\(todoId)"
+        print("🧪 [Todo Bounty][Day] Verify start todoId=\(todoId) expectedPointEventId=\(pointEventId) expectPaid=\(expectPaid)")
 
         for attempt in 1...8 {
             do {

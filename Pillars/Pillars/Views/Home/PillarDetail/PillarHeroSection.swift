@@ -26,15 +26,12 @@ struct PillarHeroSection: View {
     
     @ViewBuilder
     private var pillarIcon: some View {
-        if let emoji = pillar.emoji, !emoji.isEmpty {
-            Text(emoji)
-                .font(.system(size: 28))
-        } else if let icon = pillar.icon {
+        if let icon = pillar.icon {
             Image(systemName: icon.systemName)
                 .font(.system(size: 28, weight: .semibold, design: .rounded))
                 .foregroundColor(pillar.colorValue)
         } else {
-            Image(systemName: "star.fill")
+            Image(systemName: PillarIcon.default.systemName)
                 .font(.system(size: 28, weight: .semibold, design: .rounded))
                 .foregroundColor(pillar.colorValue)
         }
@@ -50,4 +47,3 @@ struct PillarHeroSection: View {
         icon: .briefcase
     ))
 }
-

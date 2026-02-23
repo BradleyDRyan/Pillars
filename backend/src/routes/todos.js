@@ -299,19 +299,6 @@ function normalizeTodoPayload(body, options = {}) {
     normalized.description = '';
   }
 
-  if (hasOwn(body, 'bountyReason')) {
-    if (body.bountyReason === null) {
-      normalized.bountyReason = null;
-    } else if (typeof body.bountyReason !== 'string') {
-      return { error: 'bountyReason must be a string or null' };
-    } else {
-      const trimmed = body.bountyReason.trim();
-      normalized.bountyReason = trimmed || null;
-    }
-  } else if (!partial) {
-    normalized.bountyReason = null;
-  }
-
   if (hasOwn(body, 'bountyPoints')) {
     if (body.bountyPoints === null) {
       normalized.bountyPoints = null;
@@ -497,10 +484,11 @@ function sortTodos(todos) {
 }
 
 function toResponseTodo(todo) {
+  const { bountyReason: _ignoredBountyReason, ...rest } = todo || {};
   return {
-    ...todo,
-    pillarId: typeof todo?.pillarId === 'string' ? todo.pillarId : null,
-    archivedAt: typeof todo?.archivedAt === 'number' ? todo.archivedAt : null
+    ...rest,
+    pillarId: typeof rest?.pillarId === 'string' ? rest.pillarId : null,
+    archivedAt: typeof rest?.archivedAt === 'number' ? rest.archivedAt : null
   };
 }
 
@@ -968,7 +956,6 @@ router.post('/', async (req, res) => {
       bountyPoints: bountyResult.allocations && bountyResult.allocations.length === 1 ? bountyResult.allocations[0].points : (normalized.data.bountyPoints ?? null),
       bountyAllocations: bountyResult.allocations || null,
       bountyPillarId: validatedBountyPillarId,
-      bountyReason: normalized.data.bountyReason ?? null,
       bountyPaidAt: null
     };
 
@@ -1421,10 +1408,6 @@ const updateTodoHandler = async (req, res) => {
           throw error;
         }
       }
-    }
-
-    if (Object.prototype.hasOwnProperty.call(normalized.data, 'bountyReason')) {
-      payload.bountyReason = normalized.data.bountyReason;
     }
 
     const bountyUpdate = await normalizeBountyForTodoUpdate({

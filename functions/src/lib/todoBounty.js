@@ -4,7 +4,7 @@ const TODO_BOUNTY_MAX_ALLOCATION_POINTS = 100;
 const TODO_BOUNTY_MAX_SINGLE_POINTS = 150;
 const TODO_BOUNTY_TOTAL_MAX = 150;
 const TODO_BOUNTY_MAX_ALLOCATIONS = 3;
-const TODO_REASON_MAX_LENGTH = 300;
+const TODO_EVENT_LABEL_MAX_LENGTH = 300;
 
 function nowTs() {
   return Date.now() / 1000;
@@ -67,7 +67,6 @@ function pickRelevantTodoFields(todo) {
     status: normalizeStatus(todo.status),
     dueDate: normalizeString(todo.dueDate),
     content: normalizeString(todo.content),
-    bountyReason: normalizeString(todo.bountyReason),
     bountyPoints: asIntegerOrNull(todo.bountyPoints),
     bountyPillarId: normalizeString(todo.bountyPillarId),
     pillarId: normalizeString(todo.pillarId),
@@ -86,12 +85,10 @@ function didRelevantTodoFieldsChange(before, after) {
 }
 
 function normalizeReason(todo) {
-  const fromBounty = normalizeString(todo?.bountyReason);
-  const fromContent = normalizeString(todo?.content);
-  const reason = fromBounty || fromContent || 'Todo completed';
-  return reason.length > TODO_REASON_MAX_LENGTH
-    ? reason.slice(0, TODO_REASON_MAX_LENGTH)
-    : reason;
+  const todoTitle = normalizeString(todo?.content) || 'Todo';
+  return todoTitle.length > TODO_EVENT_LABEL_MAX_LENGTH
+    ? todoTitle.slice(0, TODO_EVENT_LABEL_MAX_LENGTH)
+    : todoTitle;
 }
 
 function normalizeAllocationInput(todo) {
@@ -353,13 +350,25 @@ async function reconcileTodoBountyWrite({
   source = 'system'
 }) {
   if (!todoId) {
-    return { action: 'noop', reason: 'missing-todo-id' };
+    return { action: 'noop', reason: 'missing-todo-id', pointEventId: null };
   }
+  const pointEventId = buildTodoPointEventId(todoId);
+
+  logger.info('[todo-bounty-trigger] reconcile start', {
+    todoId,
+    pointEventId,
+    beforeExists: Boolean(before),
+    afterExists: Boolean(after),
+    before: pickRelevantTodoFields(before),
+    after: pickRelevantTodoFields(after),
+    beforeBountyPaidAt: before?.bountyPaidAt ?? null,
+    afterBountyPaidAt: after?.bountyPaidAt ?? null
+  });
 
   if (!after) {
     const deletedUserId = normalizeString(before?.userId);
     if (!deletedUserId) {
-      return { action: 'noop', reason: 'deleted-missing-user' };
+      return { action: 'noop', reason: 'deleted-missing-user', pointEventId };
     }
 
     const voidResult = await voidTodoPointEvent({
@@ -372,22 +381,35 @@ async function reconcileTodoBountyWrite({
 
     return {
       action: voidResult.changed ? 'voided' : 'noop',
-      reason: 'deleted'
+      reason: 'deleted',
+      pointEventId
     };
   }
 
   if (!didRelevantTodoFieldsChange(before, after)) {
-    return { action: 'noop', reason: 'no-relevant-change' };
+    return { action: 'noop', reason: 'no-relevant-change', pointEventId };
   }
 
   const userId = normalizeString(after.userId);
   if (!userId) {
-    logger.warn('[todo-bounty-trigger] skipping todo with missing userId', { todoId });
-    return { action: 'noop', reason: 'missing-user-id' };
+    logger.warn('[todo-bounty-trigger] skipping todo with missing userId', {
+      todoId,
+      pointEventId,
+      after: pickRelevantTodoFields(after)
+    });
+    return { action: 'noop', reason: 'missing-user-id', pointEventId };
   }
 
   const now = nowSeconds();
   const isCompleted = normalizeStatus(after.status) === 'completed';
+  logger.info('[todo-bounty-trigger] completion state evaluated', {
+    todoId,
+    pointEventId,
+    userId,
+    beforeStatus: normalizeStatus(before?.status),
+    afterStatus: normalizeStatus(after?.status),
+    isCompleted
+  });
 
   if (!isCompleted) {
     const [voidResult, bountyResult] = await Promise.all([
@@ -395,9 +417,18 @@ async function reconcileTodoBountyWrite({
       clearBountyPaidAtIfNeeded({ db, todoId, after })
     ]);
 
+    logger.info('[todo-bounty-trigger] reconciled non-completed todo', {
+      todoId,
+      pointEventId,
+      userId,
+      voidedPointEvent: voidResult.changed,
+      clearedBountyPaidAt: bountyResult
+    });
+
     return {
       action: voidResult.changed || bountyResult ? 'voided' : 'noop',
-      reason: 'not-completed'
+      reason: 'not-completed',
+      pointEventId
     };
   }
 
@@ -406,8 +437,10 @@ async function reconcileTodoBountyWrite({
     if (payout.diagnostic) {
       logger.warn('[todo-bounty-trigger] invalid bounty on completed todo', {
         todoId,
+        pointEventId,
         userId,
-        diagnostic: payout.diagnostic
+        diagnostic: payout.diagnostic,
+        after: pickRelevantTodoFields(after)
       });
     }
 
@@ -416,11 +449,32 @@ async function reconcileTodoBountyWrite({
       clearBountyPaidAtIfNeeded({ db, todoId, after })
     ]);
 
+    logger.info('[todo-bounty-trigger] reconciled completed todo without valid bounty', {
+      todoId,
+      pointEventId,
+      userId,
+      reason: payout.diagnostic || 'no-bounty',
+      voidedPointEvent: voidResult.changed,
+      clearedBountyPaidAt: bountyResult
+    });
+
     return {
       action: voidResult.changed || bountyResult ? 'voided' : 'noop',
-      reason: payout.diagnostic || 'no-bounty'
+      reason: payout.diagnostic || 'no-bounty',
+      pointEventId
     };
   }
+
+  logger.info('[todo-bounty-trigger] payout resolved for completed todo', {
+    todoId,
+    pointEventId,
+    userId,
+    totalPoints: payout.totalPoints,
+    pillarIds: payout.pillarIds,
+    allocations: payout.allocations,
+    reason: payout.reason,
+    date: payout.date
+  });
 
   const [upsertResult, bountyResult] = await Promise.all([
     upsertTodoPointEvent({
@@ -435,9 +489,18 @@ async function reconcileTodoBountyWrite({
     setBountyPaidAtIfNeeded({ db, todoId, after, now })
   ]);
 
+  logger.info('[todo-bounty-trigger] reconciled completed todo with bounty', {
+    todoId,
+    pointEventId,
+    userId,
+    upsertedPointEvent: upsertResult.changed,
+    setBountyPaidAt: bountyResult
+  });
+
   return {
     action: upsertResult.changed || bountyResult ? 'paid' : 'noop',
-    reason: 'completed-with-bounty'
+    reason: 'completed-with-bounty',
+    pointEventId
   };
 }
 

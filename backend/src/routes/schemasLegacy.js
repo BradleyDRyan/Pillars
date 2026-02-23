@@ -3,6 +3,7 @@ const { flexibleAuth } = require('../middleware/serviceAuth');
 const { db } = require('../config/firebase');
 const { listBlockTypesForUser } = require('../services/blockTypes');
 const { VALID_EVENT_TYPES } = require('../services/events');
+const { Pillar } = require('../models');
 
 const router = express.Router();
 router.use(flexibleAuth);
@@ -19,6 +20,32 @@ const POINT_EVENT_SOURCE_ENUM = Object.freeze(['user', 'clawdbot', 'system']);
 const POINT_EVENT_REF_TYPE_ENUM = Object.freeze(['todo', 'habit', 'block', 'freeform']);
 const PLAN_ENDPOINT = '/api/plan/by-date/:date';
 const LEGACY_DAY_BATCH_SUNSET = '2026-03-31';
+
+function getPillarIconValues() {
+  if (Array.isArray(Pillar?.VALID_ICON_VALUES) && Pillar.VALID_ICON_VALUES.length > 0) {
+    return [...Pillar.VALID_ICON_VALUES];
+  }
+  return [];
+}
+
+function buildPillarIconSchema() {
+  const iconValues = getPillarIconValues();
+
+  return {
+    endpoint: '/api/schemas/pillar-icons',
+    description: 'Canonical pillar icon values accepted by the pillars API.',
+    values: iconValues
+  };
+}
+
+function buildPillarIconListResponse() {
+  const values = getPillarIconValues();
+  return {
+    values,
+    count: values.length,
+    endpoint: '/api/schemas/pillar-icons'
+  };
+}
 
 function buildJsonLikeDataSchema(rawDataSchema) {
   const fields = Array.isArray(rawDataSchema?.fields) ? rawDataSchema.fields : [];
@@ -214,7 +241,6 @@ function buildTodoSchema() {
         pillarId: { type: 'string', nullable: true },
         bountyPoints: { type: 'integer', min: 1, max: 150, nullable: true },
         bountyPillarId: { type: 'string', nullable: true },
-        bountyReason: { type: 'string', maxLength: 500, nullable: true },
         bountyAllocations: {
           type: 'array',
           nullable: true,
@@ -251,7 +277,6 @@ function buildTodoSchema() {
         pillarId: { type: 'string', nullable: true },
         bountyPoints: { type: 'integer', min: 1, max: 150, nullable: true },
         bountyPillarId: { type: 'string', nullable: true },
-        bountyReason: { type: 'string', maxLength: 500, nullable: true },
         bountyAllocations: {
           type: 'array',
           nullable: true,
@@ -753,23 +778,7 @@ function buildPointEventSchema() {
 
 router.get('/', async (req, res) => {
   try {
-    const userId = req.user.uid;
-    const blockTypes = await listBlockTypesForUser({
-      db,
-      userId,
-      ensureBuiltins: true
-    });
-
-    const response = {
-      blockTypes: blockTypes.map(toCanonicalBlockType),
-      todoSchema: buildTodoSchema(),
-      habitSchema: buildHabitSchema(),
-      daySchema: buildDaySchema(),
-      planSchema: buildPlanSchema(),
-      pointEventSchema: buildPointEventSchema(),
-      eventTypes: [...VALID_EVENT_TYPES].sort()
-    };
-
+    const response = await buildSchemasResponse(req.user.uid);
     return res.json(response);
   } catch (error) {
     console.error('[schemas] GET / error:', error);
@@ -777,4 +786,47 @@ router.get('/', async (req, res) => {
   }
 });
 
-module.exports = router;
+async function buildSchemasResponse(userId) {
+  const blockTypes = await listBlockTypesForUser({
+    db,
+    userId,
+    ensureBuiltins: true
+  });
+  const pillarIcons = buildPillarIconSchema();
+
+  return {
+    blockTypes: blockTypes.map(toCanonicalBlockType),
+    todoSchema: buildTodoSchema(),
+    habitSchema: buildHabitSchema(),
+    daySchema: buildDaySchema(),
+    planSchema: buildPlanSchema(),
+    pillarIcons,
+    pointEventSchema: buildPointEventSchema(),
+    eventTypes: [...VALID_EVENT_TYPES].sort()
+  };
+}
+
+router.get('/pillar-icons', async (req, res) => {
+  try {
+    const pillarIcons = buildPillarIconListResponse();
+    return res.json(pillarIcons);
+  } catch (error) {
+    console.error('[schemas] GET /pillar-icons error:', error);
+    return res.status(500).json({ error: error.message || 'Internal server error' });
+  }
+});
+
+module.exports = {
+  router,
+  buildSchemasResponse,
+  buildTodoSchema,
+  buildHabitSchema,
+  buildDaySchema,
+  buildPlanSchema,
+  buildPointEventSchema,
+  buildPillarIconSchema,
+  buildPillarIconListResponse,
+  toCanonicalBlockType,
+  getPillarIconValues,
+  buildJsonLikeDataSchema
+};

@@ -123,13 +123,30 @@ final class TodoViewModel: ObservableObject, BackendRequesting {
         Task {
             do {
                 let now = Date().timeIntervalSince1970
+                let pointEventId = "pe_todo_\(todoId)"
                 let statusPayload: [String: Any] = [
                     "status": isCompleted ? "completed" : "active",
                     "completedAt": isCompleted ? now : NSNull(),
                     "updatedAt": now
                 ]
 
-                print("🧪 [Todo Bounty] Request completion update todoId=\(todoId) isCompleted=\(isCompleted)")
+                do {
+                    let todoSnapshot = try await Firestore.firestore().collection("todos").document(todoId).getDocument()
+                    let todoData = todoSnapshot.data() ?? [:]
+                    print(
+                        "🧪 [Todo Bounty] Preflight todoId=\(todoId) expectedPointEventId=\(pointEventId) expectPaid=\(isCompleted) "
+                        + "status=\((todoData["status"] as? String) ?? "nil") "
+                        + "pillarId=\((todoData["pillarId"] as? String) ?? "nil") "
+                        + "bountyPillarId=\((todoData["bountyPillarId"] as? String) ?? "nil") "
+                        + "bountyPoints=\(String(describing: intValue(todoData["bountyPoints"]))) "
+                        + "bountyAllocations=\(allocationsSummary(todoData["bountyAllocations"])) "
+                        + "bountyPaidAt=\(String(describing: timestampValue(todoData["bountyPaidAt"])))"
+                    )
+                } catch {
+                    print("⚠️ [Todo Bounty] Preflight read failed todoId=\(todoId): \(friendlyErrorMessage(error))")
+                }
+
+                print("🧪 [Todo Bounty] Request completion update todoId=\(todoId) isCompleted=\(isCompleted) expectedPointEventId=\(pointEventId)")
                 try await Firestore.firestore().collection("todos").document(todoId).setData(statusPayload, merge: true)
                 print("✅ [Todo Bounty] Firestore completion write succeeded todoId=\(todoId) isCompleted=\(isCompleted)")
 
@@ -185,7 +202,6 @@ final class TodoViewModel: ObservableObject, BackendRequesting {
             parentId: data["parentId"] as? String,
             bountyPoints: data["bountyPoints"] as? Int,
             bountyPillarId: data["bountyPillarId"] as? String,
-            bountyReason: data["bountyReason"] as? String,
             bountyPaidAt: timestampValue(data["bountyPaidAt"]),
             createdAt: timestampValue(data["createdAt"]),
             updatedAt: timestampValue(data["updatedAt"]),
@@ -243,6 +259,7 @@ final class TodoViewModel: ObservableObject, BackendRequesting {
     private func verifyBountyTrigger(todoId: String, expectPaid: Bool) async {
         let db = Firestore.firestore()
         let pointEventId = "pe_todo_\(todoId)"
+        print("🧪 [Todo Bounty] Verify start todoId=\(todoId) expectedPointEventId=\(pointEventId) expectPaid=\(expectPaid)")
 
         for attempt in 1...8 {
             do {

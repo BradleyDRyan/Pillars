@@ -70,7 +70,7 @@ final class PillarPickerDataSource: ObservableObject {
             name: name,
             description: data["description"] as? String ?? "",
             color: data["color"] as? String ?? "#000000",
-            icon: (data["icon"] as? String).flatMap(PillarIcon.init(rawValue:)),
+            icon: PillarIcon.resolve(data["icon"] as? String),
             emoji: data["emoji"] as? String,
             isDefault: data["isDefault"] as? Bool ?? false,
             isArchived: data["isArchived"] as? Bool ?? false,

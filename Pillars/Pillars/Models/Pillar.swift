@@ -77,11 +77,8 @@ struct Pillar: Identifiable, Codable, Hashable {
         color = try container.decodeIfPresent(String.self, forKey: .color) ?? "#000000"
         emoji = try container.decodeIfPresent(String.self, forKey: .emoji)
         
-        if let iconString = try container.decodeIfPresent(String.self, forKey: .icon) {
-            icon = PillarIcon(rawValue: iconString)
-        } else {
-            icon = nil
-        }
+        let iconString = try container.decodeIfPresent(String.self, forKey: .icon)
+        icon = PillarIcon.resolve(iconString)
         
         isDefault = try container.decodeIfPresent(Bool.self, forKey: .isDefault) ?? false
         isArchived = try container.decodeIfPresent(Bool.self, forKey: .isArchived) ?? false
@@ -104,6 +101,3 @@ struct Pillar: Identifiable, Codable, Hashable {
         hasher.combine(id)
     }
 }
-
-
-

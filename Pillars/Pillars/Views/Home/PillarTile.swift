@@ -28,18 +28,14 @@ struct PillarTile: View {
     
     @ViewBuilder
     private var pillarIcon: some View {
-        if let emoji = pillar.emoji, !emoji.isEmpty {
-            // Emoji icon
-            Text(emoji)
-                .font(.system(size: 17))
-        } else if let icon = pillar.icon {
+        if let icon = pillar.icon {
             // SF Symbol icon
             Image(systemName: icon.systemName)
                 .font(.system(size: 17, weight: .medium))
                 .foregroundColor(pillar.colorValue)
         } else {
             // Fallback icon
-            Image(systemName: "star.fill")
+            Image(systemName: PillarIcon.default.systemName)
                 .font(.system(size: 17, weight: .medium))
                 .foregroundColor(pillar.colorValue)
         }
@@ -99,4 +95,3 @@ struct PillarTile: View {
     .padding()
     .background(Color(UIColor.secondarySystemBackground))
 }
-

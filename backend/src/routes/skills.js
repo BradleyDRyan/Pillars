@@ -7,8 +7,8 @@ const router = express.Router();
 
 const SKILL_ID = 'openclaw-pillars-api';
 const SKILL_NAME = 'pillars_api';
-const SKILL_VERSION = '2026.02.20.10';
-const SKILL_UPDATED_AT = '2026-02-20T23:59:59.000Z';
+const SKILL_VERSION = '2026.02.22.01';
+const SKILL_UPDATED_AT = '2026-02-22T00:00:00.000Z';
 const BASE_URL = process.env.APP_URL || 'https://pillars-phi.vercel.app';
 const SKILL_FILE_PATH = path.join(__dirname, '..', 'skills', 'openclaw', 'SKILL.md');
 

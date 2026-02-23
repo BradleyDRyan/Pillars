@@ -92,6 +92,7 @@ if (!emulatorHost) {
       assert.equal(event.allocations.length, 1);
       assert.equal(event.allocations[0].pillarId, 'pillar_a');
       assert.equal(event.allocations[0].points, 25);
+      assert.equal(event.reason, 'Ship trigger');
       assert.equal(event.voidedAt, null);
 
       const todo = await readTodo(db, todoId);
@@ -113,11 +114,11 @@ if (!emulatorHost) {
       const after = {
         ...before,
         status: 'completed',
+        content: 'Deep work block',
         bountyAllocations: [
           { pillarId: 'pillar_a', points: 30 },
           { pillarId: 'pillar_b', points: 20 }
-        ],
-        bountyReason: 'Deep work block'
+        ]
       };
       await writeTodo(db, todoId, after);
 
@@ -219,7 +220,7 @@ if (!emulatorHost) {
       const after = {
         ...before,
         bountyPoints: 35,
-        bountyReason: 'Adjusted reward'
+        content: 'Adjusted reward'
       };
       await writeTodo(db, todoId, after);
 

@@ -21,8 +21,6 @@ struct PillarFormView: View {
     @State private var description: String = ""
     @State private var selectedIcon: PillarIcon = .star
     @State private var selectedColor: Color = .blue
-    @State private var emoji: String = ""
-    @State private var useEmoji: Bool = false
     @State private var isLoading = false
     @State private var errorMessage: String?
     
@@ -58,32 +56,25 @@ struct PillarFormView: View {
                 
                 // Icon
                 Section {
-                    Toggle("Use Emoji", isOn: $useEmoji)
-                    
-                    if useEmoji {
-                        TextField("Emoji", text: $emoji)
-                            .font(.system(size: 32))
-                    } else {
-                        LazyVGrid(columns: [GridItem(.adaptive(minimum: 50))], spacing: 12) {
-                            ForEach(PillarIcon.allCases) { icon in
-                                Button {
-                                    selectedIcon = icon
-                                    selectedColor = icon.defaultColor
-                                } label: {
-                                    Image(systemName: icon.systemName)
-                                        .font(.system(size: 20, weight: .medium))
-                                        .foregroundColor(icon == selectedIcon ? .white : icon.defaultColor)
-                                        .frame(width: 44, height: 44)
-                                        .background(
-                                            RoundedRectangle(cornerRadius: 10)
-                                                .fill(icon == selectedIcon ? icon.defaultColor : icon.defaultColor.opacity(0.15))
-                                        )
-                                }
-                                .buttonStyle(.plain)
+                    LazyVGrid(columns: [GridItem(.adaptive(minimum: 50))], spacing: 12) {
+                        ForEach(PillarIcon.allCases) { icon in
+                            Button {
+                                selectedIcon = icon
+                                selectedColor = icon.defaultColor
+                            } label: {
+                                Image(systemName: icon.systemName)
+                                    .font(.system(size: 20, weight: .medium))
+                                    .foregroundColor(icon == selectedIcon ? .white : icon.defaultColor)
+                                    .frame(width: 44, height: 44)
+                                    .background(
+                                        RoundedRectangle(cornerRadius: 10)
+                                            .fill(icon == selectedIcon ? icon.defaultColor : icon.defaultColor.opacity(0.15))
+                                    )
                             }
+                            .buttonStyle(.plain)
                         }
-                        .padding(.vertical, 8)
                     }
+                    .padding(.vertical, 8)
                 } header: {
                     Text("Icon")
                 }
@@ -130,10 +121,6 @@ struct PillarFormView: View {
                     if let icon = pillar.icon {
                         selectedIcon = icon
                     }
-                    if let existingEmoji = pillar.emoji, !existingEmoji.isEmpty {
-                        emoji = existingEmoji
-                        useEmoji = true
-                    }
                 }
             }
         }
@@ -152,16 +139,14 @@ struct PillarFormView: View {
                     name: name,
                     description: description,
                     color: colorHex,
-                    icon: useEmoji ? nil : selectedIcon,
-                    emoji: useEmoji ? emoji : nil
+                    icon: selectedIcon
                 )
             } else {
                 _ = try await viewModel.createPillar(
                     name: name,
                     description: description,
                     color: colorHex,
-                    icon: useEmoji ? nil : selectedIcon,
-                    emoji: useEmoji ? emoji : nil
+                    icon: selectedIcon
                 )
             }
             dismiss()
@@ -191,6 +176,5 @@ extension Color {
     PillarFormView(mode: .create)
         .environmentObject(PillarsViewModel())
 }
-
 
 

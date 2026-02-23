@@ -19,7 +19,15 @@ Use this skill when the user asks you to read or modify their Pillars app data.
   - `GET /api/skills/openclaw/manifest.json`
   - `GET /api/skills/openclaw/SKILL.md`
 - Canonical Schemas:
-  - `GET /api/schemas` (single endpoint for machine-readable `blockTypes`, `todoSchema`, `habitSchema`, `daySchema`, `planSchema`, `eventTypes`)
+  - `GET /api/schemas` (full canonical contract snapshot, includes all schema sections)
+  - `GET /api/schemas/block-types`
+  - `GET /api/schemas/todos`
+  - `GET /api/schemas/habits`
+  - `GET /api/schemas/day`
+  - `GET /api/schemas/plan`
+  - `GET /api/schemas/pillars` (or `/api/schemas/pillar-icons`) for pillar icon enum values
+  - `GET /api/schemas/point-events`
+  - `GET /api/schemas/event-types`
 - Pillars / Principles / Insights:
   - `GET|POST|PUT|DELETE /api/pillars*`
   - `GET|POST|PUT|DELETE /api/principles*`

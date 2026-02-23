@@ -33,7 +33,7 @@ struct DayView: View {
     // Keeps entry move animations smooth between sections.
     @Namespace var completionCardNamespace
 
-    @State private var selectedHabitGroupCard: HabitGroupCardSheetTarget?
+    @State var selectedHabitGroupCard: HabitGroupCardSheetTarget?
 
     /// Main screen flow.
     var body: some View {

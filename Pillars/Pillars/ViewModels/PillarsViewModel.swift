@@ -65,12 +65,11 @@ class PillarsViewModel: ObservableObject {
                     
                     let description = data["description"] as? String ?? ""
                     let color = data["color"] as? String ?? "#000000"
-                    let emoji = data["emoji"] as? String
                     let isDefault = data["isDefault"] as? Bool ?? false
                     
                     // Parse icon
                     let iconString = data["icon"] as? String
-                    let icon = iconString.flatMap { PillarIcon(rawValue: $0) }
+                    let icon = PillarIcon.resolve(iconString)
                     
                     // Parse stats
                     let statsData = data["stats"] as? [String: Any] ?? [:]
@@ -90,7 +89,7 @@ class PillarsViewModel: ObservableObject {
                         description: description,
                         color: color,
                         icon: icon,
-                        emoji: emoji,
+                        emoji: data["emoji"] as? String,
                         isDefault: isDefault,
                         isArchived: isArchived,
                         settings: data["settings"] as? [String: String],
@@ -117,7 +116,7 @@ class PillarsViewModel: ObservableObject {
     
     // MARK: - Create Pillar
     
-    func createPillar(name: String, description: String = "", color: String, icon: PillarIcon?, emoji: String? = nil) async throws -> Pillar {
+    func createPillar(name: String, description: String = "", color: String, icon: PillarIcon = .default) async throws -> Pillar {
         guard let user = Auth.auth().currentUser else {
             throw PillarError.notAuthenticated
         }
@@ -144,13 +143,7 @@ class PillarsViewModel: ObservableObject {
             "updatedAt": Timestamp(date: now)
         ]
         
-        if let icon = icon {
-            pillarData["icon"] = icon.rawValue
-        }
-        
-        if let emoji = emoji, !emoji.isEmpty {
-            pillarData["emoji"] = emoji
-        }
+        pillarData["icon"] = icon.rawValue
         
         try await db.collection("pillars").document(pillarId).setData(pillarData)
         
@@ -163,7 +156,7 @@ class PillarsViewModel: ObservableObject {
             description: description,
             color: color,
             icon: icon,
-            emoji: emoji,
+            emoji: nil,
             stats: Pillar.PillarStats(),
             createdAt: now,
             updatedAt: now
@@ -172,7 +165,7 @@ class PillarsViewModel: ObservableObject {
     
     // MARK: - Update Pillar
     
-    func updatePillar(_ pillar: Pillar, name: String? = nil, description: String? = nil, color: String? = nil, icon: PillarIcon? = nil, emoji: String? = nil) async throws {
+    func updatePillar(_ pillar: Pillar, name: String? = nil, description: String? = nil, color: String? = nil, icon: PillarIcon? = nil) async throws {
         var updateData: [String: Any] = [
             "updatedAt": FieldValue.serverTimestamp()
         ]
@@ -188,9 +181,6 @@ class PillarsViewModel: ObservableObject {
         }
         if let icon = icon {
             updateData["icon"] = icon.rawValue
-        }
-        if let emoji = emoji {
-            updateData["emoji"] = emoji
         }
         
         try await db.collection("pillars").document(pillar.id).updateData(updateData)

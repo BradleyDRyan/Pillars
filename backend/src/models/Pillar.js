@@ -1,15 +1,85 @@
 const { firestore } = require('../config/firebase');
 
+const VALID_PILLAR_ICONS = [
+  'heart',
+  'house',
+  'briefcase',
+  'figure2',
+  'dollarsign',
+  'brain',
+  'figure',
+  'book',
+  'sparkles',
+  'leaf',
+  'star',
+  'globe',
+  'airplane',
+  'car',
+  'bus',
+  'bicycle',
+  'train',
+  'camera',
+  'photo',
+  'paintbrush',
+  'musicnote',
+  'headphones',
+  'microphone',
+  'speaker',
+  'tv',
+  'gamecontroller',
+  'bookopen',
+  'newspaper',
+  'pencil',
+  'ruler',
+  'wrench',
+  'hammer',
+  'key',
+  'creditcard',
+  'cart',
+  'bag',
+  'gift',
+  'trophy',
+  'target',
+  'flame',
+  'drop',
+  'umbrella',
+  'cloud',
+  'sun',
+  'moon',
+  'bell',
+  'clock',
+  'calendar',
+  'chart',
+  'shield',
+  'flag',
+  'mountain'
+];
+
+const validPillarIconSet = new Set(VALID_PILLAR_ICONS);
+const VALID_PILLAR_ICON_VALUES = Object.freeze([...VALID_PILLAR_ICONS]);
+
+function normalizePillarIcon(icon) {
+  if (typeof icon !== 'string') {
+    return null;
+  }
+
+  const trimmed = icon.trim();
+  if (!trimmed) {
+    return null;
+  }
+  const normalized = trimmed.toLowerCase();
+  if (validPillarIconSet.has(normalized)) {
+    return normalized;
+  }
+
+  return null;
+}
+
 /**
  * Pillar — A major domain of life (e.g., Work, Relationship, Health)
  * 
- * Valid icon values (enum-based, translates to platform-specific assets):
- * - folder (default)
- * - health
- * - money
- * - work
- * - relationship
- * - growth
+ * Valid icon values (enum-backed):
+ * - heart, house, briefcase, figure2, dollarsign, brain, figure, book, sparkles, leaf, star, globe, and 40 more
  */
 class Pillar {
   constructor(data = {}) {
@@ -18,8 +88,8 @@ class Pillar {
     this.name = data.name || '';
     this.description = data.description || '';
     this.color = data.color || '#000000';
-    /** @type {string|null} Icon identifier (see valid values above) */
-    this.icon = data.icon || null;
+    /** @type {string|null} Icon identifier (enum-backed, e.g., heart, house, ... ) */
+    this.icon = normalizePillarIcon(data.icon);
     this.isDefault = data.isDefault || false;
     this.isArchived = data.isArchived || false;
     this.settings = data.settings || {};
@@ -172,6 +242,7 @@ class Pillar {
 
   async save() {
     this.updatedAt = new Date();
+    this.icon = normalizePillarIcon(this.icon);
     if (this.id) {
       await Pillar.collection().doc(this.id).update({
         name: this.name,
@@ -213,5 +284,8 @@ class Pillar {
     }
   }
 }
+
+Pillar.VALID_ICON_VALUES = VALID_PILLAR_ICON_VALUES;
+Pillar.validIconValues = VALID_PILLAR_ICON_VALUES;
 
 module.exports = Pillar;
