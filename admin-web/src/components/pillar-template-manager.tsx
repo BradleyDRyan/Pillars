@@ -1,13 +1,15 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { Plus } from "lucide-react";
-import { Button, PrimaryButton } from "@/components/design-system";
+import { TertiaryButton, Button, ListGroup, ListRow, PrimaryButton, Section } from "@/components/design-system";
 import { requestJson } from "@/lib/http-json";
 import type { PillarTemplateRecord } from "@/lib/pillar-templates";
 import { PageView, PageViewHeader, PageViewContent } from "@/components/design-system";
 import { PillarTemplateForm, type PillarTemplateFormState } from "@/components/pillar-template-form";
 import { TemplateRubricEditor } from "@/components/template-rubric-editor";
+import { useRouter } from "next/navigation";
+import { ChevronLeft } from "lucide-react";
+import { getTemplateIcon } from "@/lib/pillar-template-icons";
 
 const EMPTY_CREATE_FORM: PillarTemplateFormState = {
   pillarType: "",
@@ -31,9 +33,20 @@ function toEditForm(template: PillarTemplateRecord): PillarTemplateFormState {
   };
 }
 
-export function PillarTemplateManager() {
+type PillarTemplateManagerProps = {
+  listOnly?: boolean;
+  selectedType?: string | null;
+  detailsOnly?: boolean;
+};
+
+export function PillarTemplateManager({
+  listOnly = false,
+  selectedType: selectedTypeFromPath,
+  detailsOnly = false
+}: PillarTemplateManagerProps) {
+  const router = useRouter();
   const [templates, setTemplates] = useState<PillarTemplateRecord[]>([]);
-  const [selectedType, setSelectedType] = useState<string | null>(null);
+  const [selectedType, setSelectedType] = useState<string | null>(selectedTypeFromPath || null);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -59,7 +72,10 @@ export function PillarTemplateManager() {
         return a.name.localeCompare(b.name);
       });
       setTemplates(sorted);
-      if (!selectedType && sorted.length > 0) {
+
+      if (selectedTypeFromPath && sorted.some(item => item.pillarType === selectedTypeFromPath)) {
+        setSelectedType(selectedTypeFromPath);
+      } else if (!selectedType && sorted.length > 0) {
         setSelectedType(sorted[0].pillarType);
       }
       if (selectedType && !sorted.some(item => item.pillarType === selectedType)) {
@@ -84,6 +100,125 @@ export function PillarTemplateManager() {
     }
     setEditForm(toEditForm(selectedTemplate));
   }, [selectedTemplate]);
+
+  if (listOnly) {
+    return (
+      <PageView>
+        <PageViewHeader className="relative flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h1 className="text-3xl font-semibold tracking-tight md:text-4xl">Pillar Templates</h1>
+          </div>
+        </PageViewHeader>
+        <PageViewContent>
+          <Section title={null} className="mx-[56px] my-6">
+            {error ? (
+              <p className="mono mb-3 rounded bg-[var(--bg-elevated)] px-3 py-2 text-xs text-[var(--ink)]">{error}</p>
+            ) : null}
+            {loading ? <p className="text-sm text-[var(--ink-subtle)]">Loading...</p> : null}
+            <ListGroup>
+              {templates.map(template => (
+                <ListRow
+                  key={template.pillarType}
+                  href={`/pillars/templates/${encodeURIComponent(template.pillarType)}`}
+                  active={selectedType === template.pillarType}
+                  icon={getTemplateIcon(template.icon, { size: 14 })}
+                  aria-label={`Open template ${template.name}`}
+                >
+                  {template.name}
+                </ListRow>
+              ))}
+            </ListGroup>
+          </Section>
+        </PageViewContent>
+      </PageView>
+    );
+  }
+
+  if (detailsOnly) {
+    const detailTitle = selectedTemplate
+      ? selectedTemplate.name
+      : selectedType
+        ? selectedType
+        : "Template";
+
+    return (
+      <PageView>
+        <PageViewHeader className="relative flex flex-wrap items-center justify-between gap-3">
+          <TertiaryButton
+            buttonType="button"
+            onClick={() => router.push("/pillars/templates")}
+            className="admin-page-view__back absolute left-[4px] top-[4px] inline-flex items-center gap-1.5 border-0 bg-transparent px-0 py-0 text-xs font-medium transition-colors hover:text-[var(--ink)]"
+            aria-label="Back to Pillars"
+          >
+            <ChevronLeft size={14} />
+            Pillars
+          </TertiaryButton>
+          <div>
+            <h1 className="text-3xl font-semibold tracking-tight md:text-4xl">{detailTitle}</h1>
+          </div>
+        </PageViewHeader>
+        <PageViewContent>
+          {error ? (
+            <p className="mono mb-4 rounded bg-[var(--bg-elevated)] px-3 py-2 text-xs text-[var(--ink)]">{error}</p>
+          ) : null}
+
+          {loading ? (
+            <p className="text-sm text-[var(--ink-subtle)]">Loading...</p>
+          ) : (
+            <section className="grid gap-4">
+              {selectedTemplate && editForm ? (
+                <>
+                  <PillarTemplateForm
+                    title={selectedTemplate.name}
+                    value={editForm}
+                    submitLabel="Save Template"
+                    busy={busy}
+                    onChange={setEditForm}
+                    onSubmit={saveTemplate}
+                  />
+
+                  <div className="surface p-4">
+                    <div className="flex flex-wrap gap-2">
+                      {selectedTemplate.isActive ? (
+                        <Button
+                          disabled={busy}
+                          onClick={deactivateTemplate}
+                          className="mono cursor-pointer rounded-md border border-[var(--line-strong)] bg-[var(--bg-elevated)] px-3 py-2 text-xs text-[var(--ink)] hover:bg-[var(--bg-elevated)] disabled:cursor-not-allowed disabled:opacity-60"
+                        >
+                          Deactivate Template
+                        </Button>
+                      ) : (
+                        <Button
+                          disabled={busy}
+                          onClick={restoreTemplate}
+                          className="mono cursor-pointer rounded-md border border-[var(--line-strong)] bg-[var(--bg)] px-3 py-2 text-xs text-[var(--ink)] hover:bg-[var(--bg-elevated)] disabled:cursor-not-allowed disabled:opacity-60"
+                        >
+                          Restore Template
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+
+                  <TemplateRubricEditor
+                    rubricItems={selectedTemplate.rubricItems || []}
+                    busy={busy}
+                    onAdd={addRubricItem}
+                    onUpdate={updateRubricItem}
+                    onRemove={removeRubricItem}
+                  />
+                </>
+              ) : (
+                <section className="surface p-5">
+                  <p className="text-sm text-[var(--ink-subtle)]">Template not found.</p>
+                </section>
+              )}
+            </section>
+          )}
+        </PageViewContent>
+      </PageView>
+    );
+  }
+
 
   function upsertTemplate(template: PillarTemplateRecord) {
     setTemplates(current => {
@@ -243,10 +378,9 @@ export function PillarTemplateManager() {
           <PrimaryButton
             buttonType="button"
             onClick={() => setShowCreate(current => !current)}
-            className="inline-flex items-center gap-1.5"
+            className="inline-flex items-center"
           >
-            <Plus size={12} />
-            Template
+            New template
           </PrimaryButton>
         </div>
       </PageViewHeader>
@@ -271,41 +405,25 @@ export function PillarTemplateManager() {
         </div>
       ) : null}
 
-        <div className="grid gap-4 lg:grid-cols-[320px_minmax(0,1fr)]">
-        <section className="surface p-3">
-          <h2 className="mb-2 text-base font-semibold">Template Library</h2>
-          {loading ? (
-            <p className="text-sm text-[var(--ink-subtle)]">Loading...</p>
-          ) : null}
-          <div className="grid gap-2">
-            {templates.map(template => (
-              <Button
-                key={template.pillarType}
-                onClick={() => setSelectedType(template.pillarType)}
-                className={`w-full rounded-md border px-3 py-2 text-left ${
-                  selectedType === template.pillarType
-                    ? "border-[var(--accent)] bg-[var(--accent-soft)]"
-                    : "border-[var(--line)] bg-[var(--bg)] hover:bg-[var(--bg-elevated)]"
-                }`}
-              >
-                <div className="flex items-center justify-between gap-2">
-                  <p className="font-medium">{template.name}</p>
-                  <span
-                    className={`mono rounded px-2 py-1 text-xs ${
-                      template.isActive
-                        ? "bg-[var(--ink)] text-[var(--bg)]"
-                        : "bg-[var(--bg)] text-[var(--ink-subtle)]"
-                    }`}
-                  >
-                    {template.isActive ? "active" : "inactive"}
-                  </span>
-                </div>
-                <p className="mono mt-1 text-xs text-[var(--ink-subtle)]">{template.pillarType}</p>
-                <p className="mt-1 text-xs text-[var(--ink-subtle)]">{template.rubricItems.length} rubric items</p>
-              </Button>
-            ))}
-          </div>
-        </section>
+          <div className="grid gap-4 lg:grid-cols-[320px_minmax(0,1fr)]">
+          <Section title={null}>
+            {loading ? (
+              <p className="text-sm text-[var(--ink-subtle)]">Loading...</p>
+            ) : null}
+            <ListGroup>
+              {templates.map(template => (
+                <ListRow
+                  key={template.pillarType}
+                  onClick={() => setSelectedType(template.pillarType)}
+                  active={selectedType === template.pillarType}
+                  icon={getTemplateIcon(template.icon, { size: 14 })}
+                  aria-label={`Open template ${template.name}`}
+                >
+                  {template.name}
+                </ListRow>
+              ))}
+            </ListGroup>
+          </Section>
 
         <section className="grid gap-4">
           {selectedTemplate && editForm ? (

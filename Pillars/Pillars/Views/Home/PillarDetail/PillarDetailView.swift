@@ -9,7 +9,6 @@ import SwiftUI
 
 struct PillarDetailView: View {
     let pillar: Pillar
-    let onClose: () -> Void
     @EnvironmentObject var viewModel: PillarsViewModel
     @State private var showingEditSheet = false
     @State private var selectedTab: Int? = 0
@@ -104,10 +103,6 @@ struct PillarDetailView: View {
         .toolbarBackground(.hidden, for: .navigationBar)
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
-            ToolbarItem(placement: .topBarLeading) {
-                backButton
-            }
-            
             ToolbarItem(placement: .principal) {
                 // Title fades in as hero collapses
                 Text(livePillar.name)
@@ -123,7 +118,6 @@ struct PillarDetailView: View {
                 }
             }
         }
-        .navigationBarBackButtonHidden(true)
         .sheet(isPresented: $showingEditSheet) {
             NavigationStack {
                 PillarFormView(mode: .edit(livePillar))
@@ -133,17 +127,6 @@ struct PillarDetailView: View {
     }
     
     // MARK: - Toolbar Items
-    
-    private var backButton: some View {
-        Button {
-            onClose()
-        } label: {
-            Image(systemName: "chevron.down")
-                .font(.system(size: 16, weight: .semibold))
-                .foregroundColor(livePillar.colorValue)
-        }
-        .buttonStyle(.plain)
-    }
     
     private var editButton: some View {
         Button {
@@ -202,8 +185,7 @@ struct TabContentScrollView<Content: View>: View {
                 description: "Professional growth",
                 color: "#c6316d",
                 icon: .briefcase
-            ),
-            onClose: {}
+            )
         )
         .environmentObject(PillarsViewModel())
         .environmentObject(FirebaseManager.shared)

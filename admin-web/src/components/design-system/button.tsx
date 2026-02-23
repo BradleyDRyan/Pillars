@@ -3,7 +3,9 @@
 import { Button as BaseUIButton } from "@base-ui/react/button";
 import type { CSSProperties, ComponentPropsWithoutRef } from "react";
 
-type AdminButtonVisualType = "default" | "primary";
+type ButtonVisualType = "default" | "primary" | "tertiary";
+type ButtonClassName = ComponentPropsWithoutRef<typeof BaseUIButton>["className"];
+type NativeButtonType = NonNullable<ComponentPropsWithoutRef<typeof BaseUIButton>["type"]>;
 
 type AdminButtonBaseProps = Omit<
   ComponentPropsWithoutRef<typeof BaseUIButton>,
@@ -11,57 +13,127 @@ type AdminButtonBaseProps = Omit<
 >;
 
 type AdminButtonProps = AdminButtonBaseProps & {
-  className?: string;
-  type?: AdminButtonVisualType;
-  buttonType?: "button" | "submit" | "reset";
+  className?: ButtonClassName;
+  variant?: ButtonVisualType;
+  type?: NativeButtonType;
+  buttonType?: NativeButtonType;
 };
 
 function cx(...classes: Array<string | undefined>) {
   return classes.filter(Boolean).join(" ");
 }
 
+function mergeButtonClassName(
+  baseClassName: string,
+  className: ButtonClassName
+): ButtonClassName {
+  if (!className) {
+    return baseClassName;
+  }
+  if (typeof className === "string") {
+    return cx(baseClassName, className);
+  }
+
+  return (state) => cx(baseClassName, className(state));
+}
+
 const buttonBaseClassName =
-  "inline-flex items-center justify-center px-2 py-0.5 border disabled:cursor-not-allowed disabled:opacity-60 hover:bg-[var(--button-bg-hover)]";
+  "inline-flex min-h-8 cursor-pointer items-center justify-center px-[14px] py-0 border disabled:cursor-not-allowed disabled:opacity-60";
 
 const buttonPrimaryClassName =
-  "mono cursor-pointer border border-[var(--line-strong)] bg-[var(--bg)] px-2 py-0.5 text-[var(--ink)] hover:bg-[var(--bg-elevated)]";
+  "mono cursor-pointer text-sm bg-[var(--button-primary)] text-[var(--on-button-primary)] hover:bg-[var(--button-primary-hover)]";
+
+const buttonTertiaryClassName =
+  "bg-[var(--button-tertiary)] border-transparent shadow-none text-[var(--on-button-tertiary)] text-sm hover:bg-[var(--tertiary-hover)] hover:text-[var(--ink)]";
+
+const buttonDefaultClassName =
+  "mono cursor-pointer text-sm bg-[var(--button-default)] text-[var(--on-button-default)] hover:bg-[var(--button-default-hover)]";
 
 export function Button({
-  type = "default",
-  buttonType = "button",
+  variant = "default",
+  type = "button",
+  buttonType,
   className,
+  style: styleOverride,
   ...props
 }: AdminButtonProps) {
-  const isPrimary = type === "primary";
+  const resolvedNativeType = buttonType ?? type;
+  const isPrimary = variant === "primary";
+  const isTertiary = variant === "tertiary";
   const classNames = cx(
     buttonBaseClassName,
-    isPrimary ? buttonPrimaryClassName : undefined,
-    className
+    isPrimary
+      ? buttonPrimaryClassName
+      : isTertiary
+        ? buttonTertiaryClassName
+        : buttonDefaultClassName
   );
 
-  const style: CSSProperties = {
-    backgroundColor: isPrimary ? "var(--primary)" : "var(--button-bg)",
-    color: isPrimary ? "var(--on-primary)" : "var(--button-text)",
-    borderColor: isPrimary ? "var(--primary)" : "var(--button-border-color)",
-    borderWidth: isPrimary ? "1px" : "var(--button-border-width)",
+  const baseStyle: CSSProperties = {
+    borderColor: isPrimary
+      ? "var(--button-primary)"
+      : isTertiary
+        ? "transparent"
+        : "var(--button-border)",
+    borderWidth: isTertiary ? "0px" : "var(--button-border-width)",
     borderRadius: "var(--button-radius)",
-    boxShadow: "var(--button-shadow)",
-    fontSize: "13px",
+    minHeight: "32px",
+    height: "32px",
+    boxSizing: "border-box",
+    lineHeight: "normal",
+    fontFamily: "var(--font-sans), system-ui, sans-serif",
+    boxShadow: isTertiary ? "none" : "var(--button-shadow)",
+    fontSize: "14px",
     fontWeight: "500"
   };
 
-  return <BaseUIButton type={buttonType} className={classNames} style={style} {...props} />;
+  const mergedStyle =
+    typeof styleOverride === "function"
+      ? (state: unknown) => {
+          const computed = styleOverride(state) || {};
+          return { ...baseStyle, ...computed };
+        }
+      : styleOverride
+        ? { ...baseStyle, ...styleOverride }
+        : baseStyle;
+
+  const mergedClassName = mergeButtonClassName(classNames, className);
+  const baseProps = props as Omit<AdminButtonBaseProps, "className" | "type" | "style" | "buttonType">;
+
+  return (
+    <BaseUIButton
+      type={resolvedNativeType}
+      className={mergedClassName}
+      style={mergedStyle}
+      {...baseProps}
+    />
+  );
 }
 
 export function PrimaryButton({
   className,
   buttonType,
   ...props
-}: Omit<AdminButtonProps, "type"> & { className?: string }) {
+}: Omit<AdminButtonProps, "variant"> & { className?: string }) {
   return (
     <Button
-      type="primary"
+      variant="primary"
       className={cx(buttonPrimaryClassName, className)}
+      buttonType={buttonType}
+      {...props}
+    />
+  );
+}
+
+export function TertiaryButton({
+  className,
+  buttonType,
+  ...props
+}: Omit<AdminButtonProps, "variant"> & { className?: string }) {
+  return (
+    <Button
+      variant="tertiary"
+      className={cx(buttonTertiaryClassName, className)}
       buttonType={buttonType}
       {...props}
     />

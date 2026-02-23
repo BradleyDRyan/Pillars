@@ -59,9 +59,7 @@ struct PillarsTabView: View {
                     .environmentObject(viewModel)
             }
             .navigationDestination(item: $selectedPillar) { pillar in
-                PillarDetailView(pillar: pillar) {
-                    selectedPillar = nil
-                }
+                PillarDetailView(pillar: pillar)
                     .environmentObject(viewModel)
             }
         }

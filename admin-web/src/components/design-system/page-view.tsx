@@ -24,7 +24,7 @@ export function PageView({ children, className, ...props }: ComponentPropsWithou
 export function PageViewHeader({ children, className, ...props }: ComponentPropsWithoutRef<"section">) {
   return (
     <section
-      className={cx(headerClassName, "mb-6", className)}
+      className={cx(headerClassName, "pb-6", className)}
       {...props}
     >
       {children}

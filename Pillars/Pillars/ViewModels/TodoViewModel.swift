@@ -72,6 +72,7 @@ final class TodoViewModel: ObservableObject, BackendRequesting {
     func createTodo(
         title: String,
         dueDate: String?,
+        pillarId: String? = nil,
         section: DaySection.TimeSection = .afternoon
     ) {
         let trimmed = title.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -82,6 +83,7 @@ final class TodoViewModel: ObservableObject, BackendRequesting {
                 guard let user = Auth.auth().currentUser else { throw BackendError.notAuthenticated }
                 let now = Date().timeIntervalSince1970
                 let todoRef = Firestore.firestore().collection("todos").document()
+                let normalizedPillarId = normalizedPillarIdentifier(pillarId)
 
                 let body: [String: Any] = [
                     "id": todoRef.documentID,
@@ -92,7 +94,7 @@ final class TodoViewModel: ObservableObject, BackendRequesting {
                     "sectionId": section.rawValue,
                     "order": 0,
                     "status": "active",
-                    "pillarId": NSNull(),
+                    "pillarId": normalizedPillarId ?? NSNull(),
                     "parentId": NSNull(),
                     "createdAt": now,
                     "updatedAt": now,

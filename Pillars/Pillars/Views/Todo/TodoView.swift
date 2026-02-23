@@ -92,8 +92,8 @@ struct TodoView: View {
             }
         }
         .sheet(isPresented: $showingCreateTodoSheet) {
-            CreateTodoSheet { title, dueDate in
-                viewModel.createTodo(title: title, dueDate: dueDate)
+            CreateTodoSheet(pillars: pillarPickerSource.pillars) { title, dueDate, pillarId in
+                viewModel.createTodo(title: title, dueDate: dueDate, pillarId: pillarId)
             }
         }
         .sheet(isPresented: $showingSettingsSheet) {

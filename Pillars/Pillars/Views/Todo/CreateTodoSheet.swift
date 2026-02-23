@@ -8,10 +8,12 @@
 import SwiftUI
 
 struct CreateTodoSheet: View {
-    let onCreate: (String, String?) -> Void
+    let pillars: [Pillar]
+    let onCreate: (String, String?, String?) -> Void
 
     @Environment(\.dismiss) private var dismiss
     @State private var title = ""
+    @State private var selectedPillarId: String?
     @State private var isScheduled = false
     @State private var selectedDate = Date()
 
@@ -22,26 +24,41 @@ struct CreateTodoSheet: View {
     var body: some View {
         NavigationStack {
             VStack(alignment: .leading, spacing: S2.Spacing.md) {
-                TextField("What needs to get done?", text: $title)
-                    .font(S2.MyDay.Typography.fieldValue)
-                    .submitLabel(.done)
-                    .s2MyDayInputSurface()
-
-                Toggle(isOn: $isScheduled) {
-                    Text("Schedule for a specific day")
+                fieldGroup("Title") {
+                    TextField("What needs to get done?", text: $title)
                         .font(S2.MyDay.Typography.fieldValue)
-                        .foregroundColor(S2.MyDay.Colors.titleText)
+                        .submitLabel(.done)
+                        .s2MyDayInputSurface()
                 }
-                .tint(S2.MyDay.Colors.interactiveTint)
 
-                if isScheduled {
-                    DatePicker(
-                        "Date",
-                        selection: $selectedDate,
-                        displayedComponents: .date
-                    )
-                    .datePickerStyle(.graphical)
+                fieldGroup("Pillar") {
+                    Picker("Pillar", selection: $selectedPillarId) {
+                        Text("No Pillar").tag(String?.none)
+                        ForEach(pillars) { pillar in
+                            Text(pillar.name).tag(Optional(pillar.id))
+                        }
+                    }
+                    .pickerStyle(.menu)
+                    .font(S2.MyDay.Typography.fieldValue)
+                }
+
+                fieldGroup("Schedule") {
+                    Toggle(isOn: $isScheduled) {
+                        Text("Schedule for a specific day")
+                            .font(S2.MyDay.Typography.fieldValue)
+                            .foregroundColor(S2.MyDay.Colors.titleText)
+                    }
                     .tint(S2.MyDay.Colors.interactiveTint)
+
+                    if isScheduled {
+                        DatePicker(
+                            "Date",
+                            selection: $selectedDate,
+                            displayedComponents: .date
+                        )
+                        .datePickerStyle(.graphical)
+                        .tint(S2.MyDay.Colors.interactiveTint)
+                    }
                 }
 
                 Spacer()
@@ -61,7 +78,11 @@ struct CreateTodoSheet: View {
 
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Create") {
-                        onCreate(normalizedTitle, isScheduled ? dueDateString(from: selectedDate) : nil)
+                        onCreate(
+                            normalizedTitle,
+                            isScheduled ? dueDateString(from: selectedDate) : nil,
+                            selectedPillarId
+                        )
                         dismiss()
                     }
                     .disabled(normalizedTitle.isEmpty)
@@ -75,6 +96,17 @@ struct CreateTodoSheet: View {
         }
     }
 
+    @ViewBuilder
+    private func fieldGroup<Content: View>(_ title: String, @ViewBuilder content: () -> Content) -> some View {
+        VStack(alignment: .leading, spacing: S2.Spacing.sm) {
+            Text(title)
+                .font(S2.MyDay.Typography.fieldLabel)
+                .foregroundColor(S2.MyDay.Colors.subtitleText)
+
+            content()
+        }
+    }
+
     private func dueDateString(from date: Date) -> String {
         let formatter = DateFormatter()
         formatter.calendar = Calendar(identifier: .gregorian)
@@ -84,4 +116,3 @@ struct CreateTodoSheet: View {
         return formatter.string(from: date)
     }
 }
-
