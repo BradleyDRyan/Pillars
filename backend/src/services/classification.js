@@ -1,6 +1,7 @@
 const { chatCompletion } = require('./openai');
 const { logger } = require('../config/firebase');
 const { getRubricItems } = require('../utils/rubrics');
+const { parseFactsMarkdown } = require('../utils/userFactsMarkdown');
 
 const CLASSIFICATION_MODEL = process.env.OPENAI_MODEL || 'gpt-4o-mini';
 const MAX_TEXT_LENGTH = 1200;
@@ -128,22 +129,30 @@ function formatUserFactsForPrompt(userFacts) {
   return lines.join('\n');
 }
 
-function normalizeFactList(rawFacts, { maxFacts = 12 } = {}) {
-  const rawList = Array.isArray(rawFacts)
-    ? rawFacts
-    : (typeof rawFacts === 'string' ? rawFacts.split(/\r?\n/) : null);
+function parseFactsValue(rawFacts, { maxFacts = 12, maxFactLength = USER_CONTEXT_MAX_FACT_LENGTH } = {}) {
+  const fromMarkdown = parseFactsMarkdown(typeof rawFacts === 'string' ? rawFacts : null, {
+    maxFacts,
+    maxFactLength
+  });
+  if (fromMarkdown.length) {
+    return fromMarkdown;
+  }
 
-  if (!rawList) {
+  const list = Array.isArray(rawFacts)
+    ? rawFacts
+    : (typeof rawFacts === 'string' ? rawFacts.split(/\r?\n/) : []);
+
+  if (!list.length) {
     return [];
   }
 
   const dedup = new Set();
   const normalized = [];
-  for (const item of rawList) {
+  for (const item of list) {
     if (typeof item !== 'string') {
       continue;
     }
-    const value = normalizeContextString(item, USER_CONTEXT_MAX_FACT_LENGTH);
+    const value = normalizeContextString(item, maxFactLength);
     if (!value) {
       continue;
     }
@@ -161,6 +170,35 @@ function normalizeFactList(rawFacts, { maxFacts = 12 } = {}) {
   return normalized;
 }
 
+function mergeFactLists(factLists, maxFacts = 12) {
+  const dedup = new Set();
+  const merged = [];
+  for (const facts of factLists) {
+    if (!Array.isArray(facts)) {
+      continue;
+    }
+    for (const fact of facts) {
+      if (typeof fact !== 'string') {
+        continue;
+      }
+      const normalized = normalizeContextString(fact);
+      if (!normalized) {
+        continue;
+      }
+      const key = normalized.toLowerCase();
+      if (dedup.has(key)) {
+        continue;
+      }
+      dedup.add(key);
+      merged.push(normalized);
+      if (merged.length >= maxFacts) {
+        return merged;
+      }
+    }
+  }
+  return merged;
+}
+
 async function loadUserContextFacts({ db, userId }) {
   try {
     const userDoc = await db.collection('users').doc(userId).get();
@@ -168,15 +206,25 @@ async function loadUserContextFacts({ db, userId }) {
       return [];
     }
     const data = userDoc.data() || {};
-    const directFacts = normalizeFactList(data.facts, { maxFacts: 12 });
+    const directFacts = parseFactsValue(data.facts, {
+      maxFacts: 12,
+      maxFactLength: USER_CONTEXT_MAX_FACT_LENGTH
+    });
+    const markdownFacts = parseFactsValue(data.factsMarkdown, {
+      maxFacts: 12,
+      maxFactLength: USER_CONTEXT_MAX_FACT_LENGTH
+    });
     const additionalData = data.additionalData && typeof data.additionalData === 'object' && !Array.isArray(data.additionalData)
       ? data.additionalData
       : null;
-    const additionalFacts = normalizeFactList(additionalData?.facts, { maxFacts: 12 });
-    const profileData = data.profileData && typeof data.profileData === 'object' && !Array.isArray(data.profileData)
-      ? data.profileData
-      : null;
-    const profileFacts = normalizeFactList(profileData?.facts, { maxFacts: 12 });
+    const additionalFacts = parseFactsValue(additionalData?.facts, {
+      maxFacts: 12,
+      maxFactLength: USER_CONTEXT_MAX_FACT_LENGTH
+    });
+    const additionalMarkdownFacts = parseFactsValue(additionalData?.factsMarkdown, {
+      maxFacts: 12,
+      maxFactLength: USER_CONTEXT_MAX_FACT_LENGTH
+    });
     const profile = data.profile && typeof data.profile === 'object' && !Array.isArray(data.profile)
       ? data.profile
       : null;
@@ -184,15 +232,15 @@ async function loadUserContextFacts({ db, userId }) {
       ? data.persona
       : null;
 
-    const explicitFacts = normalizeFactList(
-      [...directFacts, ...additionalFacts, ...profileFacts],
-      { maxFacts: 12 }
+    const explicitFacts = mergeFactLists(
+      [directFacts, markdownFacts, additionalFacts, additionalMarkdownFacts],
+      12
     );
     if (explicitFacts.length) {
       return explicitFacts;
     }
 
-    const containers = [data, additionalData, profileData, profile, persona];
+    const containers = [data, profile, persona];
 
     const displayName = extractFactFromContainers(containers, ['displayName', 'fullName', 'name']);
     const spouseName = extractFactFromContainers(containers, [
@@ -229,6 +277,27 @@ async function loadUserContextFacts({ db, userId }) {
     );
     return [];
   }
+}
+
+function extractPillarContextFacts(pillarData) {
+  if (!pillarData || typeof pillarData !== 'object') {
+    return [];
+  }
+  const metadata = pillarData.metadata && typeof pillarData.metadata === 'object' && !Array.isArray(pillarData.metadata)
+    ? pillarData.metadata
+    : null;
+  const settings = pillarData.settings && typeof pillarData.settings === 'object' && !Array.isArray(pillarData.settings)
+    ? pillarData.settings
+    : null;
+
+  return mergeFactLists([
+    parseFactsValue(pillarData.facts, { maxFacts: 6, maxFactLength: USER_CONTEXT_MAX_FACT_LENGTH }),
+    parseFactsValue(pillarData.factsMarkdown, { maxFacts: 6, maxFactLength: USER_CONTEXT_MAX_FACT_LENGTH }),
+    parseFactsValue(metadata?.facts, { maxFacts: 6, maxFactLength: USER_CONTEXT_MAX_FACT_LENGTH }),
+    parseFactsValue(metadata?.factsMarkdown, { maxFacts: 6, maxFactLength: USER_CONTEXT_MAX_FACT_LENGTH }),
+    parseFactsValue(settings?.facts, { maxFacts: 6, maxFactLength: USER_CONTEXT_MAX_FACT_LENGTH }),
+    parseFactsValue(settings?.factsMarkdown, { maxFacts: 6, maxFactLength: USER_CONTEXT_MAX_FACT_LENGTH })
+  ], 6);
 }
 
 function normalizeForMatch(value) {
@@ -572,6 +641,48 @@ function formatCandidatesForPrompt(candidates, includePillar) {
     .join('\n');
 }
 
+function formatPillarFactsForPrompt(candidates, includePillar) {
+  if (!Array.isArray(candidates) || !candidates.length) {
+    return null;
+  }
+
+  const byPillar = new Map();
+  for (const candidate of candidates) {
+    const pillarId = typeof candidate?.pillarId === 'string' ? candidate.pillarId : '';
+    const facts = Array.isArray(candidate?.pillarFacts) ? candidate.pillarFacts : [];
+    if (!pillarId || facts.length === 0) {
+      continue;
+    }
+    if (!byPillar.has(pillarId)) {
+      byPillar.set(pillarId, {
+        pillarId,
+        pillarName: normalizeContextString(candidate?.pillarName, 80),
+        facts: mergeFactLists([facts], 6)
+      });
+    }
+  }
+
+  if (byPillar.size === 0) {
+    return null;
+  }
+
+  const lines = [...byPillar.values()]
+    .filter(entry => Array.isArray(entry.facts) && entry.facts.length > 0)
+    .map(entry => {
+      const parts = [];
+      if (includePillar) {
+        parts.push(`pillar_id="${entry.pillarId}"`);
+        if (entry.pillarName) {
+          parts.push(`pillar_name="${entry.pillarName}"`);
+        }
+      }
+      parts.push(`facts="${entry.facts.join('; ')}"`);
+      return `- ${parts.join(' | ')}`;
+    });
+
+  return lines.length ? lines.join('\n') : null;
+}
+
 async function selectCandidateWithModel({ text, candidates, includePillar, userFacts }) {
   const systemPrompt = [
     'You classify a user activity against an existing rubric.',
@@ -585,9 +696,11 @@ async function selectCandidateWithModel({ text, candidates, includePillar, userF
   ].join('\n');
 
   const userContextBlock = formatUserFactsForPrompt(userFacts);
+  const pillarFactsBlock = formatPillarFactsForPrompt(candidates, includePillar);
   const userPrompt = [
     `Activity text:\n${text}`,
     userContextBlock ? `\nUser context:\n${userContextBlock}` : null,
+    pillarFactsBlock ? `\nPillar context:\n${pillarFactsBlock}` : null,
     '',
     'Rubric options:',
     formatCandidatesForPrompt(candidates, includePillar),
@@ -684,10 +797,11 @@ function buildMultiClassificationResponse(candidates, {
   };
 }
 
-function toCandidate(pillarId, rubricItem, pillarName = null) {
+function toCandidate(pillarId, rubricItem, pillarName = null, pillarFacts = []) {
   return {
     pillarId,
     pillarName,
+    pillarFacts,
     rubricItem
   };
 }
@@ -808,9 +922,11 @@ async function selectCandidatesWithModelMulti({ text, candidates, maxMatches, us
   ].join('\n');
 
   const userContextBlock = formatUserFactsForPrompt(userFacts);
+  const pillarFactsBlock = formatPillarFactsForPrompt(candidates, true);
   const userPrompt = [
     `Activity text:\n${text}`,
     userContextBlock ? `\nUser context:\n${userContextBlock}` : null,
+    pillarFactsBlock ? `\nPillar context:\n${pillarFactsBlock}` : null,
     '',
     'Rubric options:',
     formatCandidatesForPrompt(candidates, true),
@@ -972,9 +1088,10 @@ async function classifyAgainstRubric({ db, userId, text, pillarId }) {
   const pillar = await getOwnedPillar({ db, userId, pillarId });
   const userFacts = await loadUserContextFacts({ db, userId });
   const pillarName = normalizeContextString(pillar.pillarData?.name, 80);
+  const pillarFacts = extractPillarContextFacts(pillar.pillarData);
   const candidates = getRubricItems(pillar.pillarData)
     .filter(item => item && typeof item.id === 'string')
-    .map(item => toCandidate(pillar.pillarId, item, pillarName));
+    .map(item => toCandidate(pillar.pillarId, item, pillarName, pillarFacts));
 
   logger.info(
     {
@@ -1014,12 +1131,13 @@ async function classifyAcrossPillars({ db, userId, text }) {
   for (const doc of pillarsSnapshot.docs) {
     const pillarData = doc.data() || {};
     const pillarName = normalizeContextString(pillarData?.name, 80);
+    const pillarFacts = extractPillarContextFacts(pillarData);
     const rubricItems = getRubricItems(pillarData);
     for (const rubricItem of rubricItems) {
       if (!rubricItem || typeof rubricItem.id !== 'string') {
         continue;
       }
-      candidates.push(toCandidate(doc.id, rubricItem, pillarName));
+      candidates.push(toCandidate(doc.id, rubricItem, pillarName, pillarFacts));
     }
   }
 
@@ -1061,12 +1179,13 @@ async function classifyAcrossPillarsMulti({ db, userId, text, maxMatches = AUTO_
   for (const doc of pillarsSnapshot.docs) {
     const pillarData = doc.data() || {};
     const pillarName = normalizeContextString(pillarData?.name, 80);
+    const pillarFacts = extractPillarContextFacts(pillarData);
     const rubricItems = getRubricItems(pillarData);
     for (const rubricItem of rubricItems) {
       if (!rubricItem || typeof rubricItem.id !== 'string') {
         continue;
       }
-      candidates.push(toCandidate(doc.id, rubricItem, pillarName));
+      candidates.push(toCandidate(doc.id, rubricItem, pillarName, pillarFacts));
     }
   }
 

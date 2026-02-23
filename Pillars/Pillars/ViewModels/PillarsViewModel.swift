@@ -21,7 +21,9 @@ class PillarsViewModel: ObservableObject {
     @Published var errorMessage: String?
     
     private var pillarsListener: ListenerRegistration?
+    private var pillarVisualsListener: ListenerRegistration?
     private let db = Firestore.firestore()
+    private let pillarVisualsDocumentPath = ("appConfig", "pillarVisuals")
     private var loggedUnknownColorTokens = Set<String>()
     private var loggedUnknownIconTokens = Set<String>()
 
@@ -70,9 +72,7 @@ class PillarsViewModel: ObservableObject {
         print("🔍 [PillarsViewModel] Starting to listen for pillars for userId: \(userId)")
         pillarsListener?.remove()
         isLoading = true
-        Task {
-            await loadPillarVisuals(force: true)
-        }
+        startVisualsListening()
         
         pillarsListener = db.collection("pillars")
             .whereField("userId", isEqualTo: userId)
@@ -170,6 +170,8 @@ class PillarsViewModel: ObservableObject {
     func stopListening() {
         pillarsListener?.remove()
         pillarsListener = nil
+        pillarVisualsListener?.remove()
+        pillarVisualsListener = nil
     }
     
     // MARK: - Create Pillar
@@ -246,19 +248,60 @@ class PillarsViewModel: ObservableObject {
     }
 
     func loadPillarVisuals(force: Bool = false) async {
-        if !force && !pillarVisualColors.isEmpty {
-            return
+        if !force {
+            if !pillarVisualColors.isEmpty {
+                return
+            }
+            if pillarVisualsListener != nil {
+                return
+            }
         }
 
         do {
-            let visuals = try await APIService.shared.fetchPillarVisuals()
-            pillarVisualColors = visuals.colors
-            pillarVisualIcons = visuals.icons
-            applyVisualPaletteToCurrentPillars()
+            let snapshot = try await db
+                .collection(pillarVisualsDocumentPath.0)
+                .document(pillarVisualsDocumentPath.1)
+                .getDocument()
+            applyVisualPayload(snapshot.data())
+            if pillarVisualsListener == nil {
+                startVisualsListening()
+            }
         } catch {
             errorMessage = error.localizedDescription
-            print("⚠️ [PillarsViewModel] Failed to load pillar visuals: \(error.localizedDescription)")
+            print("⚠️ [PillarsViewModel] Failed to load pillar visuals from Firestore: \(error.localizedDescription)")
         }
+    }
+
+    private func startVisualsListening() {
+        pillarVisualsListener?.remove()
+        pillarVisualsListener = db
+            .collection(pillarVisualsDocumentPath.0)
+            .document(pillarVisualsDocumentPath.1)
+            .addSnapshotListener { [weak self] snapshot, error in
+                guard let self = self else { return }
+                if let error = error {
+                    print("⚠️ [PillarsViewModel] Visuals listener error: \(error.localizedDescription)")
+                    return
+                }
+
+                self.applyVisualPayload(snapshot?.data())
+            }
+    }
+
+    private func applyVisualPayload(_ payload: [String: Any]?) {
+        guard let payload else {
+            pillarVisualColors = []
+            pillarVisualIcons = []
+            return
+        }
+
+        let parsedColors = parseVisualColors(payload["colors"])
+        let colorIds = Set(parsedColors.map(\.id))
+        let parsedIcons = parseVisualIcons(payload["icons"], validColorIds: colorIds)
+
+        pillarVisualColors = parsedColors
+        pillarVisualIcons = parsedIcons
+        applyVisualPaletteToCurrentPillars()
     }
     
     // MARK: - Update Pillar
@@ -269,7 +312,8 @@ class PillarsViewModel: ObservableObject {
         description: String? = nil,
         colorToken: String? = nil,
         iconToken: String? = nil,
-        pillarType: PillarType? = nil
+        pillarType: PillarType? = nil,
+        rubricItems: [PillarRubricItem]? = nil
     ) async throws {
         let previousPillars = pillars
         var updateData: [String: Any] = [
@@ -304,6 +348,9 @@ class PillarsViewModel: ObservableObject {
         if let resolvedPillarType {
             updateData["pillarType"] = resolvedPillarType.rawValue
         }
+        if let rubricItems {
+            updateData["rubricItems"] = rubricItems.map(\.firestoreData)
+        }
 
         // Optimistic local update for instant UI feedback.
         if let index = pillars.firstIndex(where: { $0.id == pillar.id }) {
@@ -323,6 +370,9 @@ class PillarsViewModel: ObservableObject {
             }
             if let resolvedPillarType {
                 local.pillarType = resolvedPillarType
+            }
+            if let rubricItems {
+                local.rubricItems = rubricItems
             }
             local.updatedAt = Date()
             pillars[index] = local
@@ -417,6 +467,120 @@ class PillarsViewModel: ObservableObject {
         }
         let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
         return trimmed.isEmpty ? nil : trimmed
+    }
+
+    private func parseBool(_ raw: Any?) -> Bool? {
+        switch raw {
+        case let value as Bool:
+            return value
+        case let value as NSNumber:
+            return value.boolValue
+        case let value as String:
+            switch value.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() {
+            case "true", "1", "yes":
+                return true
+            case "false", "0", "no":
+                return false
+            default:
+                return nil
+            }
+        default:
+            return nil
+        }
+    }
+
+    private func normalizeVisualToken(_ raw: Any?) -> String? {
+        guard let value = parseString(raw) else {
+            return nil
+        }
+        let normalized = value
+            .lowercased()
+            .replacingOccurrences(of: "[^a-z0-9_]+", with: "_", options: .regularExpression)
+            .trimmingCharacters(in: CharacterSet(charactersIn: "_"))
+        return normalized.isEmpty ? nil : normalized
+    }
+
+    private func parseVisualColors(_ raw: Any?) -> [PillarVisualColor] {
+        guard let rows = raw as? [[String: Any]] else {
+            return []
+        }
+
+        var seen = Set<String>()
+        var parsed: [PillarVisualColor] = []
+
+        for (index, row) in rows.enumerated() {
+            guard let id = normalizeVisualToken(row["id"]) else {
+                continue
+            }
+            guard !seen.contains(id) else {
+                continue
+            }
+            seen.insert(id)
+
+            let label = parseString(row["label"]) ?? id
+            let order = parseInt(row["order"]) ?? (index * 10)
+            let isActive = parseBool(row["isActive"]) ?? true
+
+            parsed.append(
+                PillarVisualColor(
+                    id: id,
+                    label: label,
+                    order: max(order, 0),
+                    isActive: isActive
+                )
+            )
+        }
+
+        return parsed.sorted { left, right in
+            if left.order != right.order {
+                return left.order < right.order
+            }
+            return left.id.localizedCaseInsensitiveCompare(right.id) == .orderedAscending
+        }
+    }
+
+    private func parseVisualIcons(_ raw: Any?, validColorIds: Set<String>) -> [PillarVisualIcon] {
+        guard let rows = raw as? [[String: Any]] else {
+            return []
+        }
+
+        var seen = Set<String>()
+        var parsed: [PillarVisualIcon] = []
+
+        for (index, row) in rows.enumerated() {
+            guard let id = normalizeVisualToken(row["id"]) else {
+                continue
+            }
+            guard !seen.contains(id) else {
+                continue
+            }
+            seen.insert(id)
+
+            let label = parseString(row["label"]) ?? id
+            let order = parseInt(row["order"]) ?? (index * 10)
+            let isActive = parseBool(row["isActive"]) ?? true
+            let defaultColorToken = normalizeVisualToken(row["defaultColorToken"])
+            let validatedDefaultColor = defaultColorToken.flatMap { token in
+                validColorIds.contains(token) ? token : nil
+            }
+
+            parsed.append(
+                PillarVisualIcon(
+                    id: id,
+                    label: label,
+                    defaultColorToken: validatedDefaultColor,
+                    order: max(order, 0),
+                    isActive: isActive
+                )
+            )
+        }
+
+        return parsed.sorted { left, right in
+            if left.order != right.order {
+                return left.order < right.order
+            }
+            return left.id.localizedCaseInsensitiveCompare(right.id) == .orderedAscending
+        }
     }
 
     private func applyVisualPaletteToCurrentPillars() {

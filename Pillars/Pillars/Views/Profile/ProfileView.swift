@@ -100,7 +100,7 @@ struct ProfileView: View {
 
                 // Facts section
                 Section("Facts") {
-                    Text("One fact per line. These help AI classify todos to the right pillars.")
+                    Text("Use Markdown list items for user facts. These help AI classify todos to the right pillars.")
                         .font(.system(size: 13))
                         .foregroundColor(.secondary)
 
@@ -114,14 +114,13 @@ struct ProfileView: View {
                         }
                     }
 
-                    let factLines = normalizeFactLines(from: factsText)
                     if !isFactsLoading {
-                        if factLines.isEmpty {
+                        if factsText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                             Text("No facts saved yet.")
                                 .font(.system(size: 13))
                                 .foregroundColor(.secondary)
                         } else {
-                            Text(factLines.joined(separator: "\n"))
+                            Text(factsText)
                                 .font(.system(size: 14))
                                 .foregroundColor(.primary)
                         }
@@ -418,7 +417,7 @@ struct ProfileView: View {
     private var factsEditorSheet: some View {
         NavigationStack {
             VStack(alignment: .leading, spacing: 12) {
-                Text("One fact per line.")
+                Text("Write facts as Markdown list items.")
                     .font(.system(size: 13))
                     .foregroundColor(.secondary)
 
@@ -431,8 +430,8 @@ struct ProfileView: View {
 
                     if factsDraftText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                         Text("""
-                        Bradley is a product designer
-                        Bradley is married to Emme
+                        - Bradley is a product designer
+                        - Bradley is married to Emme
                         """)
                             .font(.system(size: 14))
                             .foregroundColor(.secondary)
@@ -528,8 +527,8 @@ struct ProfileView: View {
         defer { isFactsLoading = false }
 
         do {
-            let facts = try await fetchProfileFacts(userId: userId)
-            factsText = facts.joined(separator: "\n")
+            let factsMarkdown = try await fetchProfileFactsMarkdown(userId: userId)
+            factsText = factsMarkdown
         } catch {
             factsErrorMessage = error.localizedDescription
         }
@@ -548,14 +547,18 @@ struct ProfileView: View {
 
         do {
             let lines = normalizeFactLines(from: rawText)
+            let factsMarkdown = buildFactsMarkdown(from: lines)
+            var payload: [String: Any] = [
+                "facts": FieldValue.delete(),
+                "updatedAt": FieldValue.serverTimestamp()
+            ]
+            payload["factsMarkdown"] = factsMarkdown ?? FieldValue.delete()
+
             try await Firestore.firestore()
                 .collection("users")
                 .document(userId)
-                .setData([
-                    "facts": lines,
-                    "updatedAt": FieldValue.serverTimestamp()
-                ], merge: true)
-            factsText = lines.joined(separator: "\n")
+                .setData(payload, merge: true)
+            factsText = factsMarkdown ?? ""
             factsSuccessMessage = lines.isEmpty ? "Facts cleared." : "Facts saved."
             return true
         } catch {
@@ -564,33 +567,23 @@ struct ProfileView: View {
         }
     }
 
-    private func fetchProfileFacts(userId: String) async throws -> [String] {
+    private func fetchProfileFactsMarkdown(userId: String) async throws -> String {
         let document = try await Firestore.firestore()
             .collection("users")
             .document(userId)
             .getDocument()
 
         let data = document.data() ?? [:]
-        if let facts = data["facts"] as? [String] {
-            return normalizeFactLines(from: facts.joined(separator: "\n"))
+        guard let factsMarkdown = data["factsMarkdown"] as? String else {
+            return ""
         }
-        if let facts = data["facts"] as? String {
-            return normalizeFactLines(from: facts)
-        }
-        if let additionalData = data["additionalData"] as? [String: Any] {
-            if let facts = additionalData["facts"] as? [String] {
-                return normalizeFactLines(from: facts.joined(separator: "\n"))
-            }
-            if let facts = additionalData["facts"] as? String {
-                return normalizeFactLines(from: facts)
-            }
-        }
-        return []
+        return buildFactsMarkdown(from: normalizeFactLines(from: factsMarkdown)) ?? ""
     }
 
     private func normalizeFactLines(from raw: String) -> [String] {
         let lines = raw
             .components(separatedBy: .newlines)
+            .map { stripMarkdownPrefix(from: $0) }
             .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
             .filter { !$0.isEmpty }
             .map { String($0.prefix(200)) }
@@ -609,6 +602,23 @@ struct ProfileView: View {
             }
         }
         return result
+    }
+
+    private func buildFactsMarkdown(from lines: [String]) -> String? {
+        guard !lines.isEmpty else {
+            return nil
+        }
+        return lines.map { "- \($0)" }.joined(separator: "\n")
+    }
+
+    private func stripMarkdownPrefix(from line: String) -> String {
+        var value = line.trimmingCharacters(in: .whitespacesAndNewlines)
+        value = value.replacingOccurrences(of: #"^[-*+]\s+\[[ xX]\]\s*"#, with: "", options: .regularExpression)
+        value = value.replacingOccurrences(of: #"^[-*+]\s+"#, with: "", options: .regularExpression)
+        value = value.replacingOccurrences(of: #"^\d+[.)]\s+"#, with: "", options: .regularExpression)
+        value = value.replacingOccurrences(of: #"^>\s+"#, with: "", options: .regularExpression)
+        value = value.replacingOccurrences(of: #"^#{1,6}\s+"#, with: "", options: .regularExpression)
+        return value
     }
 
     private func createOrRotateApiKey() async {

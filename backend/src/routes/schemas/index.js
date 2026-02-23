@@ -7,6 +7,7 @@ const {
   buildDaySchema,
   buildPlanSchema,
   buildPointEventSchema,
+  buildUserSchema,
   buildPillarSchema,
   buildPillarIconListResponse,
   toCanonicalBlockType,
@@ -66,6 +67,14 @@ schemasRouter.get('/plan', async (req, res) => {
 
 schemasRouter.get('/point-events', async (req, res) => {
   return res.json({ pointEventSchema: buildPointEventSchema() });
+});
+
+schemasRouter.get('/users', async (req, res) => {
+  return res.json({ userSchema: buildUserSchema() });
+});
+
+schemasRouter.get('/user', async (req, res) => {
+  return res.json({ userSchema: buildUserSchema() });
 });
 
 schemasRouter.get('/block-types', async (req, res) => {

@@ -1,8 +1,10 @@
 const express = require('express');
 const router = express.Router();
 const crypto = require('crypto');
+const admin = require('firebase-admin');
 const { auth, firestore } = require('../config/firebase');
 const { verifyToken, requireRole, requireVerifiedEmail } = require('../middleware/auth');
+const { normalizeFactsMarkdownPayload } = require('../utils/userFactsMarkdown');
 
 function generateApiKey() {
   return `plr_${crypto.randomBytes(32).toString('base64url')}`;
@@ -14,46 +16,6 @@ function hashApiKey(apiKey) {
 
 function getApiKeyPrefix(apiKey) {
   return apiKey.slice(0, 12);
-}
-
-function normalizeFactsPayload(rawFacts) {
-  if (rawFacts === undefined) {
-    return { provided: false };
-  }
-  if (rawFacts === null) {
-    return { provided: true, value: null };
-  }
-  const rawList = Array.isArray(rawFacts)
-    ? rawFacts
-    : (typeof rawFacts === 'string' ? rawFacts.split(/\r?\n/) : null);
-
-  if (!rawList) {
-    return { error: 'facts must be a string or array of strings' };
-  }
-
-  const normalized = [];
-  const dedup = new Set();
-  for (const item of rawList) {
-    if (typeof item !== 'string') {
-      return { error: 'facts must contain only strings' };
-    }
-    const value = item.trim().replace(/\s+/g, ' ');
-    if (!value) {
-      continue;
-    }
-    const capped = value.slice(0, 200);
-    const dedupKey = capped.toLowerCase();
-    if (dedup.has(dedupKey)) {
-      continue;
-    }
-    dedup.add(dedupKey);
-    normalized.push(capped);
-    if (normalized.length >= 25) {
-      break;
-    }
-  }
-
-  return { provided: true, value: normalized };
 }
 
 router.get('/profile', verifyToken, async (req, res) => {
@@ -87,7 +49,7 @@ router.get('/profile', verifyToken, async (req, res) => {
 
 router.put('/profile', verifyToken, async (req, res) => {
   try {
-    const { displayName, photoURL, phoneNumber, additionalData, facts } = req.body;
+    const { displayName, photoURL, phoneNumber, additionalData, facts, factsMarkdown } = req.body;
     
     const updateData = {};
     if (displayName !== undefined) updateData.displayName = displayName;
@@ -98,7 +60,7 @@ router.put('/profile', verifyToken, async (req, res) => {
       await auth.updateUser(req.user.uid, updateData);
     }
     
-    const normalizedFacts = normalizeFactsPayload(facts);
+    const normalizedFacts = normalizeFactsMarkdownPayload({ factsMarkdown, facts });
     if (normalizedFacts.error) {
       return res.status(400).json({ error: normalizedFacts.error });
     }
@@ -108,10 +70,14 @@ router.put('/profile', verifyToken, async (req, res) => {
         updatedAt: new Date().toISOString()
       };
       if (additionalData && typeof additionalData === 'object' && !Array.isArray(additionalData)) {
-        Object.assign(profilePayload, additionalData);
+        const sanitizedAdditionalData = { ...additionalData };
+        delete sanitizedAdditionalData.facts;
+        delete sanitizedAdditionalData.factsMarkdown;
+        Object.assign(profilePayload, sanitizedAdditionalData);
       }
       if (normalizedFacts.provided) {
-        profilePayload.facts = normalizedFacts.value;
+        profilePayload.factsMarkdown = normalizedFacts.markdown ?? admin.firestore.FieldValue.delete();
+        profilePayload.facts = admin.firestore.FieldValue.delete();
       }
 
       await firestore.collection('users').doc(req.user.uid).set(profilePayload, { merge: true });

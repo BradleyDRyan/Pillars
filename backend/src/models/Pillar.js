@@ -58,6 +58,8 @@ const VALID_PILLAR_ICONS = [
 
 const VALID_PILLAR_ICON_VALUES = Object.freeze([...VALID_PILLAR_ICONS]);
 const ICON_TOKEN_REGEX = /^[a-z][a-z0-9_.-]{1,63}$/;
+const MAX_PILLAR_FACTS = 25;
+const MAX_PILLAR_FACT_LENGTH = 200;
 
 function normalizePillarIcon(icon) {
   if (typeof icon !== 'string') {
@@ -73,6 +75,40 @@ function normalizePillarIcon(icon) {
     return normalized;
   }
   return null;
+}
+
+function normalizePillarFacts(rawFacts) {
+  const list = Array.isArray(rawFacts)
+    ? rawFacts
+    : (typeof rawFacts === 'string' ? rawFacts.split(/\r?\n/) : []);
+
+  if (!list.length) {
+    return [];
+  }
+
+  const dedup = new Set();
+  const normalized = [];
+  for (const raw of list) {
+    if (typeof raw !== 'string') {
+      continue;
+    }
+    const value = raw.trim().replace(/\s+/g, ' ');
+    if (!value) {
+      continue;
+    }
+    const fact = value.slice(0, MAX_PILLAR_FACT_LENGTH);
+    const key = fact.toLowerCase();
+    if (dedup.has(key)) {
+      continue;
+    }
+    dedup.add(key);
+    normalized.push(fact);
+    if (normalized.length >= MAX_PILLAR_FACTS) {
+      break;
+    }
+  }
+
+  return normalized;
 }
 
 /**
@@ -95,6 +131,7 @@ class Pillar {
     this.icon = normalizePillarIcon(data.icon);
     this.isDefault = data.isDefault || false;
     this.isArchived = data.isArchived || false;
+    this.facts = normalizePillarFacts(data.facts ?? data.factsMarkdown);
     this.rubricItems = Array.isArray(data.rubricItems)
       ? normalizeRubricItems(data.rubricItems, { fallbackItems: [] }).value || []
       : [];
@@ -131,6 +168,7 @@ class Pillar {
       icon: pillar.icon,
       isDefault: pillar.isDefault,
       isArchived: pillar.isArchived,
+      facts: pillar.facts,
       rubricItems: pillar.rubricItems,
       settings: pillar.settings,
       stats: pillar.stats,
@@ -256,6 +294,7 @@ class Pillar {
   async save() {
     this.updatedAt = new Date();
     this.icon = normalizePillarIcon(this.icon);
+    this.facts = normalizePillarFacts(this.facts);
     if (this.id) {
       await Pillar.collection().doc(this.id).update({
         name: this.name,
@@ -267,6 +306,7 @@ class Pillar {
         icon: this.icon,
         isDefault: this.isDefault,
         isArchived: this.isArchived,
+        facts: this.facts,
         rubricItems: this.rubricItems,
         settings: this.settings,
         stats: this.stats,

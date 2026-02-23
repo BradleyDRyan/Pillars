@@ -6,6 +6,7 @@ const { VALID_EVENT_TYPES } = require('../services/events');
 const { Pillar } = require('../models');
 const { listPillarTemplates, buildTemplateLibraryPayload } = require('../services/pillarTemplates');
 const { getPillarVisuals } = require('../services/pillarVisuals');
+const { MAX_USER_FACTS, MAX_USER_FACT_LENGTH } = require('../utils/userFactsMarkdown');
 
 const router = express.Router();
 router.use(flexibleAuth);
@@ -148,6 +149,44 @@ async function buildPillarSchema() {
       'Admin icon/color catalog CRUD is available at /api/pillar-visuals (writes require admin claim or internal service secret).',
       'Template CRUD is available at /api/pillar-templates (writes require admin claim or internal service secret).',
       'Todos and habits may reference a rubric item by id via rubricItemId.'
+    ]
+  };
+}
+
+function buildUserSchema() {
+  return {
+    endpoint: '/users/profile',
+    factsField: 'factsMarkdown',
+    factsFormat: 'markdown-list',
+    factsConstraints: {
+      maxFacts: MAX_USER_FACTS,
+      maxFactLength: MAX_USER_FACT_LENGTH
+    },
+    profileUpdate: {
+      type: 'object',
+      required: [],
+      additionalProperties: false,
+      properties: {
+        displayName: { type: 'string', nullable: true },
+        photoURL: { type: 'string', nullable: true },
+        phoneNumber: { type: 'string', nullable: true },
+        factsMarkdown: {
+          type: 'string',
+          nullable: true,
+          description: 'Canonical user facts store. Provide Markdown list items; null clears facts.'
+        },
+        additionalData: {
+          type: 'object',
+          nullable: true,
+          additionalProperties: true,
+          description: 'Optional profile fields merged into the user profile document.'
+        }
+      }
+    },
+    notes: [
+      'factsMarkdown is the only canonical facts field persisted for users.',
+      'Legacy facts array/string input may still be accepted on /users/profile for compatibility but should not be used.',
+      'Facts are normalized/deduplicated and stored as Markdown list items.'
     ]
   };
 }
@@ -980,6 +1019,7 @@ async function buildSchemasResponse(userId) {
     habitSchema: buildHabitSchema(),
     daySchema: buildDaySchema(),
     planSchema: buildPlanSchema(),
+    userSchema: buildUserSchema(),
     pillarSchema,
     pillarIcons,
     pillarVisuals,
@@ -1016,6 +1056,7 @@ module.exports = {
   buildDaySchema,
   buildPlanSchema,
   buildPointEventSchema,
+  buildUserSchema,
   buildPillarSchema,
   buildRubricItemSchema,
   buildPillarIconSchema,

@@ -38,6 +38,17 @@ export type BlockTypeSchema = {
 
 export type SchemasResponse = {
   blockTypes: BlockTypeSchema[];
+  userSchema?: {
+    endpoint: string;
+    factsField: string;
+    factsFormat: string;
+    factsConstraints: {
+      maxFacts: number;
+      maxFactLength: number;
+    };
+    profileUpdate: JsonObjectSchema;
+    notes: string[];
+  };
   pillarSchema: {
     endpoint: string;
     pillarTypes?: {
