@@ -40,9 +40,15 @@ export type SchemasResponse = {
   blockTypes: BlockTypeSchema[];
   userSchema?: {
     endpoint: string;
-    factsField: string;
-    factsFormat: string;
-    factsConstraints: {
+    contextField: string;
+    contextFormat: string;
+    contextConstraints: {
+      maxFacts: number;
+      maxFactLength: number;
+    };
+    factsField?: string;
+    factsFormat?: string;
+    factsConstraints?: {
       maxFacts: number;
       maxFactLength: number;
     };
@@ -127,25 +133,34 @@ export type SchemasResponse = {
       isActive: boolean;
     }>;
   };
-  todoSchema: {
-    listQuery: JsonObjectSchema;
-    readQuery: JsonObjectSchema;
+  actionSchema: {
+    listByDate: {
+      endpoint: string;
+      query: JsonObjectSchema;
+    };
+    read: {
+      endpoint: string;
+    };
     create: JsonObjectSchema;
     update: JsonObjectSchema;
-    createResponse: JsonObjectSchema;
-    updateResponse: JsonObjectSchema;
+    archive: {
+      endpoint: string;
+      method: string;
+    };
+    notes?: string[];
   };
-  habitSchema: {
-    listQuery: JsonObjectSchema;
-    readQuery: JsonObjectSchema;
+  actionTemplateSchema: {
+    list: {
+      endpoint: string;
+      query: JsonObjectSchema;
+    };
     create: JsonObjectSchema;
     update: JsonObjectSchema;
-    log: JsonObjectSchema;
-    createResponse: JsonObjectSchema;
-    updateResponse: JsonObjectSchema;
-  };
-  daySchema: {
-    batchPush: JsonSchemaProperty;
+    archive: {
+      endpoint: string;
+      method: string;
+    };
+    notes?: string[];
   };
   pointEventSchema: {
     endpoint: string;
@@ -155,18 +170,6 @@ export type SchemasResponse = {
     rollupQuery: JsonObjectSchema;
   };
   eventTypes: string[];
-};
-
-export type TodoMutationClassificationSummary = {
-  matchedPillarIds: string[];
-  trimmedPillarIds: string[];
-  method?: string;
-  fallbackUsed?: boolean;
-  modelUsed?: string | null;
-  modelRationale?: string | null;
-  modelSystemPrompt?: string | null;
-  modelUserPrompt?: string | null;
-  modelResponseRaw?: string | null;
 };
 
 export type SchemaFetchResult =

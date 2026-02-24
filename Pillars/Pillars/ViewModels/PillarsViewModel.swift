@@ -119,6 +119,12 @@ class PillarsViewModel: ObservableObject {
                     let color = self.colorHex(forColorToken: colorToken)
                     let isDefault = data["isDefault"] as? Bool ?? false
                     let rubricItems = self.parseRubricItems(data["rubricItems"])
+                    let contextMarkdown = self.parsePillarContextMarkdown(
+                        primary: data["contextMarkdown"],
+                        secondary: data["context"],
+                        legacyMarkdown: data["factsMarkdown"],
+                        legacyList: data["context"] ?? data["facts"]
+                    )
                     
                     // Parse icon
                     let iconToken = self.normalizeIconToken(data["icon"] as? String)
@@ -154,7 +160,8 @@ class PillarsViewModel: ObservableObject {
                         stats: stats,
                         createdAt: createdTimestamp.dateValue(),
                         updatedAt: updatedTimestamp.dateValue(),
-                        metadata: data["metadata"] as? [String: String]
+                        metadata: data["metadata"] as? [String: String],
+                        contextMarkdown: contextMarkdown
                     )
                 }
                 
@@ -182,7 +189,8 @@ class PillarsViewModel: ObservableObject {
         colorToken: String? = nil,
         iconToken: String? = nil,
         pillarType: PillarType? = nil,
-        pillarTypeRaw: String? = nil
+        pillarTypeRaw: String? = nil,
+        contextMarkdown: String? = nil
     ) async throws -> Pillar {
         guard Auth.auth().currentUser != nil else {
             throw PillarError.notAuthenticated
@@ -203,7 +211,8 @@ class PillarsViewModel: ObservableObject {
             description: description,
             colorToken: resolvedColorToken,
             iconToken: resolvedIconToken,
-            pillarType: resolvedTypeRaw
+            pillarType: resolvedTypeRaw,
+            contextMarkdown: normalizedContextMarkdownValue(contextMarkdown)
         )
         
         print("✅ [PillarsViewModel] Created pillar '\(name)' via backend")
@@ -313,7 +322,9 @@ class PillarsViewModel: ObservableObject {
         colorToken: String? = nil,
         iconToken: String? = nil,
         pillarType: PillarType? = nil,
-        rubricItems: [PillarRubricItem]? = nil
+        rubricItems: [PillarRubricItem]? = nil,
+        contextMarkdown: String? = nil,
+        updateContextMarkdown: Bool = false
     ) async throws {
         let previousPillars = pillars
         var updateData: [String: Any] = [
@@ -351,6 +362,13 @@ class PillarsViewModel: ObservableObject {
         if let rubricItems {
             updateData["rubricItems"] = rubricItems.map(\.firestoreData)
         }
+        let normalizedContextMarkdown = normalizedContextMarkdownValue(contextMarkdown)
+        if updateContextMarkdown {
+            updateData["contextMarkdown"] = normalizedContextMarkdown ?? NSNull()
+            updateData["context"] = FieldValue.delete()
+            updateData["facts"] = FieldValue.delete()
+            updateData["factsMarkdown"] = FieldValue.delete()
+        }
 
         // Optimistic local update for instant UI feedback.
         if let index = pillars.firstIndex(where: { $0.id == pillar.id }) {
@@ -373,6 +391,9 @@ class PillarsViewModel: ObservableObject {
             }
             if let rubricItems {
                 local.rubricItems = rubricItems
+            }
+            if updateContextMarkdown {
+                local.contextMarkdown = normalizedContextMarkdown
             }
             local.updatedAt = Date()
             pillars[index] = local
@@ -467,6 +488,35 @@ class PillarsViewModel: ObservableObject {
         }
         let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
         return trimmed.isEmpty ? nil : trimmed
+    }
+
+    private func normalizedContextMarkdownValue(_ raw: String?) -> String? {
+        guard let raw else {
+            return nil
+        }
+        let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? nil : trimmed
+    }
+
+    private func parsePillarContextMarkdown(
+        primary: Any?,
+        secondary: Any?,
+        legacyMarkdown: Any?,
+        legacyList: Any?
+    ) -> String? {
+        if let parsed = parseString(primary) ?? parseString(secondary) ?? parseString(legacyMarkdown) {
+            return parsed
+        }
+        guard let lines = legacyList as? [String] else {
+            return nil
+        }
+        let normalized = lines
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+        guard !normalized.isEmpty else {
+            return nil
+        }
+        return normalized.map { "- \($0)" }.joined(separator: "\n")
     }
 
     private func parseBool(_ raw: Any?) -> Bool? {

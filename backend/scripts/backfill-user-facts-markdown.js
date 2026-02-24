@@ -3,9 +3,9 @@
 const admin = require('firebase-admin');
 const { db } = require('../src/config/firebase');
 const {
-  MAX_USER_FACTS,
-  parseFactsMarkdown,
-  buildFactsMarkdown
+  MAX_USER_CONTEXT_FACTS,
+  parseContextMarkdown,
+  buildContextMarkdown
 } = require('../src/utils/userFactsMarkdown');
 
 function parseArgs(argv) {
@@ -40,21 +40,27 @@ function parseArgs(argv) {
 
 function toFactList(value) {
   if (typeof value === 'string') {
-    return parseFactsMarkdown(value);
+    return parseContextMarkdown(value);
   }
   if (Array.isArray(value)) {
     if (value.some(item => typeof item !== 'string')) {
       return [];
     }
-    return parseFactsMarkdown(value.join('\n'));
+    return parseContextMarkdown(value.join('\n'));
   }
   return [];
 }
 
 function collectFacts(data) {
   const sources = [
+    data?.contextMarkdown,
+    data?.context,
     data?.factsMarkdown,
     data?.facts,
+    data?.additionalData?.context,
+    data?.profileData?.context,
+    data?.profile?.context,
+    data?.persona?.context,
     data?.additionalData?.facts,
     data?.profileData?.facts,
     data?.profile?.facts,
@@ -72,7 +78,7 @@ function collectFacts(data) {
       }
       dedup.add(key);
       facts.push(fact);
-      if (facts.length >= MAX_USER_FACTS) {
+      if (facts.length >= MAX_USER_CONTEXT_FACTS) {
         return facts;
       }
     }
@@ -83,7 +89,12 @@ function collectFacts(data) {
 
 function hasLegacyFactFields(data) {
   return (
+    data?.context !== undefined ||
     data?.facts !== undefined ||
+    data?.additionalData?.context !== undefined ||
+    data?.profileData?.context !== undefined ||
+    data?.profile?.context !== undefined ||
+    data?.persona?.context !== undefined ||
     data?.additionalData?.facts !== undefined ||
     data?.profileData?.facts !== undefined ||
     data?.profile?.facts !== undefined ||
@@ -102,7 +113,7 @@ async function getUserDocs(userId) {
 
 async function run() {
   const args = parseArgs(process.argv.slice(2));
-  console.log('[backfill-user-facts-markdown] starting', args);
+  console.log('[backfill-user-context-markdown] starting', args);
 
   let docs = await getUserDocs(args.userId);
   if (args.limit && docs.length > args.limit) {
@@ -119,8 +130,8 @@ async function run() {
   for (const doc of docs) {
     const data = doc.data() || {};
     const mergedFacts = collectFacts(data);
-    const nextMarkdown = buildFactsMarkdown(mergedFacts);
-    const currentMarkdown = buildFactsMarkdown(toFactList(data.factsMarkdown));
+    const nextMarkdown = buildContextMarkdown(mergedFacts);
+    const currentMarkdown = buildContextMarkdown(toFactList(data.contextMarkdown));
     const legacyPresent = hasLegacyFactFields(data);
 
     const shouldUpdate = legacyPresent || nextMarkdown !== currentMarkdown;
@@ -131,17 +142,23 @@ async function run() {
 
     const updatePayload = {
       updatedAt: new Date().toISOString(),
+      context: admin.firestore.FieldValue.delete(),
       facts: admin.firestore.FieldValue.delete(),
+      factsMarkdown: admin.firestore.FieldValue.delete(),
+      'additionalData.context': admin.firestore.FieldValue.delete(),
+      'profileData.context': admin.firestore.FieldValue.delete(),
+      'profile.context': admin.firestore.FieldValue.delete(),
+      'persona.context': admin.firestore.FieldValue.delete(),
       'additionalData.facts': admin.firestore.FieldValue.delete(),
       'profileData.facts': admin.firestore.FieldValue.delete(),
       'profile.facts': admin.firestore.FieldValue.delete(),
       'persona.facts': admin.firestore.FieldValue.delete()
     };
-    updatePayload.factsMarkdown = nextMarkdown ?? admin.firestore.FieldValue.delete();
+    updatePayload.contextMarkdown = nextMarkdown ?? admin.firestore.FieldValue.delete();
 
     if (args.dryRun) {
       summary.updated += 1;
-      console.log('[backfill-user-facts-markdown] dry-run', {
+      console.log('[backfill-user-context-markdown] dry-run', {
         userId: doc.id,
         factsCount: mergedFacts.length,
         hasMarkdown: Boolean(nextMarkdown)
@@ -154,17 +171,17 @@ async function run() {
       summary.updated += 1;
     } catch (error) {
       summary.errors += 1;
-      console.error('[backfill-user-facts-markdown] failed', {
+      console.error('[backfill-user-context-markdown] failed', {
         userId: doc.id,
         message: error.message
       });
     }
   }
 
-  console.log('[backfill-user-facts-markdown] complete', summary);
+  console.log('[backfill-user-context-markdown] complete', summary);
 }
 
 run().catch(error => {
-  console.error('[backfill-user-facts-markdown] fatal', error);
+  console.error('[backfill-user-context-markdown] fatal', error);
   process.exit(1);
 });

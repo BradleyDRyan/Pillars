@@ -4,7 +4,8 @@ const crypto = require('crypto');
 const admin = require('firebase-admin');
 const { auth, firestore } = require('../config/firebase');
 const { verifyToken, requireRole, requireVerifiedEmail } = require('../middleware/auth');
-const { normalizeFactsMarkdownPayload } = require('../utils/userFactsMarkdown');
+const { flexibleAuth } = require('../middleware/serviceAuth');
+const { normalizeContextMarkdownPayload } = require('../utils/userFactsMarkdown');
 
 function generateApiKey() {
   return `plr_${crypto.randomBytes(32).toString('base64url')}`;
@@ -18,7 +19,7 @@ function getApiKeyPrefix(apiKey) {
   return apiKey.slice(0, 12);
 }
 
-router.get('/profile', verifyToken, async (req, res) => {
+router.get('/profile', flexibleAuth, async (req, res) => {
   try {
     const userRecord = await auth.getUser(req.user.uid);
     
@@ -47,9 +48,18 @@ router.get('/profile', verifyToken, async (req, res) => {
   }
 });
 
-router.put('/profile', verifyToken, async (req, res) => {
+router.put('/profile', flexibleAuth, async (req, res) => {
   try {
-    const { displayName, photoURL, phoneNumber, additionalData, facts, factsMarkdown } = req.body;
+    const {
+      displayName,
+      photoURL,
+      phoneNumber,
+      additionalData,
+      context,
+      contextMarkdown,
+      facts,
+      factsMarkdown
+    } = req.body;
     
     const updateData = {};
     if (displayName !== undefined) updateData.displayName = displayName;
@@ -60,24 +70,33 @@ router.put('/profile', verifyToken, async (req, res) => {
       await auth.updateUser(req.user.uid, updateData);
     }
     
-    const normalizedFacts = normalizeFactsMarkdownPayload({ factsMarkdown, facts });
-    if (normalizedFacts.error) {
-      return res.status(400).json({ error: normalizedFacts.error });
+    const normalizedContext = normalizeContextMarkdownPayload({
+      context,
+      contextMarkdown,
+      facts,
+      factsMarkdown
+    });
+    if (normalizedContext.error) {
+      return res.status(400).json({ error: normalizedContext.error });
     }
 
-    if (additionalData || normalizedFacts.provided) {
+    if (additionalData || normalizedContext.provided) {
       const profilePayload = {
         updatedAt: new Date().toISOString()
       };
       if (additionalData && typeof additionalData === 'object' && !Array.isArray(additionalData)) {
         const sanitizedAdditionalData = { ...additionalData };
+        delete sanitizedAdditionalData.context;
+        delete sanitizedAdditionalData.contextMarkdown;
         delete sanitizedAdditionalData.facts;
         delete sanitizedAdditionalData.factsMarkdown;
         Object.assign(profilePayload, sanitizedAdditionalData);
       }
-      if (normalizedFacts.provided) {
-        profilePayload.factsMarkdown = normalizedFacts.markdown ?? admin.firestore.FieldValue.delete();
+      if (normalizedContext.provided) {
+        profilePayload.contextMarkdown = normalizedContext.markdown ?? admin.firestore.FieldValue.delete();
+        profilePayload.context = admin.firestore.FieldValue.delete();
         profilePayload.facts = admin.firestore.FieldValue.delete();
+        profilePayload.factsMarkdown = admin.firestore.FieldValue.delete();
       }
 
       await firestore.collection('users').doc(req.user.uid).set(profilePayload, { merge: true });

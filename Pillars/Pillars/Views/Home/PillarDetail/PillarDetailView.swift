@@ -14,7 +14,7 @@ struct PillarDetailView: View {
     @State private var selectedTab: Int? = 0
     @State private var scrollOffset: CGFloat = 0
 
-    private let tabs = ["Principles", "Saves", "Points", "Rubric"]
+    private let tabs = ["Principles", "Saves", "Points", "Rubric", "Context"]
     
     private let heroMaxHeight: CGFloat = 88
     
@@ -93,6 +93,12 @@ struct PillarDetailView: View {
                     }
                     .containerRelativeFrame(.horizontal)
                     .id(3)
+
+                    TabContentScrollView(offset: selectedTab == 4 ? $scrollOffset : .constant(0)) {
+                        ContextContentView(pillar: livePillar)
+                    }
+                    .containerRelativeFrame(.horizontal)
+                    .id(4)
                 }
                 .scrollTargetLayout()
             }

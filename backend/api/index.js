@@ -28,12 +28,8 @@ const coachPreferencesRoutes = require('../src/routes/coach-preferences');
 const cronRoutes = require('../src/routes/cron');
 const onboardingContentRoutes = require('../src/routes/onboarding-content');
 const skillRoutes = require('../src/routes/skills');
-const dayRoutes = require('../src/routes/days');
-const dayBlockRoutes = require('../src/routes/day-blocks');
-const dayTemplateRoutes = require('../src/routes/day-templates');
-const blockTypeRoutes = require('../src/routes/block-types');
-const todoRoutes = require('../src/routes/todos');
-const habitRoutes = require('../src/routes/habits');
+const actionRoutes = require('../src/routes/actions');
+const actionTemplateRoutes = require('../src/routes/action-templates');
 const pointEventRoutes = require('../src/routes/point-events');
 const planRoutes = require('../src/routes/plan');
 const eventRoutes = require('../src/routes/events');
@@ -102,7 +98,7 @@ app.get('/', (req, res) => {
     endpoints: {
       auth: '/auth',
       api: '/api',
-      users: '/users',
+      users: '/api/users',
       pillars: '/api/pillars',
       pillarTemplates: '/api/pillar-templates',
       pillarVisuals: '/api/pillar-visuals',
@@ -114,11 +110,9 @@ app.get('/', (req, res) => {
       sms: '/api/sms',
       coachPreferences: '/api/coach-preferences',
       cron: '/api/cron',
-      blockTypes: '/api/block-types',
-      dayBlocks: '/api/days/:date/blocks',
+      actions: '/api/actions',
+      actionTemplates: '/api/action-templates',
       plan: '/api/plan/by-date/:date',
-      todos: '/api/todos',
-      habits: '/api/habits',
       pointEvents: '/api/point-events',
       events: '/api/events',
       context: '/api/context',
@@ -131,6 +125,7 @@ app.use('/auth', authRoutes);
 app.use('/auth/phone', phoneAuthRoutes);
 app.use('/api', apiRoutes);
 app.use('/users', userRoutes);
+app.use('/api/users', userRoutes);
 app.use('/api/pillars', pillarRoutes);
 app.use('/api/pillar-templates', pillarTemplateRoutes);
 app.use('/api/pillar-visuals', pillarVisualRoutes);
@@ -147,12 +142,8 @@ app.use('/api/coach-preferences', coachPreferencesRoutes);
 app.use('/api/cron', cronRoutes);
 app.use('/api/onboarding-content', onboardingContentRoutes);
 app.use('/api/skills', skillRoutes);
-app.use('/api/days', dayRoutes);
-app.use('/api/days/:date/blocks', dayBlockRoutes);
-app.use('/api/day-templates', dayTemplateRoutes);
-app.use('/api/block-types', blockTypeRoutes);
-app.use('/api/todos', todoRoutes);
-app.use('/api/habits', habitRoutes);
+app.use('/api/actions', actionRoutes);
+app.use('/api/action-templates', actionTemplateRoutes);
 app.use('/api/point-events', pointEventRoutes);
 app.use('/api/plan', planRoutes);
 app.use('/api/events', eventRoutes);

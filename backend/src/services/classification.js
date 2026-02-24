@@ -1,7 +1,7 @@
 const { chatCompletion } = require('./openai');
 const { logger } = require('../config/firebase');
 const { getRubricItems } = require('../utils/rubrics');
-const { parseFactsMarkdown } = require('../utils/userFactsMarkdown');
+const { parseContextMarkdown } = require('../utils/userFactsMarkdown');
 
 const CLASSIFICATION_MODEL = process.env.OPENAI_MODEL || 'gpt-4o-mini';
 const MAX_TEXT_LENGTH = 1200;
@@ -129,8 +129,8 @@ function formatUserFactsForPrompt(userFacts) {
   return lines.join('\n');
 }
 
-function parseFactsValue(rawFacts, { maxFacts = 12, maxFactLength = USER_CONTEXT_MAX_FACT_LENGTH } = {}) {
-  const fromMarkdown = parseFactsMarkdown(typeof rawFacts === 'string' ? rawFacts : null, {
+function parseContextValue(rawContext, { maxFacts = 12, maxFactLength = USER_CONTEXT_MAX_FACT_LENGTH } = {}) {
+  const fromMarkdown = parseContextMarkdown(typeof rawContext === 'string' ? rawContext : null, {
     maxFacts,
     maxFactLength
   });
@@ -138,9 +138,9 @@ function parseFactsValue(rawFacts, { maxFacts = 12, maxFactLength = USER_CONTEXT
     return fromMarkdown;
   }
 
-  const list = Array.isArray(rawFacts)
-    ? rawFacts
-    : (typeof rawFacts === 'string' ? rawFacts.split(/\r?\n/) : []);
+  const list = Array.isArray(rawContext)
+    ? rawContext
+    : (typeof rawContext === 'string' ? rawContext.split(/\r?\n/) : []);
 
   if (!list.length) {
     return [];
@@ -206,22 +206,38 @@ async function loadUserContextFacts({ db, userId }) {
       return [];
     }
     const data = userDoc.data() || {};
-    const directFacts = parseFactsValue(data.facts, {
+    const directContextMarkdown = parseContextValue(data.contextMarkdown, {
       maxFacts: 12,
       maxFactLength: USER_CONTEXT_MAX_FACT_LENGTH
     });
-    const markdownFacts = parseFactsValue(data.factsMarkdown, {
+    const directContext = parseContextValue(data.context, {
+      maxFacts: 12,
+      maxFactLength: USER_CONTEXT_MAX_FACT_LENGTH
+    });
+    const legacyFactsMarkdown = parseContextValue(data.factsMarkdown, {
+      maxFacts: 12,
+      maxFactLength: USER_CONTEXT_MAX_FACT_LENGTH
+    });
+    const legacyFacts = parseContextValue(data.facts, {
       maxFacts: 12,
       maxFactLength: USER_CONTEXT_MAX_FACT_LENGTH
     });
     const additionalData = data.additionalData && typeof data.additionalData === 'object' && !Array.isArray(data.additionalData)
       ? data.additionalData
       : null;
-    const additionalFacts = parseFactsValue(additionalData?.facts, {
+    const additionalContextMarkdown = parseContextValue(additionalData?.contextMarkdown, {
       maxFacts: 12,
       maxFactLength: USER_CONTEXT_MAX_FACT_LENGTH
     });
-    const additionalMarkdownFacts = parseFactsValue(additionalData?.factsMarkdown, {
+    const additionalContext = parseContextValue(additionalData?.context, {
+      maxFacts: 12,
+      maxFactLength: USER_CONTEXT_MAX_FACT_LENGTH
+    });
+    const additionalFacts = parseContextValue(additionalData?.facts, {
+      maxFacts: 12,
+      maxFactLength: USER_CONTEXT_MAX_FACT_LENGTH
+    });
+    const additionalMarkdownFacts = parseContextValue(additionalData?.factsMarkdown, {
       maxFacts: 12,
       maxFactLength: USER_CONTEXT_MAX_FACT_LENGTH
     });
@@ -233,7 +249,16 @@ async function loadUserContextFacts({ db, userId }) {
       : null;
 
     const explicitFacts = mergeFactLists(
-      [directFacts, markdownFacts, additionalFacts, additionalMarkdownFacts],
+      [
+        directContextMarkdown,
+        directContext,
+        additionalContextMarkdown,
+        additionalContext,
+        legacyFactsMarkdown,
+        legacyFacts,
+        additionalMarkdownFacts,
+        additionalFacts
+      ],
       12
     );
     if (explicitFacts.length) {
@@ -291,12 +316,18 @@ function extractPillarContextFacts(pillarData) {
     : null;
 
   return mergeFactLists([
-    parseFactsValue(pillarData.facts, { maxFacts: 6, maxFactLength: USER_CONTEXT_MAX_FACT_LENGTH }),
-    parseFactsValue(pillarData.factsMarkdown, { maxFacts: 6, maxFactLength: USER_CONTEXT_MAX_FACT_LENGTH }),
-    parseFactsValue(metadata?.facts, { maxFacts: 6, maxFactLength: USER_CONTEXT_MAX_FACT_LENGTH }),
-    parseFactsValue(metadata?.factsMarkdown, { maxFacts: 6, maxFactLength: USER_CONTEXT_MAX_FACT_LENGTH }),
-    parseFactsValue(settings?.facts, { maxFacts: 6, maxFactLength: USER_CONTEXT_MAX_FACT_LENGTH }),
-    parseFactsValue(settings?.factsMarkdown, { maxFacts: 6, maxFactLength: USER_CONTEXT_MAX_FACT_LENGTH })
+    parseContextValue(pillarData.contextMarkdown, { maxFacts: 6, maxFactLength: USER_CONTEXT_MAX_FACT_LENGTH }),
+    parseContextValue(pillarData.context, { maxFacts: 6, maxFactLength: USER_CONTEXT_MAX_FACT_LENGTH }),
+    parseContextValue(pillarData.factsMarkdown, { maxFacts: 6, maxFactLength: USER_CONTEXT_MAX_FACT_LENGTH }),
+    parseContextValue(pillarData.facts, { maxFacts: 6, maxFactLength: USER_CONTEXT_MAX_FACT_LENGTH }),
+    parseContextValue(metadata?.contextMarkdown, { maxFacts: 6, maxFactLength: USER_CONTEXT_MAX_FACT_LENGTH }),
+    parseContextValue(metadata?.context, { maxFacts: 6, maxFactLength: USER_CONTEXT_MAX_FACT_LENGTH }),
+    parseContextValue(metadata?.facts, { maxFacts: 6, maxFactLength: USER_CONTEXT_MAX_FACT_LENGTH }),
+    parseContextValue(metadata?.factsMarkdown, { maxFacts: 6, maxFactLength: USER_CONTEXT_MAX_FACT_LENGTH }),
+    parseContextValue(settings?.contextMarkdown, { maxFacts: 6, maxFactLength: USER_CONTEXT_MAX_FACT_LENGTH }),
+    parseContextValue(settings?.context, { maxFacts: 6, maxFactLength: USER_CONTEXT_MAX_FACT_LENGTH }),
+    parseContextValue(settings?.facts, { maxFacts: 6, maxFactLength: USER_CONTEXT_MAX_FACT_LENGTH }),
+    parseContextValue(settings?.factsMarkdown, { maxFacts: 6, maxFactLength: USER_CONTEXT_MAX_FACT_LENGTH })
   ], 6);
 }
 
@@ -676,7 +707,7 @@ function formatPillarFactsForPrompt(candidates, includePillar) {
           parts.push(`pillar_name="${entry.pillarName}"`);
         }
       }
-      parts.push(`facts="${entry.facts.join('; ')}"`);
+      parts.push(`context="${entry.facts.join('; ')}"`);
       return `- ${parts.join(' | ')}`;
     });
 

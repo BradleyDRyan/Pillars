@@ -103,6 +103,7 @@ class APIService: ObservableObject {
         colorToken: String? = nil,
         iconToken: String?,
         pillarType: String?,
+        contextMarkdown: String? = nil,
         isDefault: Bool = false,
         metadata: [String: String]? = nil,
         rubricItems: [[String: Any]]? = nil
@@ -127,6 +128,13 @@ class APIService: ObservableObject {
         }
         if let pillarType, !pillarType.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             payload["pillarType"] = pillarType
+        }
+        if let contextMarkdown {
+            let trimmed = contextMarkdown.trimmingCharacters(in: .whitespacesAndNewlines)
+            payload["contextMarkdown"] = trimmed.isEmpty ? NSNull() : trimmed
+            payload["context"] = NSNull()
+            payload["facts"] = NSNull()
+            payload["factsMarkdown"] = NSNull()
         }
         if let metadata {
             payload["metadata"] = metadata
@@ -213,6 +221,228 @@ class APIService: ObservableObject {
         let request = createRequest(url: url)
         let (data, response) = try await session.data(for: request)
         return try await handleResponse(data, response, nil, type: PointEventsResponse.self).items
+    }
+
+    // MARK: - Actions
+
+    func fetchActionsByDate(
+        date: String,
+        ensure: Bool = true,
+        status: ActionStatus? = nil,
+        sectionId: DaySection.TimeSection? = nil
+    ) async throws -> ActionsByDateResponse {
+        _ = try await getFirebaseToken()
+
+        var components = URLComponents(string: "\(baseURL)/actions/by-date/\(date)")
+        var queryItems: [URLQueryItem] = [
+            URLQueryItem(name: "ensure", value: ensure ? "true" : "false")
+        ]
+        if let status {
+            queryItems.append(URLQueryItem(name: "status", value: status.rawValue))
+        }
+        if let sectionId {
+            queryItems.append(URLQueryItem(name: "sectionId", value: sectionId.rawValue))
+        }
+        components?.queryItems = queryItems
+
+        guard let url = components?.url else {
+            throw APIError.invalidURL("\(baseURL)/actions/by-date/\(date)")
+        }
+
+        let request = createRequest(url: url)
+        let (data, response) = try await session.data(for: request)
+        return try await handleResponse(data, response, nil, type: ActionsByDateResponse.self)
+    }
+
+    func createAction(
+        title: String,
+        notes: String? = nil,
+        status: ActionStatus = .pending,
+        targetDate: String? = nil,
+        sectionId: DaySection.TimeSection = .afternoon,
+        order: Int = 0,
+        templateId: String? = nil,
+        bounties: [ActionBounty]? = nil
+    ) async throws -> ActionMutationResponse {
+        _ = try await getFirebaseToken()
+        guard let url = URL(string: "\(baseURL)/actions") else {
+            throw APIError.invalidURL("\(baseURL)/actions")
+        }
+
+        var payload: [String: Any] = [
+            "title": title,
+            "status": status.rawValue,
+            "sectionId": sectionId.rawValue,
+            "order": order
+        ]
+
+        if let notes {
+            payload["notes"] = notes
+        }
+        if let targetDate {
+            payload["targetDate"] = targetDate
+        }
+        if let templateId {
+            payload["templateId"] = templateId
+        }
+        if let bounties {
+            payload["bounties"] = bounties.map { bounty in
+                var item: [String: Any] = [
+                    "pillarId": bounty.pillarId,
+                    "points": bounty.points
+                ]
+                if let rubricItemId = bounty.rubricItemId {
+                    item["rubricItemId"] = rubricItemId
+                }
+                return item
+            }
+        }
+
+        let body = try JSONSerialization.data(withJSONObject: payload, options: [])
+        let request = createRequest(url: url, method: "POST", body: body)
+        let (data, response) = try await session.data(for: request)
+        return try await handleResponse(data, response, nil, type: ActionMutationResponse.self)
+    }
+
+    func updateAction(
+        actionId: String,
+        status: ActionStatus? = nil,
+        title: String? = nil,
+        notes: String? = nil,
+        sectionId: DaySection.TimeSection? = nil,
+        order: Int? = nil,
+        targetDate: String? = nil
+    ) async throws -> ActionMutationResponse {
+        _ = try await getFirebaseToken()
+        guard let url = URL(string: "\(baseURL)/actions/\(actionId)") else {
+            throw APIError.invalidURL("\(baseURL)/actions/\(actionId)")
+        }
+
+        var payload: [String: Any] = [:]
+        if let status {
+            payload["status"] = status.rawValue
+        }
+        if let title {
+            payload["title"] = title
+        }
+        if let notes {
+            payload["notes"] = notes
+        }
+        if let sectionId {
+            payload["sectionId"] = sectionId.rawValue
+        }
+        if let order {
+            payload["order"] = order
+        }
+        if let targetDate {
+            payload["targetDate"] = targetDate
+        }
+
+        let body = try JSONSerialization.data(withJSONObject: payload, options: [])
+        let request = createRequest(url: url, method: "PATCH", body: body)
+        let (data, response) = try await session.data(for: request)
+        return try await handleResponse(data, response, nil, type: ActionMutationResponse.self)
+    }
+
+    // MARK: - Action Templates
+
+    func fetchActionTemplates(includeInactive: Bool = true) async throws -> ActionTemplateListResponse {
+        _ = try await getFirebaseToken()
+
+        var components = URLComponents(string: "\(baseURL)/action-templates")
+        components?.queryItems = [
+            URLQueryItem(name: "includeInactive", value: includeInactive ? "true" : "false")
+        ]
+        guard let url = components?.url else {
+            throw APIError.invalidURL("\(baseURL)/action-templates")
+        }
+
+        let request = createRequest(url: url)
+        let (data, response) = try await session.data(for: request)
+        return try await handleResponse(data, response, nil, type: ActionTemplateListResponse.self)
+    }
+
+    func createActionTemplate(
+        title: String,
+        notes: String? = nil,
+        cadence: ActionCadence,
+        defaultSectionId: DaySection.TimeSection = .afternoon,
+        defaultOrder: Int = 0,
+        defaultBounties: [ActionBounty]? = nil
+    ) async throws -> ActionTemplateMutationResponse {
+        _ = try await getFirebaseToken()
+        guard let url = URL(string: "\(baseURL)/action-templates") else {
+            throw APIError.invalidURL("\(baseURL)/action-templates")
+        }
+
+        var payload: [String: Any] = [
+            "title": title,
+            "cadence": [
+                "type": cadence.type.rawValue,
+                "daysOfWeek": cadence.daysOfWeek ?? []
+            ],
+            "defaultSectionId": defaultSectionId.rawValue,
+            "defaultOrder": defaultOrder
+        ]
+        if let notes {
+            payload["notes"] = notes
+        }
+        if let defaultBounties {
+            payload["defaultBounties"] = defaultBounties.map { bounty in
+                var item: [String: Any] = [
+                    "pillarId": bounty.pillarId,
+                    "points": bounty.points
+                ]
+                if let rubricItemId = bounty.rubricItemId {
+                    item["rubricItemId"] = rubricItemId
+                }
+                return item
+            }
+        }
+
+        let body = try JSONSerialization.data(withJSONObject: payload, options: [])
+        let request = createRequest(url: url, method: "POST", body: body)
+        let (data, response) = try await session.data(for: request)
+        return try await handleResponse(data, response, nil, type: ActionTemplateMutationResponse.self)
+    }
+
+    func updateActionTemplate(
+        templateId: String,
+        title: String? = nil,
+        notes: String? = nil,
+        isActive: Bool? = nil
+    ) async throws -> ActionTemplateMutationResponse {
+        _ = try await getFirebaseToken()
+        guard let url = URL(string: "\(baseURL)/action-templates/\(templateId)") else {
+            throw APIError.invalidURL("\(baseURL)/action-templates/\(templateId)")
+        }
+
+        var payload: [String: Any] = [:]
+        if let title {
+            payload["title"] = title
+        }
+        if let notes {
+            payload["notes"] = notes
+        }
+        if let isActive {
+            payload["isActive"] = isActive
+        }
+
+        let body = try JSONSerialization.data(withJSONObject: payload, options: [])
+        let request = createRequest(url: url, method: "PATCH", body: body)
+        let (data, response) = try await session.data(for: request)
+        return try await handleResponse(data, response, nil, type: ActionTemplateMutationResponse.self)
+    }
+
+    func archiveActionTemplate(templateId: String) async throws -> ActionTemplateMutationResponse {
+        _ = try await getFirebaseToken()
+        guard let url = URL(string: "\(baseURL)/action-templates/\(templateId)") else {
+            throw APIError.invalidURL("\(baseURL)/action-templates/\(templateId)")
+        }
+
+        let request = createRequest(url: url, method: "DELETE")
+        let (data, response) = try await session.data(for: request)
+        return try await handleResponse(data, response, nil, type: ActionTemplateMutationResponse.self)
     }
 
     // MARK: - Todos

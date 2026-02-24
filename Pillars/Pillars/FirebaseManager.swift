@@ -442,14 +442,18 @@ class FirebaseManager: ObservableObject {
         let userScopedCollections = [
             "pillars",
             "principles",
+            "actions",
+            "actionTemplates",
+            "pointEvents",
+            "insights",
+            "blockTypes",
+            // Legacy prelaunch collections retained for one-time cleanup.
             "todos",
             "habits",
             "habitLogs",
             "habitGroups",
             "dayBlocks",
-            "pointEvents",
-            "insights",
-            "blockTypes"
+            "dayTemplates"
         ]
 
         var deletedCounts: [String: Int] = [:]

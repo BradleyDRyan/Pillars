@@ -58,8 +58,9 @@ const VALID_PILLAR_ICONS = [
 
 const VALID_PILLAR_ICON_VALUES = Object.freeze([...VALID_PILLAR_ICONS]);
 const ICON_TOKEN_REGEX = /^[a-z][a-z0-9_.-]{1,63}$/;
-const MAX_PILLAR_FACTS = 25;
-const MAX_PILLAR_FACT_LENGTH = 200;
+const MAX_PILLAR_CONTEXT_FACTS = 25;
+const MAX_PILLAR_CONTEXT_FACT_LENGTH = 200;
+const MAX_PILLAR_CONTEXT_MARKDOWN_LENGTH = 4000;
 
 function normalizePillarIcon(icon) {
   if (typeof icon !== 'string') {
@@ -77,38 +78,67 @@ function normalizePillarIcon(icon) {
   return null;
 }
 
-function normalizePillarFacts(rawFacts) {
-  const list = Array.isArray(rawFacts)
-    ? rawFacts
-    : (typeof rawFacts === 'string' ? rawFacts.split(/\r?\n/) : []);
+function normalizeLegacyContextLine(raw) {
+  if (typeof raw !== 'string') {
+    return null;
+  }
+  const normalized = raw
+    .trim()
+    .replace(/^[-*+]\s+\[[ xX]\]\s*/, '')
+    .replace(/^[-*+]\s+/, '')
+    .replace(/^\d+[.)]\s+/, '')
+    .replace(/^>\s+/, '')
+    .replace(/^#{1,6}\s+/, '')
+    .replace(/\s+/g, ' ');
+  if (!normalized) {
+    return null;
+  }
+  return normalized.slice(0, MAX_PILLAR_CONTEXT_FACT_LENGTH);
+}
 
-  if (!list.length) {
-    return [];
+function normalizePillarContextMarkdown(rawContext) {
+  if (rawContext === undefined || rawContext === null) {
+    return null;
   }
 
-  const dedup = new Set();
-  const normalized = [];
-  for (const raw of list) {
-    if (typeof raw !== 'string') {
-      continue;
+  if (Array.isArray(rawContext)) {
+    const dedup = new Set();
+    const normalized = [];
+    for (const rawLine of rawContext) {
+      const line = normalizeLegacyContextLine(rawLine);
+      if (!line) {
+        continue;
+      }
+      const key = line.toLowerCase();
+      if (dedup.has(key)) {
+        continue;
+      }
+      dedup.add(key);
+      normalized.push(line);
+      if (normalized.length >= MAX_PILLAR_CONTEXT_FACTS) {
+        break;
+      }
     }
-    const value = raw.trim().replace(/\s+/g, ' ');
-    if (!value) {
-      continue;
+    if (!normalized.length) {
+      return null;
     }
-    const fact = value.slice(0, MAX_PILLAR_FACT_LENGTH);
-    const key = fact.toLowerCase();
-    if (dedup.has(key)) {
-      continue;
-    }
-    dedup.add(key);
-    normalized.push(fact);
-    if (normalized.length >= MAX_PILLAR_FACTS) {
-      break;
-    }
+    return normalized
+      .join('\n')
+      .slice(0, MAX_PILLAR_CONTEXT_MARKDOWN_LENGTH);
   }
 
-  return normalized;
+  if (typeof rawContext !== 'string') {
+    return null;
+  }
+
+  const trimmed = rawContext.trim();
+  if (!trimmed) {
+    return null;
+  }
+
+  return trimmed.length > MAX_PILLAR_CONTEXT_MARKDOWN_LENGTH
+    ? trimmed.slice(0, MAX_PILLAR_CONTEXT_MARKDOWN_LENGTH)
+    : trimmed;
 }
 
 /**
@@ -131,7 +161,12 @@ class Pillar {
     this.icon = normalizePillarIcon(data.icon);
     this.isDefault = data.isDefault || false;
     this.isArchived = data.isArchived || false;
-    this.facts = normalizePillarFacts(data.facts ?? data.factsMarkdown);
+    this.contextMarkdown = normalizePillarContextMarkdown(
+      data.contextMarkdown
+        ?? data.context
+        ?? data.factsMarkdown
+        ?? data.facts
+    );
     this.rubricItems = Array.isArray(data.rubricItems)
       ? normalizeRubricItems(data.rubricItems, { fallbackItems: [] }).value || []
       : [];
@@ -168,7 +203,7 @@ class Pillar {
       icon: pillar.icon,
       isDefault: pillar.isDefault,
       isArchived: pillar.isArchived,
-      facts: pillar.facts,
+      contextMarkdown: pillar.contextMarkdown,
       rubricItems: pillar.rubricItems,
       settings: pillar.settings,
       stats: pillar.stats,
@@ -294,7 +329,12 @@ class Pillar {
   async save() {
     this.updatedAt = new Date();
     this.icon = normalizePillarIcon(this.icon);
-    this.facts = normalizePillarFacts(this.facts);
+    this.contextMarkdown = normalizePillarContextMarkdown(
+      this.contextMarkdown
+        ?? this.context
+        ?? this.factsMarkdown
+        ?? this.facts
+    );
     if (this.id) {
       await Pillar.collection().doc(this.id).update({
         name: this.name,
@@ -306,7 +346,7 @@ class Pillar {
         icon: this.icon,
         isDefault: this.isDefault,
         isArchived: this.isArchived,
-        facts: this.facts,
+        contextMarkdown: this.contextMarkdown,
         rubricItems: this.rubricItems,
         settings: this.settings,
         stats: this.stats,

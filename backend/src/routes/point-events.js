@@ -12,7 +12,7 @@ const router = express.Router();
 router.use(flexibleAuth);
 
 const VALID_SOURCES = new Set(['user', 'clawdbot', 'system']);
-const VALID_REF_TYPES = new Set(['todo', 'habit', 'block', 'freeform']);
+const VALID_REF_TYPES = new Set(['todo', 'habit', 'block', 'action', 'freeform']);
 const MIN_POINTS = 1;
 const MAX_POINTS = 100;
 const MAX_ALLOCATIONS = 3;
@@ -83,7 +83,7 @@ function normalizeRef(rawRef) {
   }
 
   if (!VALID_REF_TYPES.has(type)) {
-    return { error: 'ref.type must be todo, habit, block, or freeform' };
+    return { error: 'ref.type must be todo, habit, block, action, or freeform' };
   }
 
   if (!id) {
@@ -352,7 +352,7 @@ router.get('/', async (req, res) => {
       return res.status(400).json({ error: 'toDate must use YYYY-MM-DD format' });
     }
     if (refType && !VALID_REF_TYPES.has(refType)) {
-      return res.status(400).json({ error: 'refType must be todo, habit, block, or freeform' });
+      return res.status(400).json({ error: 'refType must be todo, habit, block, action, or freeform' });
     }
     if (refId && !refType) {
       return res.status(400).json({ error: 'refType is required when refId is provided' });

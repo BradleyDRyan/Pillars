@@ -8,10 +8,12 @@
     "dev": "nodemon src/index.js",
     "test": "jest",
     "purge:legacy-dayblocks": "node scripts/purge-legacy-dayblocks.js",
+    "purge:legacy-primitives": "node scripts/purge-legacy-primitives.js",
     "seed:pillar-visuals": "node scripts/seed-pillar-visuals.js",
     "seed:pillar-templates": "node scripts/seed-pillar-templates.js",
     "migrate:built-in-block-icons": "node scripts/migrate-builtin-block-type-icons.js",
     "backfill:todo-point-events": "node scripts/backfill-todo-point-events.js",
+    "backfill:user-context-markdown": "node scripts/backfill-user-facts-markdown.js",
     "backfill:user-facts-markdown": "node scripts/backfill-user-facts-markdown.js",
     "vercel-build": "echo 'No build step required'"
   },

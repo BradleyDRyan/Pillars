@@ -98,9 +98,9 @@ struct ProfileView: View {
                     }
                 }
 
-                // Facts section
-                Section("Facts") {
-                    Text("Use Markdown list items for user facts. These help AI classify todos to the right pillars.")
+                // User context section
+                Section("User Context") {
+                    Text("Use plain text or markdown for user context. This helps AI classify actions to the right pillars.")
                         .font(.system(size: 13))
                         .foregroundColor(.secondary)
 
@@ -108,7 +108,7 @@ struct ProfileView: View {
                         HStack(spacing: 10) {
                             ProgressView()
                                 .controlSize(.small)
-                            Text("Loading facts…")
+                            Text("Loading context…")
                                 .font(.system(size: 13))
                                 .foregroundColor(.secondary)
                         }
@@ -116,7 +116,7 @@ struct ProfileView: View {
 
                     if !isFactsLoading {
                         if factsText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                            Text("No facts saved yet.")
+                            Text("No context saved yet.")
                                 .font(.system(size: 13))
                                 .foregroundColor(.secondary)
                         } else {
@@ -130,7 +130,7 @@ struct ProfileView: View {
                         factsDraftText = factsText
                         showingFactsEditor = true
                     } label: {
-                        Label("Edit Facts", systemImage: "square.and.pencil")
+                        Label("Edit Context", systemImage: "square.and.pencil")
                     }
                     .disabled(isFactsLoading || firebaseManager.currentUser == nil)
 
@@ -403,7 +403,7 @@ struct ProfileView: View {
                 }
             }
         } message: {
-            Text("This will permanently delete all Firestore data for this account (pillars, todos, habits, points, block types, and profile data).")
+            Text("This will permanently delete all Firestore data for this account (pillars, actions, templates, points, block types, and profile data).")
         }
         .task(id: firebaseManager.currentUser?.uid) {
             await refreshApiKeyState()
@@ -417,7 +417,7 @@ struct ProfileView: View {
     private var factsEditorSheet: some View {
         NavigationStack {
             VStack(alignment: .leading, spacing: 12) {
-                Text("Write facts as Markdown list items.")
+                Text("Write context as plain text or markdown.")
                     .font(.system(size: 13))
                     .foregroundColor(.secondary)
 
@@ -430,8 +430,8 @@ struct ProfileView: View {
 
                     if factsDraftText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                         Text("""
-                        - Bradley is a product designer
-                        - Bradley is married to Emme
+                        Bradley is a product designer.
+                        Bradley is married to Emme.
                         """)
                             .font(.system(size: 14))
                             .foregroundColor(.secondary)
@@ -444,7 +444,7 @@ struct ProfileView: View {
                     HStack(spacing: 10) {
                         ProgressView()
                             .controlSize(.small)
-                        Text("Saving facts…")
+                        Text("Saving context…")
                             .font(.system(size: 13))
                             .foregroundColor(.secondary)
                     }
@@ -453,7 +453,7 @@ struct ProfileView: View {
                 Spacer()
             }
             .padding(16)
-            .navigationTitle("Edit Facts")
+            .navigationTitle("Edit Context")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
@@ -536,7 +536,7 @@ struct ProfileView: View {
 
     private func saveFacts(from rawText: String) async -> Bool {
         guard let userId = firebaseManager.currentUser?.uid else {
-            factsErrorMessage = "You must be signed in to save facts."
+            factsErrorMessage = "You must be signed in to save context."
             return false
         }
 
@@ -549,17 +549,19 @@ struct ProfileView: View {
             let lines = normalizeFactLines(from: rawText)
             let factsMarkdown = buildFactsMarkdown(from: lines)
             var payload: [String: Any] = [
+                "context": FieldValue.delete(),
                 "facts": FieldValue.delete(),
+                "factsMarkdown": FieldValue.delete(),
                 "updatedAt": FieldValue.serverTimestamp()
             ]
-            payload["factsMarkdown"] = factsMarkdown ?? FieldValue.delete()
+            payload["contextMarkdown"] = factsMarkdown ?? FieldValue.delete()
 
             try await Firestore.firestore()
                 .collection("users")
                 .document(userId)
                 .setData(payload, merge: true)
             factsText = factsMarkdown ?? ""
-            factsSuccessMessage = lines.isEmpty ? "Facts cleared." : "Facts saved."
+            factsSuccessMessage = lines.isEmpty ? "Context cleared." : "Context saved."
             return true
         } catch {
             factsErrorMessage = error.localizedDescription
@@ -574,10 +576,19 @@ struct ProfileView: View {
             .getDocument()
 
         let data = document.data() ?? [:]
-        guard let factsMarkdown = data["factsMarkdown"] as? String else {
-            return ""
+        if let contextMarkdown = data["contextMarkdown"] as? String {
+            return buildFactsMarkdown(from: normalizeFactLines(from: contextMarkdown)) ?? ""
         }
-        return buildFactsMarkdown(from: normalizeFactLines(from: factsMarkdown)) ?? ""
+        if let legacyContext = data["context"] as? [String] {
+            return buildFactsMarkdown(from: normalizeFactLines(from: legacyContext.joined(separator: "\n"))) ?? ""
+        }
+        if let factsMarkdown = data["factsMarkdown"] as? String {
+            return buildFactsMarkdown(from: normalizeFactLines(from: factsMarkdown)) ?? ""
+        }
+        if let legacyFacts = data["facts"] as? [String] {
+            return buildFactsMarkdown(from: normalizeFactLines(from: legacyFacts.joined(separator: "\n"))) ?? ""
+        }
+        return ""
     }
 
     private func normalizeFactLines(from raw: String) -> [String] {
@@ -608,7 +619,7 @@ struct ProfileView: View {
         guard !lines.isEmpty else {
             return nil
         }
-        return lines.map { "- \($0)" }.joined(separator: "\n")
+        return lines.joined(separator: "\n")
     }
 
     private func stripMarkdownPrefix(from line: String) -> String {

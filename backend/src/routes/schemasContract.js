@@ -6,7 +6,10 @@ const { VALID_EVENT_TYPES } = require('../services/events');
 const { Pillar } = require('../models');
 const { listPillarTemplates, buildTemplateLibraryPayload } = require('../services/pillarTemplates');
 const { getPillarVisuals } = require('../services/pillarVisuals');
-const { MAX_USER_FACTS, MAX_USER_FACT_LENGTH } = require('../utils/userFactsMarkdown');
+const {
+  MAX_USER_CONTEXT_FACTS,
+  MAX_USER_CONTEXT_FACT_LENGTH
+} = require('../utils/userFactsMarkdown');
 
 const router = express.Router();
 router.use(flexibleAuth);
@@ -16,11 +19,12 @@ const BLOCK_SOURCE_ENUM = Object.freeze(['template', 'user', 'clawdbot', 'auto-s
 const DAY_BATCH_MODE_ENUM = Object.freeze(['replace', 'append', 'merge']);
 const TODO_STATUS_ENUM = Object.freeze(['active', 'completed']);
 const HABIT_STATUS_ENUM = Object.freeze(['active', 'inactive']);
+const ACTION_STATUS_ENUM = Object.freeze(['pending', 'completed', 'skipped', 'canceled']);
 const ARCHIVE_VISIBILITY_ENUM = Object.freeze(['exclude', 'include', 'only']);
 const WEEKDAY_ENUM = Object.freeze(['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday']);
 const HABIT_TARGET_TYPE_ENUM = Object.freeze(['binary', 'count', 'duration']);
 const POINT_EVENT_SOURCE_ENUM = Object.freeze(['user', 'clawdbot', 'system']);
-const POINT_EVENT_REF_TYPE_ENUM = Object.freeze(['todo', 'habit', 'block', 'freeform']);
+const POINT_EVENT_REF_TYPE_ENUM = Object.freeze(['todo', 'habit', 'block', 'action', 'freeform']);
 const PLAN_ENDPOINT = '/api/plan/by-date/:date';
 const LEGACY_DAY_BATCH_SUNSET = '2026-03-31';
 
@@ -148,19 +152,27 @@ async function buildPillarSchema() {
       'Pillar colors are token-driven. Store colorToken only; clients render token values locally.',
       'Admin icon/color catalog CRUD is available at /api/pillar-visuals (writes require admin claim or internal service secret).',
       'Template CRUD is available at /api/pillar-templates (writes require admin claim or internal service secret).',
-      'Todos and habits may reference a rubric item by id via rubricItemId.'
+      'Pillars accept optional contextMarkdown to provide classifier guidance for that pillar.',
+      'Actions and action templates may reference a rubric item by id via bounty rubricItemId.'
     ]
   };
 }
 
 function buildUserSchema() {
   return {
-    endpoint: '/users/profile',
-    factsField: 'factsMarkdown',
-    factsFormat: 'markdown-list',
+    endpoint: '/api/users/profile',
+    contextField: 'contextMarkdown',
+    contextFormat: 'markdown',
+    contextConstraints: {
+      maxFacts: MAX_USER_CONTEXT_FACTS,
+      maxFactLength: MAX_USER_CONTEXT_FACT_LENGTH
+    },
+    // Legacy aliases retained while schema consumers migrate.
+    factsField: 'contextMarkdown',
+    factsFormat: 'markdown',
     factsConstraints: {
-      maxFacts: MAX_USER_FACTS,
-      maxFactLength: MAX_USER_FACT_LENGTH
+      maxFacts: MAX_USER_CONTEXT_FACTS,
+      maxFactLength: MAX_USER_CONTEXT_FACT_LENGTH
     },
     profileUpdate: {
       type: 'object',
@@ -170,10 +182,10 @@ function buildUserSchema() {
         displayName: { type: 'string', nullable: true },
         photoURL: { type: 'string', nullable: true },
         phoneNumber: { type: 'string', nullable: true },
-        factsMarkdown: {
+        contextMarkdown: {
           type: 'string',
           nullable: true,
-          description: 'Canonical user facts store. Provide Markdown list items; null clears facts.'
+          description: 'Canonical user context store. Accepts plain text or markdown; null clears context.'
         },
         additionalData: {
           type: 'object',
@@ -184,9 +196,10 @@ function buildUserSchema() {
       }
     },
     notes: [
-      'factsMarkdown is the only canonical facts field persisted for users.',
-      'Legacy facts array/string input may still be accepted on /users/profile for compatibility but should not be used.',
-      'Facts are normalized/deduplicated and stored as Markdown list items.'
+      'contextMarkdown is the canonical user context field.',
+      '/api/users/profile accepts Firebase tokens and user-scoped API keys.',
+      'Legacy facts input may still be accepted on /api/users/profile for compatibility but should not be used.',
+      'Context is stored as provided (trimmed). Bullet prefixes are optional.'
     ]
   };
 }
@@ -687,6 +700,185 @@ function buildHabitSchema() {
   };
 }
 
+function buildBountySchema() {
+  return {
+    type: 'object',
+    required: ['pillarId', 'points'],
+    additionalProperties: false,
+    properties: {
+      pillarId: { type: 'string' },
+      rubricItemId: { type: 'string', nullable: true },
+      points: { type: 'integer', min: 1, max: 100 }
+    }
+  };
+}
+
+function buildCadenceSchema() {
+  return {
+    type: 'object',
+    required: ['type'],
+    additionalProperties: false,
+    properties: {
+      type: { type: 'string', enum: ['daily', 'weekdays', 'weekly'] },
+      daysOfWeek: {
+        type: 'array',
+        items: { type: 'string', enum: WEEKDAY_ENUM }
+      }
+    }
+  };
+}
+
+function buildActionSchema() {
+  const bountySchema = buildBountySchema();
+
+  return {
+    listByDate: {
+      endpoint: '/api/actions/by-date/:date',
+      query: {
+        type: 'object',
+        required: [],
+        additionalProperties: false,
+        properties: {
+          ensure: { type: 'boolean', default: false },
+          status: { type: 'string', enum: [...ACTION_STATUS_ENUM, 'all'], default: 'all' },
+          sectionId: { type: 'string', enum: SECTION_ENUM, nullable: true }
+        }
+      }
+    },
+    read: {
+      endpoint: '/api/actions/:id'
+    },
+    createEndpoint: '/api/actions',
+    create: {
+      type: 'object',
+      required: ['title'],
+      additionalProperties: false,
+      properties: {
+        title: { type: 'string', minLength: 1, maxLength: 500 },
+        notes: { type: 'string', maxLength: 2000, nullable: true },
+        status: { type: 'string', enum: ACTION_STATUS_ENUM, default: 'pending' },
+        targetDate: { type: 'string', format: 'date', nullable: true },
+        sectionId: { type: 'string', enum: SECTION_ENUM, nullable: true },
+        order: { type: 'integer', nullable: true },
+        templateId: { type: 'string', nullable: true },
+        source: { type: 'string', nullable: true },
+        bounties: {
+          type: 'array',
+          nullable: true,
+          minItems: 1,
+          maxItems: 3,
+          items: bountySchema
+        }
+      }
+    },
+    updateEndpoint: '/api/actions/:id',
+    update: {
+      type: 'object',
+      required: [],
+      additionalProperties: false,
+      properties: {
+        title: { type: 'string', minLength: 1, maxLength: 500 },
+        notes: { type: 'string', maxLength: 2000, nullable: true },
+        status: { type: 'string', enum: ACTION_STATUS_ENUM },
+        targetDate: { type: 'string', format: 'date', nullable: true },
+        sectionId: { type: 'string', enum: SECTION_ENUM },
+        order: { type: 'integer' },
+        templateId: { type: 'string', nullable: true },
+        source: { type: 'string', nullable: true },
+        bounties: {
+          type: 'array',
+          nullable: true,
+          minItems: 1,
+          maxItems: 3,
+          items: bountySchema
+        }
+      }
+    },
+    archive: {
+      endpoint: '/api/actions/:id',
+      method: 'DELETE'
+    },
+    notes: [
+      'If bounties is omitted on create, backend classifier resolves rubric-aware bounties from title+notes.',
+      'Entering completed awards points; leaving completed voids the action point event.'
+    ]
+  };
+}
+
+function buildActionTemplateSchema() {
+  const bountySchema = buildBountySchema();
+  const cadenceSchema = buildCadenceSchema();
+
+  return {
+    list: {
+      endpoint: '/api/action-templates',
+      query: {
+        type: 'object',
+        required: [],
+        additionalProperties: false,
+        properties: {
+          archived: { type: 'string', enum: ARCHIVE_VISIBILITY_ENUM, default: 'exclude' },
+          includeInactive: { type: 'boolean', default: true }
+        }
+      }
+    },
+    createEndpoint: '/api/action-templates',
+    create: {
+      type: 'object',
+      required: ['title', 'cadence'],
+      additionalProperties: false,
+      properties: {
+        title: { type: 'string', minLength: 1, maxLength: 500 },
+        notes: { type: 'string', maxLength: 2000, nullable: true },
+        cadence: cadenceSchema,
+        defaultSectionId: { type: 'string', enum: SECTION_ENUM, nullable: true },
+        defaultOrder: { type: 'integer', nullable: true },
+        defaultBounties: {
+          type: 'array',
+          nullable: true,
+          minItems: 1,
+          maxItems: 3,
+          items: bountySchema
+        },
+        isActive: { type: 'boolean', default: true },
+        startDate: { type: 'string', format: 'date', nullable: true },
+        endDate: { type: 'string', format: 'date', nullable: true }
+      }
+    },
+    updateEndpoint: '/api/action-templates/:id',
+    update: {
+      type: 'object',
+      required: [],
+      additionalProperties: false,
+      properties: {
+        title: { type: 'string', minLength: 1, maxLength: 500 },
+        notes: { type: 'string', maxLength: 2000, nullable: true },
+        cadence: cadenceSchema,
+        defaultSectionId: { type: 'string', enum: SECTION_ENUM },
+        defaultOrder: { type: 'integer' },
+        defaultBounties: {
+          type: 'array',
+          nullable: true,
+          minItems: 1,
+          maxItems: 3,
+          items: bountySchema
+        },
+        isActive: { type: 'boolean' },
+        startDate: { type: 'string', format: 'date', nullable: true },
+        endDate: { type: 'string', format: 'date', nullable: true }
+      }
+    },
+    archive: {
+      endpoint: '/api/action-templates/:id',
+      method: 'DELETE'
+    },
+    notes: [
+      'If defaultBounties is omitted on create/update, backend classifies title+notes once and persists defaults.',
+      'Spawned actions inherit template bounties without per-spawn classifier calls.'
+    ]
+  };
+}
+
 function buildDaySchema() {
   const dayReadResponse = {
     type: 'object',
@@ -1015,9 +1207,8 @@ async function buildSchemasResponse(userId) {
 
   return {
     blockTypes: blockTypes.map(toCanonicalBlockType),
-    todoSchema: buildTodoSchema(),
-    habitSchema: buildHabitSchema(),
-    daySchema: buildDaySchema(),
+    actionSchema: buildActionSchema(),
+    actionTemplateSchema: buildActionTemplateSchema(),
     planSchema: buildPlanSchema(),
     userSchema: buildUserSchema(),
     pillarSchema,
@@ -1051,6 +1242,8 @@ router.get('/pillar-visuals', async (req, res) => {
 module.exports = {
   router,
   buildSchemasResponse,
+  buildActionSchema,
+  buildActionTemplateSchema,
   buildTodoSchema,
   buildHabitSchema,
   buildDaySchema,

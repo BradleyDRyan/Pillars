@@ -2,9 +2,8 @@ const express = require('express');
 
 const {
   buildSchemasResponse,
-  buildTodoSchema,
-  buildHabitSchema,
-  buildDaySchema,
+  buildActionSchema,
+  buildActionTemplateSchema,
   buildPlanSchema,
   buildPointEventSchema,
   buildUserSchema,
@@ -42,23 +41,39 @@ schemasRouter.get('/', async (req, res) => {
 });
 
 schemasRouter.get('/todos', async (req, res) => {
-  return res.json({ todoSchema: buildTodoSchema() });
+  return res.status(410).json({ error: 'Todo schema removed. Use /api/schemas/actions.' });
 });
 
 schemasRouter.get('/todo', async (req, res) => {
-  return res.json({ todoSchema: buildTodoSchema() });
+  return res.status(410).json({ error: 'Todo schema removed. Use /api/schemas/actions.' });
 });
 
 schemasRouter.get('/habits', async (req, res) => {
-  return res.json({ habitSchema: buildHabitSchema() });
+  return res.status(410).json({ error: 'Habit schema removed. Use /api/schemas/action-templates.' });
 });
 
 schemasRouter.get('/habit', async (req, res) => {
-  return res.json({ habitSchema: buildHabitSchema() });
+  return res.status(410).json({ error: 'Habit schema removed. Use /api/schemas/action-templates.' });
 });
 
 schemasRouter.get('/day', async (req, res) => {
-  return res.json({ daySchema: buildDaySchema() });
+  return res.status(410).json({ error: 'Day block schema removed. Use /api/schemas/actions.' });
+});
+
+schemasRouter.get('/actions', async (req, res) => {
+  return res.json({ actionSchema: buildActionSchema() });
+});
+
+schemasRouter.get('/action', async (req, res) => {
+  return res.json({ actionSchema: buildActionSchema() });
+});
+
+schemasRouter.get('/action-templates', async (req, res) => {
+  return res.json({ actionTemplateSchema: buildActionTemplateSchema() });
+});
+
+schemasRouter.get('/action-template', async (req, res) => {
+  return res.json({ actionTemplateSchema: buildActionTemplateSchema() });
 });
 
 schemasRouter.get('/plan', async (req, res) => {

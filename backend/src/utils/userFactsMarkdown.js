@@ -1,7 +1,11 @@
-const MAX_USER_FACTS = 25;
-const MAX_USER_FACT_LENGTH = 200;
+const MAX_USER_CONTEXT_FACTS = 25;
+const MAX_USER_CONTEXT_FACT_LENGTH = 200;
 
-function normalizeFactText(value, { maxLength = MAX_USER_FACT_LENGTH } = {}) {
+// Legacy aliases retained while clients migrate from "facts" naming.
+const MAX_USER_FACTS = MAX_USER_CONTEXT_FACTS;
+const MAX_USER_FACT_LENGTH = MAX_USER_CONTEXT_FACT_LENGTH;
+
+function normalizeContextText(value, { maxLength = MAX_USER_CONTEXT_FACT_LENGTH } = {}) {
   if (typeof value !== 'string') {
     return null;
   }
@@ -28,16 +32,16 @@ function stripMarkdownPrefix(line) {
     .replace(/^#{1,6}\s+/, '');
 }
 
-function normalizeFactsArray(rawFacts, { maxFacts = MAX_USER_FACTS, maxFactLength = MAX_USER_FACT_LENGTH } = {}) {
-  if (!Array.isArray(rawFacts)) {
+function normalizeContextArray(rawContext, { maxFacts = MAX_USER_CONTEXT_FACTS, maxFactLength = MAX_USER_CONTEXT_FACT_LENGTH } = {}) {
+  if (!Array.isArray(rawContext)) {
     return [];
   }
 
   const dedup = new Set();
   const normalized = [];
 
-  for (const item of rawFacts) {
-    const value = normalizeFactText(stripMarkdownPrefix(item), { maxLength: maxFactLength });
+  for (const item of rawContext) {
+    const value = normalizeContextText(stripMarkdownPrefix(item), { maxLength: maxFactLength });
     if (!value) {
       continue;
     }
@@ -55,64 +59,78 @@ function normalizeFactsArray(rawFacts, { maxFacts = MAX_USER_FACTS, maxFactLengt
   return normalized;
 }
 
-function parseFactsMarkdown(markdown, { maxFacts = MAX_USER_FACTS, maxFactLength = MAX_USER_FACT_LENGTH } = {}) {
+function parseContextMarkdown(markdown, { maxFacts = MAX_USER_CONTEXT_FACTS, maxFactLength = MAX_USER_CONTEXT_FACT_LENGTH } = {}) {
   if (typeof markdown !== 'string') {
     return [];
   }
 
-  return normalizeFactsArray(markdown.split(/\r?\n/), {
+  return normalizeContextArray(markdown.split(/\r?\n/), {
     maxFacts,
     maxFactLength
   });
 }
 
-function buildFactsMarkdown(facts) {
-  if (!Array.isArray(facts) || !facts.length) {
+function buildContextMarkdown(context) {
+  if (!Array.isArray(context) || !context.length) {
     return null;
   }
-  return facts.map(fact => `- ${fact}`).join('\n');
+  return context.join('\n');
 }
 
-function normalizeFactsMarkdownPayload(
-  { factsMarkdown, facts } = {},
-  { maxFacts = MAX_USER_FACTS, maxFactLength = MAX_USER_FACT_LENGTH } = {}
+function normalizeContextMarkdownPayload(
+  { contextMarkdown, context, factsMarkdown, facts } = {},
+  { maxFacts = MAX_USER_CONTEXT_FACTS, maxFactLength = MAX_USER_CONTEXT_FACT_LENGTH } = {}
 ) {
-  if (factsMarkdown === undefined && facts === undefined) {
+  const hasMarkdownInput = contextMarkdown !== undefined || factsMarkdown !== undefined;
+  const hasListInput = context !== undefined || facts !== undefined;
+
+  if (!hasMarkdownInput && !hasListInput) {
     return { provided: false };
   }
 
-  if (factsMarkdown === null || facts === null) {
+  const effectiveMarkdown = contextMarkdown !== undefined ? contextMarkdown : factsMarkdown;
+  const effectiveList = context !== undefined ? context : facts;
+
+  if (effectiveMarkdown === null || effectiveList === null) {
     return {
       provided: true,
+      context: [],
       facts: [],
       markdown: null
     };
   }
 
-  let normalizedFacts;
+  let normalizedContext;
 
-  if (factsMarkdown !== undefined) {
-    if (typeof factsMarkdown !== 'string') {
-      return { error: 'factsMarkdown must be a string' };
+  if (effectiveMarkdown !== undefined) {
+    if (typeof effectiveMarkdown !== 'string') {
+      return { error: 'contextMarkdown must be a string' };
     }
-    normalizedFacts = parseFactsMarkdown(factsMarkdown, {
+    const trimmedMarkdown = effectiveMarkdown.trim();
+    normalizedContext = parseContextMarkdown(trimmedMarkdown, {
       maxFacts,
       maxFactLength
     });
+    return {
+      provided: true,
+      context: normalizedContext,
+      facts: normalizedContext,
+      markdown: trimmedMarkdown || null
+    };
   } else {
-    const rawList = Array.isArray(facts)
-      ? facts
-      : (typeof facts === 'string' ? facts.split(/\r?\n/) : null);
+    const rawList = Array.isArray(effectiveList)
+      ? effectiveList
+      : (typeof effectiveList === 'string' ? effectiveList.split(/\r?\n/) : null);
 
     if (!rawList) {
-      return { error: 'facts must be a string or array of strings' };
+      return { error: 'context must be a string or array of strings' };
     }
 
     if (rawList.some(item => typeof item !== 'string')) {
-      return { error: 'facts must contain only strings' };
+      return { error: 'context must contain only strings' };
     }
 
-    normalizedFacts = normalizeFactsArray(rawList, {
+    normalizedContext = normalizeContextArray(rawList, {
       maxFacts,
       maxFactLength
     });
@@ -120,16 +138,29 @@ function normalizeFactsMarkdownPayload(
 
   return {
     provided: true,
-    facts: normalizedFacts,
-    markdown: buildFactsMarkdown(normalizedFacts)
+    context: normalizedContext,
+    facts: normalizedContext,
+    markdown: buildContextMarkdown(normalizedContext)
   };
 }
 
+// Backwards-compatible exports for existing imports.
+const normalizeFactText = normalizeContextText;
+const parseFactsMarkdown = parseContextMarkdown;
+const buildFactsMarkdown = buildContextMarkdown;
+const normalizeFactsMarkdownPayload = normalizeContextMarkdownPayload;
+
 module.exports = {
+  MAX_USER_CONTEXT_FACTS,
+  MAX_USER_CONTEXT_FACT_LENGTH,
   MAX_USER_FACTS,
   MAX_USER_FACT_LENGTH,
+  normalizeContextText,
   normalizeFactText,
+  parseContextMarkdown,
   parseFactsMarkdown,
+  buildContextMarkdown,
   buildFactsMarkdown,
+  normalizeContextMarkdownPayload,
   normalizeFactsMarkdownPayload
 };

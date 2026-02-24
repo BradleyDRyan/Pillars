@@ -18,6 +18,14 @@ const VALID_EVENT_TYPES = new Set([
   'habit.archived',
   'habit.unarchived',
   'habit.deleted',
+  'action.created',
+  'action.updated',
+  'action.completed',
+  'action.reopened',
+  'action.archived',
+  'action-template.created',
+  'action-template.updated',
+  'action-template.deleted',
   'pillar.created',
   'pillar.updated'
 ]);

@@ -16,6 +16,26 @@ private func normalizePillarIconToken(_ raw: String?) -> String? {
     return trimmed.isEmpty ? nil : trimmed
 }
 
+private func normalizePillarContextMarkdown(_ raw: String?) -> String? {
+    guard let raw else { return nil }
+    let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+    guard !trimmed.isEmpty else {
+        return nil
+    }
+    return trimmed
+}
+
+private func buildPillarContextMarkdown(from lines: [String]?) -> String? {
+    guard let lines else { return nil }
+    let normalized = lines
+        .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+        .filter { !$0.isEmpty }
+    guard !normalized.isEmpty else {
+        return nil
+    }
+    return normalized.map { "- \($0)" }.joined(separator: "\n")
+}
+
 enum PillarType: String, Codable, CaseIterable {
     case marriage
     case physical
@@ -271,6 +291,7 @@ struct Pillar: Identifiable, Codable, Hashable {
     let createdAt: Date
     var updatedAt: Date
     var metadata: [String: String]?
+    var contextMarkdown: String?
 
     var icon: PillarIcon? { PillarIcon.resolve(iconToken) }
     
@@ -296,13 +317,14 @@ struct Pillar: Identifiable, Codable, Hashable {
         case id, userId, name, pillarType, description, color, colorToken, customColorHex, icon, emoji
         case isDefault, isArchived, rubricItems, settings, stats
         case createdAt, updatedAt, metadata
+        case contextMarkdown, context, factsMarkdown, facts
     }
     
     init(id: String, userId: String, name: String, description: String = "", color: String = "#000000",
          colorToken: String? = nil, customColorHex: String? = nil,
          pillarType: PillarType? = nil, iconToken: String? = nil, icon: PillarIcon? = nil, emoji: String? = nil, isDefault: Bool = false, isArchived: Bool = false,
          rubricItems: [PillarRubricItem] = [], settings: [String: String]? = nil, stats: PillarStats = PillarStats(), createdAt: Date = Date(), updatedAt: Date = Date(),
-         metadata: [String: String]? = nil) {
+         metadata: [String: String]? = nil, contextMarkdown: String? = nil) {
         let normalizedIconToken = normalizePillarIconToken(iconToken) ?? icon?.rawValue
         self.id = id
         self.userId = userId
@@ -322,6 +344,7 @@ struct Pillar: Identifiable, Codable, Hashable {
         self.createdAt = createdAt
         self.updatedAt = updatedAt
         self.metadata = metadata
+        self.contextMarkdown = normalizePillarContextMarkdown(contextMarkdown)
     }
     
     init(from decoder: Decoder) throws {
@@ -350,6 +373,18 @@ struct Pillar: Identifiable, Codable, Hashable {
         // Backend metadata can include nested objects (for example templateSource),
         // so decode string-only metadata best-effort without failing the whole model decode.
         metadata = try? container.decode([String: String].self, forKey: .metadata)
+        let directContextMarkdown = (try? container.decodeIfPresent(String.self, forKey: .contextMarkdown)) ?? nil
+        let directContext = (try? container.decodeIfPresent(String.self, forKey: .context)) ?? nil
+        let legacyFactsMarkdown = (try? container.decodeIfPresent(String.self, forKey: .factsMarkdown)) ?? nil
+        let legacyFactsString = (try? container.decodeIfPresent(String.self, forKey: .facts)) ?? nil
+        let legacyFactsList = (try? container.decodeIfPresent([String].self, forKey: .facts)) ?? nil
+        contextMarkdown = normalizePillarContextMarkdown(
+            directContextMarkdown
+                ?? directContext
+                ?? legacyFactsMarkdown
+                ?? legacyFactsString
+                ?? buildPillarContextMarkdown(from: legacyFactsList)
+        )
     }
 
     func encode(to encoder: Encoder) throws {
@@ -372,6 +407,7 @@ struct Pillar: Identifiable, Codable, Hashable {
         try container.encode(createdAt, forKey: .createdAt)
         try container.encode(updatedAt, forKey: .updatedAt)
         try container.encodeIfPresent(metadata, forKey: .metadata)
+        try container.encodeIfPresent(contextMarkdown, forKey: .contextMarkdown)
     }
     
     var colorValue: Color {

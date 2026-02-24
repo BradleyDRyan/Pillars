@@ -27,6 +27,9 @@ struct PillarFormView: View {
     @State private var errorMessage: String?
     @State private var showIconPicker = false
     @State private var showColorPicker = false
+    @State private var showContextEditor = false
+    @State private var contextMarkdown: String = ""
+    @State private var contextDraftMarkdown: String = ""
     @State private var didInitialize = false
 
     init(mode: Mode, onCompleted: (() -> Void)? = nil) {
@@ -78,6 +81,25 @@ struct PillarFormView: View {
         return selectedColorToken
             .replacingOccurrences(of: "_", with: " ")
             .capitalized
+    }
+
+    private var contextSummary: String {
+        guard let normalizedContext = normalizedContextMarkdown, !normalizedContext.isEmpty else {
+            return "Not set"
+        }
+        let singleLine = normalizedContext
+            .components(separatedBy: .newlines)
+            .first?
+            .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        if singleLine.isEmpty {
+            return "Not set"
+        }
+        return singleLine
+    }
+
+    private var normalizedContextMarkdown: String? {
+        let trimmed = contextMarkdown.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? nil : trimmed
     }
 
     var body: some View {
@@ -145,6 +167,23 @@ struct PillarFormView: View {
                         )
                     ) {
                         showColorPicker = true
+                    }
+
+                    Divider()
+                        .padding(.horizontal, S2.Spacing.lg)
+
+                    settingsRow(
+                        title: "Context",
+                        value: contextSummary,
+                        valueView: AnyView(
+                            Text(contextSummary)
+                                .font(S2.TextStyle.body)
+                                .foregroundColor(S2.Colors.primaryText)
+                                .lineLimit(1)
+                        )
+                    ) {
+                        contextDraftMarkdown = contextMarkdown
+                        showContextEditor = true
                     }
                 }
                 .background(S2.Colors.secondarySurface)
@@ -219,6 +258,9 @@ struct PillarFormView: View {
                     hasManualColorSelection = true
                 }
             )
+        }
+        .sheet(isPresented: $showContextEditor) {
+            contextEditorSheet
         }
         .onAppear {
             Task {
@@ -309,12 +351,14 @@ struct PillarFormView: View {
             selectedIconToken = viewModel.defaultIconToken
             selectedColorToken = viewModel.defaultColorToken(forIconToken: selectedIconToken)
             name = ""
+            contextMarkdown = ""
             hasManualColorSelection = false
         case .createFromTemplate(let template):
             selectedIconToken = viewModel.normalizeIconToken(template.iconToken) ?? viewModel.defaultIconToken
             selectedColorToken = viewModel.normalizeColorToken(template.colorToken)
                 ?? viewModel.defaultColorToken(forIconToken: selectedIconToken)
             name = template.name
+            contextMarkdown = ""
             hasManualColorSelection = false
         case .edit(let pillar):
             selectedIconToken = viewModel.normalizeIconToken(pillar.iconToken) ?? viewModel.defaultIconToken
@@ -322,7 +366,53 @@ struct PillarFormView: View {
                 ?? viewModel.colorToken(forHex: pillar.color)
                 ?? viewModel.defaultColorToken(forIconToken: selectedIconToken)
             name = pillar.name
+            contextMarkdown = pillar.contextMarkdown ?? ""
             hasManualColorSelection = true
+        }
+    }
+
+    private var contextEditorSheet: some View {
+        NavigationStack {
+            VStack(alignment: .leading, spacing: S2.Spacing.sm) {
+                Text("Add context notes to help AI classify activities for this pillar.")
+                    .font(S2.TextStyle.footnote)
+                    .foregroundColor(S2.Colors.secondaryText)
+
+                ZStack(alignment: .topLeading) {
+                    TextEditor(text: $contextDraftMarkdown)
+                        .font(S2.TextStyle.body)
+                        .frame(minHeight: 220)
+                        .textInputAutocapitalization(.sentences)
+
+                    if contextDraftMarkdown.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                        Text("Example: Emme is Bradley's wife. Acts of service for Emme should count toward this pillar.")
+                            .font(S2.TextStyle.body)
+                            .foregroundColor(S2.Colors.secondaryText)
+                            .padding(.horizontal, S2.Spacing.xs)
+                            .padding(.vertical, S2.Spacing.sm)
+                    }
+                }
+
+                Spacer()
+            }
+            .padding(.horizontal, S2.Spacing.lg)
+            .padding(.top, S2.Spacing.md)
+            .background(S2.Colors.surface.ignoresSafeArea())
+            .navigationTitle("Pillar Context")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") {
+                        showContextEditor = false
+                    }
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Save") {
+                        contextMarkdown = contextDraftMarkdown
+                        showContextEditor = false
+                    }
+                }
+            }
         }
     }
 
@@ -340,21 +430,25 @@ struct PillarFormView: View {
                     pillar,
                     name: normalizedName,
                     colorToken: resolvedColorToken,
-                    iconToken: selectedIconToken
+                    iconToken: selectedIconToken,
+                    contextMarkdown: normalizedContextMarkdown,
+                    updateContextMarkdown: true
                 )
             case .createCustom:
                 _ = try await viewModel.createPillar(
                     name: normalizedName,
                     colorToken: resolvedColorToken,
                     iconToken: selectedIconToken,
-                    pillarType: .custom
+                    pillarType: .custom,
+                    contextMarkdown: normalizedContextMarkdown
                 )
             case .createFromTemplate(let template):
                 _ = try await viewModel.createPillar(
                     name: normalizedName,
                     colorToken: resolvedColorToken,
                     iconToken: selectedIconToken,
-                    pillarTypeRaw: template.pillarType
+                    pillarTypeRaw: template.pillarType,
+                    contextMarkdown: normalizedContextMarkdown
                 )
             }
 

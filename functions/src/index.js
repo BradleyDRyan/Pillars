@@ -1,7 +1,5 @@
-const { onTodoWrite } = require('./todoBountyTrigger');
-const { onHabitLogWrite } = require('./habitBountyTrigger');
+const { onActionWrite } = require('./actionBountyTrigger');
 
 module.exports = {
-  onTodoWrite,
-  onHabitLogWrite
+  onActionWrite
 };

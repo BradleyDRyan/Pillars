@@ -18,6 +18,20 @@
   --radius-sm: 12px;
   --sheet-radius: 24px;
   --anim-duration: 0.35s;
+  --u: 4px;
+  --u-1: calc(var(--u) * 1);
+  --u-2: calc(var(--u) * 2);
+  --u-3: calc(var(--u) * 3);
+  --u-4: calc(var(--u) * 4);
+  --u-5: calc(var(--u) * 5);
+  --u-6: calc(var(--u) * 6);
+  --content-gutter: var(--u-6);
+  --section-gap: var(--u-4);
+  --card-pad-x: var(--u-4);
+  --card-pad-y: var(--u-3);
+  --card-gap: var(--u-3);
+  --card-right-col: calc(var(--u) * 20);
+  --card-right-col-compact: calc(var(--u) * 18);
 }
 
 .life-bars-view {
@@ -25,7 +39,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 22px;
+  padding: var(--u-6);
   background:
     radial-gradient(circle at 20% 20%, rgba(0, 0, 0, 0.06), transparent 48%),
     radial-gradient(circle at 80% 80%, rgba(0, 0, 0, 0.04), transparent 45%),
@@ -145,7 +159,7 @@
   height: 100%;
   overflow-y: auto;
   overflow-x: hidden;
-  padding: 92px 0 64px;
+  padding: calc(var(--u) * 24) 0 calc(var(--u) * 16);
   scrollbar-width: none;
 }
 
@@ -155,7 +169,7 @@
 }
 
 .hero {
-  padding: 20px 24px 14px;
+  padding: var(--u-5) var(--content-gutter) var(--section-gap);
   text-align: center;
   position: relative;
 }
@@ -182,6 +196,9 @@
 }
 
 .hero-points {
+  display: inline-flex;
+  align-items: flex-end;
+  gap: var(--u-1);
   font-family: inherit;
   font-size: 72px;
   font-weight: 700;
@@ -199,13 +216,14 @@
   font-size: 20px;
   font-weight: 500;
   color: var(--text-muted);
-  margin-left: 2px;
+  margin: 0 0 var(--u-1) 0;
+  line-height: 1;
   letter-spacing: 0;
 }
 
 .hero-goal {
-  margin-top: 12px;
-  padding: 0 4px;
+  margin-top: var(--u-3);
+  padding: 0;
 }
 
 .goal-track {
@@ -225,11 +243,11 @@
 }
 
 .goal-meta {
-  margin-top: 6px;
+  margin-top: var(--u-2);
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 10px;
+  gap: var(--u-3);
 }
 
 .goal-label {
@@ -248,8 +266,8 @@
 }
 
 .pillars-section {
-  padding: 0 20px;
-  margin-bottom: 18px;
+  padding: 0 var(--content-gutter);
+  margin-bottom: var(--section-gap);
 }
 
 .section-label {
@@ -266,7 +284,7 @@
 .pillars-grid {
   display: grid;
   grid-template-columns: repeat(8, minmax(0, 1fr));
-  gap: 6px;
+  gap: var(--u-2);
 }
 
 .pillar-card {
@@ -331,23 +349,23 @@
 }
 
 .completed-section {
-  padding: 0 20px;
+  padding: 0 var(--content-gutter);
 }
 
 .completed-feed {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: var(--u-2);
 }
 
 .action-card {
   background: var(--bg-card);
   border: 1px solid var(--border);
   border-radius: var(--card-radius);
-  padding: 14px;
+  padding: var(--card-pad-y) var(--card-pad-x);
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: var(--card-gap);
   transition:
     background-color var(--anim-duration) ease,
     border-color var(--anim-duration) ease,
@@ -366,8 +384,8 @@
   background: transparent;
   border: 0;
   border-radius: 0;
-  padding: 6px 10px;
-  gap: 8px;
+  padding: var(--u-2) 0;
+  gap: var(--card-gap);
 }
 
 .action-card.completed .action-content {
@@ -383,8 +401,8 @@
 }
 
 .action-check {
-  width: 26px;
-  height: 26px;
+  width: calc(var(--u) * 7);
+  height: calc(var(--u) * 7);
   border-radius: 50%;
   border: 2px solid var(--text-muted);
   background: transparent;
@@ -426,7 +444,7 @@
 .action-text {
   font-size: 14px;
   font-weight: 500;
-  line-height: 1.3;
+  line-height: 1.25;
 }
 
 .action-card.completed .action-text {
@@ -437,8 +455,8 @@
 .action-meta {
   display: flex;
   align-items: center;
-  gap: 6px;
-  margin-top: 3px;
+  gap: var(--u-2);
+  margin-top: var(--u-1);
   flex-wrap: wrap;
 }
 
@@ -464,8 +482,14 @@
 }
 
 .action-right {
+  width: var(--card-right-col);
   text-align: right;
   flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  justify-content: center;
+  gap: 2px;
 }
 
 .action-bounty {
@@ -485,6 +509,7 @@
   text-transform: uppercase;
   letter-spacing: 0.5px;
   color: var(--text-muted);
+  line-height: 1;
 }
 
 .action-card.completed .action-bounty-label {
@@ -492,13 +517,17 @@
 }
 
 .action-card.completed .action-check {
-  width: 20px;
-  height: 20px;
+  width: calc(var(--u) * 5);
+  height: calc(var(--u) * 5);
   border-width: 1.5px;
 }
 
 .action-card.completed .action-check-mark {
   font-size: 10px;
+}
+
+.action-card.completed .action-right {
+  width: var(--card-right-col-compact);
 }
 
 .upnext-trigger-wrap {

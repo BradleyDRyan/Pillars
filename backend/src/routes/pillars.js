@@ -12,6 +12,7 @@ const {
   normalizeRubricItemCreate,
   normalizeRubricItemUpdate
 } = require('../utils/rubrics');
+const { normalizeContextMarkdownPayload } = require('../utils/userFactsMarkdown');
 
 router.use(flexibleAuth);
 
@@ -75,6 +76,25 @@ function normalizeColorTokenPayload(payload) {
   }
 
   return { value: normalized };
+}
+
+function normalizePillarContextPayload(payload) {
+  const normalized = normalizeContextMarkdownPayload({
+    contextMarkdown: payload?.contextMarkdown,
+    context: payload?.context,
+    factsMarkdown: payload?.factsMarkdown,
+    facts: payload?.facts
+  });
+
+  if (normalized.error) {
+    return { error: normalized.error };
+  }
+
+  if (!normalized.provided) {
+    return { value: undefined };
+  }
+
+  return { value: normalized.markdown ?? null };
 }
 
 // Get all pillars for user
@@ -213,6 +233,18 @@ router.get('/:id/resources', async (req, res) => {
 // Create pillar
 router.post('/', async (req, res) => {
   try {
+    req.body = req.body && typeof req.body === 'object' ? req.body : {};
+    const contextPayloadResult = normalizePillarContextPayload(req.body || {});
+    if (contextPayloadResult.error) {
+      return res.status(400).json({ error: contextPayloadResult.error });
+    }
+    if (contextPayloadResult.value !== undefined) {
+      req.body.contextMarkdown = contextPayloadResult.value;
+    }
+    delete req.body.context;
+    delete req.body.facts;
+    delete req.body.factsMarkdown;
+
     if (req.body.isDefault) {
       const existingDefault = await Pillar.findDefaultPillar(req.user.uid);
       if (existingDefault) {
@@ -316,6 +348,18 @@ router.put('/:id', async (req, res) => {
     if (!pillar) {
       return res.status(404).json({ error: 'Pillar not found' });
     }
+
+    req.body = req.body && typeof req.body === 'object' ? req.body : {};
+    const contextPayloadResult = normalizePillarContextPayload(req.body || {});
+    if (contextPayloadResult.error) {
+      return res.status(400).json({ error: contextPayloadResult.error });
+    }
+    if (contextPayloadResult.value !== undefined) {
+      req.body.contextMarkdown = contextPayloadResult.value;
+    }
+    delete req.body.context;
+    delete req.body.facts;
+    delete req.body.factsMarkdown;
     
     if (req.body.isDefault && !pillar.isDefault) {
       const existingDefault = await Pillar.findDefaultPillar(req.user.uid);

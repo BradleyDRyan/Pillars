@@ -183,9 +183,8 @@ export function SchemaExplorer({ data }: Props) {
         <Tabs.List className="mb-5 flex flex-wrap gap-2 border-b border-[var(--line)] pb-4">
           {[
             ["blockTypes", "Block Types"],
-            ["todo", "Todo Schema"],
-            ["habit", "Habit Schema"],
-            ["day", "Day Schema"],
+            ["actions", "Action Schema"],
+            ["actionTemplates", "ActionTemplate Schema"],
             ["events", "Event Types"]
           ].map(([value, label]) => (
             <Tabs.Tab
@@ -219,40 +218,24 @@ export function SchemaExplorer({ data }: Props) {
           </div>
         </Tabs.Panel>
 
-        <Tabs.Panel value="todo" className="slide-up">
+        <Tabs.Panel value="actions" className="slide-up">
           <div className="mb-4 flex justify-end">
-            <CopyButton value={data.todoSchema} label="todoSchema" />
+            <CopyButton value={data.actionSchema} label="actionSchema" />
           </div>
           <div className="grid gap-4">
-            <JsonSchemaTable title="Todo Create" schema={data.todoSchema.create} />
-            <JsonSchemaTable title="Todo Update" schema={data.todoSchema.update} />
+            <JsonSchemaTable title="Action Create" schema={data.actionSchema.create} />
+            <JsonSchemaTable title="Action Update" schema={data.actionSchema.update} />
           </div>
         </Tabs.Panel>
 
-        <Tabs.Panel value="habit" className="slide-up">
+        <Tabs.Panel value="actionTemplates" className="slide-up">
           <div className="mb-4 flex justify-end">
-            <CopyButton value={data.habitSchema} label="habitSchema" />
+            <CopyButton value={data.actionTemplateSchema} label="actionTemplateSchema" />
           </div>
           <div className="grid gap-4">
-            <JsonSchemaTable title="Habit Create" schema={data.habitSchema.create} />
-            <JsonSchemaTable title="Habit Update" schema={data.habitSchema.update} />
-            <JsonSchemaTable title="Habit Log" schema={data.habitSchema.log} />
+            <JsonSchemaTable title="ActionTemplate Create" schema={data.actionTemplateSchema.create} />
+            <JsonSchemaTable title="ActionTemplate Update" schema={data.actionTemplateSchema.update} />
           </div>
-        </Tabs.Panel>
-
-        <Tabs.Panel value="day" className="slide-up">
-          <div className="mb-4 flex justify-end">
-            <CopyButton value={data.daySchema} label="daySchema" />
-          </div>
-          <article className="surface p-5">
-            <h3 className="text-lg font-semibold">Day Batch Push Contract</h3>
-            <p className="mt-1 text-sm text-[var(--ink-subtle)]">
-              Contract used by <span className="mono">POST /api/days/:date/blocks/batch</span>
-            </p>
-            <pre className="mono mt-3 max-h-[460px] overflow-auto rounded-md bg-[var(--bg)] p-4 text-xs text-[var(--ink)]">
-              {prettyJson(data.daySchema)}
-            </pre>
-          </article>
         </Tabs.Panel>
 
         <Tabs.Panel value="events" className="slide-up">
