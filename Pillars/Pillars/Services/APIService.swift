@@ -368,7 +368,8 @@ class APIService: ObservableObject {
         cadence: ActionCadence,
         defaultSectionId: DaySection.TimeSection = .afternoon,
         defaultOrder: Int = 0,
-        defaultBounties: [ActionBounty]? = nil
+        defaultBounties: [ActionBounty]? = nil,
+        startDate: String? = nil
     ) async throws -> ActionTemplateMutationResponse {
         _ = try await getFirebaseToken()
         guard let url = URL(string: "\(baseURL)/action-templates") else {
@@ -386,6 +387,9 @@ class APIService: ObservableObject {
         ]
         if let notes {
             payload["notes"] = notes
+        }
+        if let startDate {
+            payload["startDate"] = startDate
         }
         if let defaultBounties {
             payload["defaultBounties"] = defaultBounties.map { bounty in
@@ -410,7 +414,9 @@ class APIService: ObservableObject {
         templateId: String,
         title: String? = nil,
         notes: String? = nil,
-        isActive: Bool? = nil
+        cadence: ActionCadence? = nil,
+        isActive: Bool? = nil,
+        defaultBounties: ActionTemplateBountyPatch = .unchanged
     ) async throws -> ActionTemplateMutationResponse {
         _ = try await getFirebaseToken()
         guard let url = URL(string: "\(baseURL)/action-templates/\(templateId)") else {
@@ -424,8 +430,31 @@ class APIService: ObservableObject {
         if let notes {
             payload["notes"] = notes
         }
+        if let cadence {
+            payload["cadence"] = [
+                "type": cadence.type.rawValue,
+                "daysOfWeek": cadence.daysOfWeek ?? []
+            ]
+        }
         if let isActive {
             payload["isActive"] = isActive
+        }
+        switch defaultBounties {
+        case .unchanged:
+            break
+        case .set(let bounties):
+            payload["defaultBounties"] = bounties.map { bounty in
+                var item: [String: Any] = [
+                    "pillarId": bounty.pillarId,
+                    "points": bounty.points
+                ]
+                if let rubricItemId = bounty.rubricItemId {
+                    item["rubricItemId"] = rubricItemId
+                }
+                return item
+            }
+        case .reclassify:
+            payload["defaultBounties"] = NSNull()
         }
 
         let body = try JSONSerialization.data(withJSONObject: payload, options: [])
@@ -568,6 +597,12 @@ class APIService: ObservableObject {
         let (data, response) = try await session.data(for: request)
         return try await handleResponse(data, response, nil, type: OnboardingContent.self)
     }
+}
+
+enum ActionTemplateBountyPatch {
+    case unchanged
+    case set([ActionBounty])
+    case reclassify
 }
 
 enum APIError: LocalizedError {
